@@ -1,0 +1,40 @@
+<%- include('partials/header', { title: 'Gestion des bandeaux', user, role }) %>
+
+<div class="admin-content-wrapper">
+<div class="container">
+  <h2>Bandeaux d'information</h2>
+  <a href="/admin/bandeaux/new" class="btn btn-success mb-3">Nouveau bandeau</a>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Message</th>
+        <th>Expiration</th>
+        <th>Page cible</th>
+        <th>Organisation</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% bandeaux2.forEach(b => { %>
+        <tr>
+          <td><%= b.message %></td>
+          <td><%= b.expiration_date ? formatDate(b.expiration_date) : 'Sans limite' %></td>
+          <td><%= b.page_cible ? b.page_cible : '-' %></td>
+          <td><%= b.organization_name|| '-' %></td>
+          <td>
+            <% if (role === 'SuperAdmin' || b.organization_id == organization_id) { %>
+              <a href="/admin/bandeaux/<%= b.id %>/edit" class="btn btn-primary btn-sm me-2">Éditer</a>
+              <form action="/admin/bandeaux/<%= b.id %>/delete" method="post" style="display:inline;">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <button class="btn btn-danger btn-sm" onclick="return confirm('Supprimer ce bandeau ?')">Supprimer</button>
+              </form>
+            <% } %>
+          </td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+  <a href="/admin/menu" class="btn btn-secondary">Retour menu admin</a>
+</div>
+</div>
+<%- include('partials/footer') %>

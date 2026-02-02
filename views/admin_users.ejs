@@ -1,0 +1,336 @@
+<%- include('partials/header', { title: 'Gestion des utilisateurs', user, role }) %>
+
+<% const currentUserId = typeof userId !== 'undefined' ? userId : null; %>
+
+<div class="admin-content-wrapper">
+<div class="container-fluid px-3 mt-4">
+  <div class="row">
+    <div class="col-12">
+      <h2 class="mb-4">Gestion des utilisateurs</h2>
+      <p class="text-muted mb-4">Administrer les comptes utilisateurs et leurs permissions</p>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-12">
+      <div class="d-flex flex-column flex-sm-row gap-2 mb-3">
+        <a href="/admin/users/new" class="btn btn-success">
+          <i class="bi bi-person-plus me-2"></i>Ajouter un nouvel utilisateur
+        </a>
+        <a href="/admin/menu" class="btn btn-outline-secondary">
+          <i class="bi bi-arrow-left me-2"></i>Retour au menu admin
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-12">
+      <% if(error){ %>
+        <div class="alert alert-danger" role="alert">
+          <i class="bi bi-exclamation-triangle-fill me-2"></i>
+          <%= error %>
+        </div>
+      <% } %>
+      
+      <% if (users.length === 0) { %>
+        <div class="alert alert-info text-center">
+          <h4>Aucun utilisateur trouvé</h4>
+          <p>Il n'y a actuellement aucun utilisateur enregistré.</p>
+          <a href="/admin/users/new" class="btn btn-primary">Créer le premier utilisateur</a>
+        </div>
+      <% } else { %>
+        <div class="card">
+          <div class="card-header">
+            <h5 class="card-title mb-0">
+              <i class="bi bi-people-fill me-2"></i>
+              Liste des utilisateurs (<%= users.length %>)
+            </h5>
+          </div>
+          <div class="card-body">
+            <div class="mb-3">
+              <input id="uniqueFilter" type="text" class="form-control" placeholder="Filtrer les utilisateurs...">
+            </div>
+            <div class="table-responsive">
+              <table id="usersTable" class="table table-striped table-hover">
+                <thead class="table-dark">
+                  <tr>
+                    <th>ID</th>
+                    <th>Nom</th>
+                    <th class="d-none d-md-table-cell">Email</th>
+                    <th class="d-none d-sm-table-cell">Rôle</th>
+                    <th class="d-none d-lg-table-cell">Description</th>
+                    <th class="d-none d-xl-table-cell">Statut</th>
+                    <% if (role === 'SuperAdmin') { %>
+                      <th>Organisation</th>
+                    <% } %>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% users.forEach(function(u) { %>
+                    <tr>
+                      <td class="fw-bold">#<%= u.id %></td>
+                      <td>
+                        <div class="fw-bold"><%= u.username %></div>
+                        <!-- Informations supplémentaires sur mobile -->
+                        <div class="d-md-none small text-muted">
+                          <i class="bi bi-envelope me-1"></i><%= u.email %>
+                        </div>
+                        <div class="d-sm-none small mt-1">
+                          <span class="badge bg-secondary"><%= u.role %></span>
+                        </div>
+                        <div class="d-lg-none small text-muted mt-1">
+                          <%= u.description || "Aucune description" %>
+                        </div>
+                        <div class="d-xl-none small mt-1">
+                          <% if (!u.is_validated) { %>
+                            <span class="badge bg-warning">En attente</span>
+                          <% } else { %>
+                            <span class="badge bg-success">Validé</span>
+                          <% } %>
+                        </div>
+                      </td>
+                      <td class="d-none d-md-table-cell">
+                        <small><%= u.email %></small>
+                      </td>
+                      <td class="d-none d-sm-table-cell">
+                        <span class="badge bg-secondary"><%= u.role %></span>
+                      </td>
+                      <td class="d-none d-lg-table-cell">
+                        <small><%= u.description || "Aucune description" %></small>
+                      </td>
+                      <td class="d-none d-xl-table-cell">
+                        <% if (!u.is_validated) { %>
+                          <span class="badge bg-warning">En attente</span>
+                        <% } else { %>
+                          <span class="badge bg-success">Validé</span>
+                        <% } %>
+                      </td>
+                      <% if (role === 'SuperAdmin') { %>
+                        <td><%= u.organization_name || "-" %></td>
+                      <% } %>
+                      <td>
+                        <!-- Actions sur mobile : menu déroulant -->
+                        <div class="d-lg-none">
+                          <div class="dropdown">
+                            <button class="btn btn-outline-secondary btn-sm dropdown-toggle" 
+                                    type="button" data-bs-toggle="dropdown">
+                              Actions
+                            </button>
+                            <ul class="dropdown-menu">
+                              <li>
+                                <a class="dropdown-item" href="/admin/users/<%= u.id %>/edit">
+                                  <i class="bi bi-pencil me-2"></i>Modifier les informations
+                                </a>
+                              </li>
+                              <% if (!u.is_validated) { %>
+                                <li>
+                                  <form method="post" action="/admin/users/<%= u.id %>/validate">
+                                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                    <button class="dropdown-item text-success" type="submit">
+                                      <i class="bi bi-check-circle me-2"></i>Valider l'utilisateur
+                                    </button>
+                                  </form>
+                                </li>
+                              <% } %>
+                              <% if (role === 'SuperAdmin' && currentUserId !== null && u.id !== currentUserId) { %>
+                                <li>
+                                  <form method="POST" action="/admin/impersonate">
+                                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                    <input type="hidden" name="user_id" value="<%= u.id %>">
+                                    <button type="submit" class="dropdown-item">
+                                      <i class="bi bi-person-bounding-box me-2"></i>Impersoner cet utilisateur
+                                    </button>
+                                  </form>
+                                </li>
+                              <% } %>
+                              <li><hr class="dropdown-divider"></li>
+                              <li>
+                                <form action="/admin/users/<%= u.id %>/delete" method="POST" 
+                                      onsubmit="return confirm('Supprimer cet utilisateur ?');">
+                                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                  <button type="submit" class="dropdown-item text-danger">
+                                    <i class="bi bi-trash me-2"></i>Supprimer définitivement
+                                  </button>
+                                </form>
+                                <form action="/forgot-password" method="POST">
+                                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                  <input type="hidden" name="email" value="<%= u.email %>">
+                                  <button type="submit">Envoyer le lien de réinitialisation</button>
+                                </form>
+                                <p>
+                            
+                              </li>
+                            </ul>
+                          </div>
+                        </div>
+
+                        <!-- Actions sur desktop : boutons horizontaux -->
+                        <div class="d-none d-lg-block">
+                          <div class="d-flex gap-1">
+                            <a href="/admin/users/<%= u.id %>/edit" class="btn btn-primary btn-sm">
+                              <i class="bi bi-pencil me-1"></i>Modifier
+                            </a>
+                            <% if (!u.is_validated) { %>
+                              <form method="post" action="/admin/users/<%= u.id %>/validate" style="display:inline">
+                                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                <button class="btn btn-success btn-sm" type="submit">
+                                  <i class="bi bi-check-circle me-1"></i>Valider
+                                </button>
+                              </form>
+                            <% } %>
+                            <form action="/admin/users/<%= u.id %>/delete" method="POST" style="display:inline" 
+                                  onsubmit="return confirm('Supprimer cet utilisateur ?');">
+                              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                              <button type="submit" class="btn btn-danger btn-sm">
+                                <i class="bi bi-trash me-1"></i>Supprimer
+                              </button>
+                            </form>
+                            <% if (role === 'SuperAdmin' && currentUserId !== null && u.id !== currentUserId) { %>
+                              <form method="POST" action="/admin/impersonate" style="display:inline;">
+                                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                <input type="hidden" name="user_id" value="<%= u.id %>">
+                                <button type="submit" class="btn btn-outline-dark btn-sm">
+                                  <i class="bi bi-person-bounding-box me-1"></i>Impersoner
+                                </button>
+                              </form>
+                            <% } %>
+                            <form action="/forgot-password" method="POST">
+                              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                              <input type="hidden" name="email" value="<%= u.email %>">
+                              <input type="hidden" name="flag" value="admin">
+                              <button type="submit">Envoyer le lien de réinitialisation</button>
+                            </form>
+                            <p>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      <% } %>
+    </div>
+  </div>
+
+  <!-- Statistiques -->
+  <div class="row mt-4">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title mb-0">Statistiques des utilisateurs</h5>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-6 col-md-3">
+              <div class="text-center">
+                <h4 class="text-primary"><%= users.length %></h4>
+                <p class="text-muted">Total utilisateurs</p>
+              </div>
+            </div>
+            <div class="col-6 col-md-3">
+              <div class="text-center">
+                <h4 class="text-success"><%= users.filter(u => u.is_validated).length %></h4>
+                <p class="text-muted">Utilisateurs validés</p>
+              </div>
+            </div>
+            <div class="col-6 col-md-3">
+              <div class="text-center">
+                <h4 class="text-warning"><%= users.filter(u => !u.is_validated).length %></h4>
+                <p class="text-muted">En attente de validation</p>
+              </div>
+            </div>
+            <div class="col-6 col-md-3">
+              <div class="text-center">
+                <h4 class="text-info"><%= users.filter(u => u.description).length %></h4>
+                <p class="text-muted">Avec description</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Actions rapides -->
+  <div class="row mt-4">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title mb-0">Actions rapides</h5>
+        </div>
+        <div class="card-body">
+          <div class="d-flex flex-column flex-sm-row gap-2">
+            <% if (users.filter(u => !u.is_validated).length > 0) { %>
+              <form method="post" action="/admin/users/validate-all" style="display:inline">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <button type="submit" class="btn btn-success" 
+                        onclick="return confirm('Valider tous les utilisateurs en attente ?');">
+                  <i class="bi bi-check-circle-fill me-2"></i>Valider tous les utilisateurs
+                </button>
+              </form>
+            <% } %>
+            <a href="/admin/users/export" class="btn btn-outline-primary">
+              <i class="bi bi-download me-2"></i>Exporter la liste des utilisateurs
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Boutons de navigation -->
+  <div class="row mt-4">
+    <div class="col-12">
+      <div class="d-flex flex-column flex-sm-row gap-2">
+        <a href="/admin/menu" class="btn btn-secondary">
+          <i class="bi bi-arrow-left me-2"></i>Retour au menu admin
+        </a>
+        <a href="/" class="btn btn-outline-secondary">
+          <i class="bi bi-house me-2"></i>Retour à l'accueil
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+<%- include('partials/footer') %>
+
+<!-- DataTables JS (fin de page, après le tableau) -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script>
+$(function() {
+  setTimeout(function() {
+    var tableEl = $("#usersTable");
+    if (tableEl.length === 0) {
+      console.error("Table #usersTable non trouvée !");
+      return;
+    }
+    if ($.fn.dataTable.isDataTable(tableEl)) {
+      tableEl.DataTable().destroy();
+    }
+    var table = tableEl.DataTable({
+      pageLength: 100,
+      lengthChange: false,
+      searching: true,
+      language: {
+        url: "//cdn.datatables.net/plug-ins/1.13.6/i18n/fr-FR.json",
+      },
+    });
+    var filterEl = $("#uniqueFilter");
+    if (filterEl.length === 0) {
+      console.error("Champ #uniqueFilter non trouvé !");
+      return;
+    }
+    filterEl.on("input", function () {
+      table.search(this.value).draw();
+    });
+  }, 50);
+});
+</script>

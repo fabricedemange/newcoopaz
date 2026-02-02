@@ -1,0 +1,51 @@
+<%- include('partials/header', { title: 'Éditer un bandeau', user, role }) %>
+
+<div class="admin-content-wrapper">
+<div class="container">
+	<h2>Édition du bandeau d'information</h2>
+	<% if (error) { %>
+		<div class="alert alert-danger"><%= error %></div>
+	<% } %>
+	<form action="/admin/bandeaux/<%= bandeau.id %>/edit" method="post">
+			<input type="hidden" name="_csrf" value="<%= csrfToken %>">
+				<% if (role === 'SuperAdmin') { %>
+					<div class="mb-3">
+						<label class="form-label">Organisation&nbsp;*</label>
+									<select name="organization_id" class="form-control" required>
+										<option value="">veuillez selectionner...</option>
+							<% organizations && organizations.forEach(function(org) { %>
+								<option value="<%= org.id %>" <%= bandeau.organization_id == org.id ? 'selected' : '' %>><%= org.name %></option>
+							<% }) %>
+						</select>
+						<small class="form-text text-muted">Sélectionnez l'organisation à laquelle rattacher ce bandeau.</small>
+					</div>
+				<% } else { %>
+					<input type="hidden" name="organization_id" value="<%= bandeau.organization_id %>">
+				<% } %>
+			<div class="mb-3">
+				<label class="form-label">Message&nbsp;*</label>
+				<textarea name="message" class="form-control" required><%= bandeau.message %></textarea>
+			</div>
+		<div class="mb-3">
+			<label class="form-label">Type de bandeau&nbsp;*</label>
+			<select name="type" class="form-control" required>
+				<option value="info" <%= bandeau.type === 'info' ? 'selected' : '' %>>Information (couleur douce)</option>
+				<option value="important" <%= bandeau.type === 'important' ? 'selected' : '' %>>Important (couleur voyante)</option>
+			</select>
+			<small class="form-text text-muted">Choisissez le type de bandeau : <strong>Information</strong> pour les messages informatifs normaux, <strong>Important</strong> pour les messages urgents ou critiques.</small>
+		</div>
+		<div class="mb-3">
+			<label class="form-label">Page cible</label>
+			<input type="text" name="page_cible" class="form-control" placeholder="Laissez vide pour toutes les pages" value="<%= bandeau.page_cible || '' %>"/>
+			<small class="form-text text-muted">Saisissez l'URL de la page où afficher ce bandeau (ex: /account, /admin/stats, /panier, /catalogues) ou le nom de la vue (ex: index, admin_menu) ou laissez vide pour toutes les pages. <br><strong>Caractères génériques :</strong> utilisez * pour les URLs avec ID (ex: /catalogues/* pour /catalogues/123, /catalogues/456, etc.)</small>
+		</div>
+		<div class="mb-3">
+			<label class="form-label">Date d'expiration (facultatif)</label>
+			<input type="date" name="expiration_date" class="form-control" value="<%= bandeau.expiration_date ? bandeau.expiration_date.toISOString().slice(0,10) : '' %>"/>
+		</div>
+		<button type="submit" class="btn btn-success">Enregistrer</button>
+		<a href="/admin/bandeaux" class="btn btn-secondary">Annuler</a>
+	</form>
+</div>
+</div>
+<%- include('partials/footer') %>

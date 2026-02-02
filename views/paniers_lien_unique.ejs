@@ -1,0 +1,102 @@
+<%- include('partials/header', { title: 'Mon panier', user, role }) %>
+
+<div class="admin-content-wrapper">
+<div class="container">
+  <h2>Mes paniers</h2>
+  <% if (paniers.length === 0) { %>
+    <div>Votre panier est vide.</div>
+  <% } else { %>
+    <% paniers.forEach(function(panier) { %>
+      <div class="card mb-4">
+        <div class="card-header">
+          <strong>Catalogue :</strong> <%= panier.originalname %>
+          <% if (panier.catalog_desc) { %> <br>
+            <em><%= panier.catalog_desc %></em>
+<%= panier.panier_id %>
+          <% } %>
+        
+          
+          
+          
+          <% if (!panier.modifiable) { %>
+            <span class="badge bg-warning float-end ms-2">Expiré, édition interdite</span>
+          <% } %>
+        </div>
+        <div class="card-body">
+          <% if (1=== 0) { %>
+            <p>Ce panier ne contient aucun article.</p>
+          <% } else { %>
+
+            <table class="table table-sm">
+              <thead>
+                <tr>
+                  <th>Produit</th>
+                  <th>Description</th>
+                  <th>Prix</th>
+                  <th>Quantité</th>
+                  <th>Total</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% let montant = 0; %>
+                <% panier.articles.forEach(function(a) { %>
+                  <% montant += (a.prix * a.quantity); %>
+                  <tr>
+                    <td><%= a.produit %></td>
+                    <td><%= a.description %></td>
+                    <td><%= a.prix %></td>
+                    <td><%= a.quantity %></td>
+                    <td><%= (a.prix * a.quantity).toFixed(2) %></td>
+                    <td>
+                      <% if (panier.modifiable) { %>
+                        <form method="POST" action="/panier/remove" style="display:inline">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                          <input type="hidden" name="panier_article_id" value="<%= a.id %>">
+                          <button type="submit" class="btn btn-danger btn-sm">Retirer cet article</button>
+                        </form>
+                      <% } %>
+                    </td>
+                  </tr>
+                <% }) %>
+              </tbody>
+              <tfoot>
+                <tr>
+                  <th colspan="4" style="text-align:right;">Total :</th>
+                  <th><%= montant.toFixed(2) %></th>
+                  <th></th>
+                </tr>
+              </tfoot>
+            </table>
+            <% if (panier.modifiable) { %>
+                 <form method="POST" action="/panier/submit">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                  <label for="note" class="form-label">Note pour la commande (optionnel)</label>
+                  <textarea id="note" name="note" class="form-control" rows="2"></textarea>
+                  <input type="hidden" name="panier_id" value="<%= panier.panier_id %>">
+                <button type="submit" class="btn btn-success">Valider le panier, il deviendra alors une commande(pensez à ajouter une note si besoin)</button>
+                <% if (panier.modifiable) { %>
+                     <a href="/catalogues/<%= panier.catalog_file_id %>/vue" class="btn btn-primary ">
+                     Éditer tout le contenu de ce panier
+                    </a>
+             
+              <% } else { %>
+                    <span class="badge bg-warning float-end ms-2">Expiré, édition interdite</span>
+              <% } %>
+              </form>
+            <% } %>
+          <% } %>
+                        
+              
+            <form action="/panier/<%= panier.panier_id %>/supprimer" method="POST" onsubmit="return confirm('Supprimer ce panier ?');">
+                <button type="submit" class="btn btn-danger btn-sm">Supprimer ce panier</button>
+            </form>
+              
+        </div>
+      </div>
+    <% }) %>
+  <% } %>
+  <a href="/" class="btn btn-secondary">Retour accueil</a>
+</div>
+</div>
+<%- include('partials/footer') %>

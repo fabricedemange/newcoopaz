@@ -1,0 +1,96 @@
+/* Fix spécifiques pour Safari iOS */
+
+/* Détection Safari iOS */
+@supports (-webkit-touch-callout: none) {
+  /* Le bouton hamburger doit être TOUJOURS visible sur iOS */
+  .mobile-menu-toggle {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: fixed !important;
+    bottom: 20px !important;
+    right: 20px !important;
+    z-index: 999999 !important;
+    width: 56px !important;
+    height: 56px !important;
+    border-radius: 50% !important;
+    background: #007bff !important;
+    color: white !important;
+    border: none !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+    font-size: 24px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    /* Fixes Safari */
+    -webkit-appearance: none;
+    -webkit-tap-highlight-color: rgba(0,0,0,0);
+    -webkit-user-select: none;
+    user-select: none;
+    transform: translate3d(0, 0, 0);
+    -webkit-transform: translate3d(0, 0, 0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+
+  /* Animation de clic pour feedback visuel sur iOS */
+  .mobile-menu-toggle:active {
+    transform: scale(0.9) translate3d(0, 0, 0);
+    -webkit-transform: scale(0.9) translate3d(0, 0, 0);
+    background: #0056b3 !important;
+  }
+
+  /* Icône à l'intérieur */
+  .mobile-menu-toggle i,
+  .mobile-menu-toggle .bi {
+    pointer-events: none;
+    display: block;
+    line-height: 1;
+  }
+
+  /* Fix pour le viewport sur iOS */
+  body {
+    -webkit-text-size-adjust: 100%;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Fix sidebar sur iOS */
+  .admin-sidebar {
+    -webkit-overflow-scrolling: touch;
+    transform: translate3d(0, 0, 0);
+    -webkit-transform: translate3d(0, 0, 0);
+  }
+
+  /* Fix overlay sur iOS */
+  .sidebar-overlay {
+    -webkit-tap-highlight-color: transparent;
+    transform: translate3d(0, 0, 0);
+    -webkit-transform: translate3d(0, 0, 0);
+  }
+}
+
+/* Media query supplémentaire pour iPhone spécifiquement */
+@media only screen
+  and (max-width: 428px)  /* iPhone 14 Pro Max */
+  and (-webkit-min-device-pixel-ratio: 2) {
+
+  .mobile-menu-toggle {
+    display: flex !important;
+    visibility: visible !important;
+    bottom: env(safe-area-inset-bottom, 20px) !important; /* Respecter la zone sûre */
+    right: env(safe-area-inset-right, 20px) !important;
+  }
+}
+
+/* Debug : Afficher le bouton même si JavaScript n'est pas chargé */
+.mobile-menu-toggle {
+  /* S'assurer qu'il n'y a pas de display: none ailleurs */
+  will-change: transform;
+}
+
+/* Forcer l'affichage sur TOUS les petits écrans */
+@media (max-width: 991px) {
+  .mobile-menu-toggle {
+    display: flex !important;
+    visibility: visible !important;
+  }
+}

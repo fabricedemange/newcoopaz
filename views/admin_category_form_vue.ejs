@@ -1,0 +1,20 @@
+<%- include('partials/header', { title: category ? 'Modifier une catégorie' : 'Nouvelle catégorie', user, role }) %>
+
+<div class="admin-content-wrapper">
+  <div id="admin-category-form-app"></div>
+</div>
+
+<script>
+window.CSRF_TOKEN = '<%= typeof csrfToken !== "undefined" ? csrfToken : "" %>';
+window.INITIAL_DATA = <%- JSON.stringify({
+  action: category ? 'edit' : 'add',
+  category: category || null,
+  categoryId: category ? category.id : null,
+  allCategories: allCategories || [],
+  errorMessage: typeof errorMessage !== 'undefined' ? errorMessage : null,
+  successMessage: typeof successMessage !== 'undefined' ? successMessage : null
+}) %>;
+</script>
+<script type="module" src="/dist/admin-category-form.js?v=<%= typeof APP_VERSION !== 'undefined' ? APP_VERSION : Date.now() %>"></script>
+
+<%- include('partials/footer') %>

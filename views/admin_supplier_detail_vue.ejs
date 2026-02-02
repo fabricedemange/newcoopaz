@@ -1,0 +1,15 @@
+<%- include('partials/header', { title: 'Détails du fournisseur', user, role }) %>
+
+<div class="admin-content-wrapper">
+  <div id="admin-supplier-detail-app"></div>
+</div>
+
+<script>
+window.INITIAL_DATA = <%- JSON.stringify({
+  supplier: supplier || null,
+  products: products || []
+}) %>;
+</script>
+<script type="module" src="/dist/admin-supplier-detail.js?v=<%= typeof APP_VERSION !== 'undefined' ? APP_VERSION : Date.now() %>"></script>
+
+<%- include('partials/footer') %>

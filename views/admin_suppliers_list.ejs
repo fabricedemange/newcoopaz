@@ -1,0 +1,154 @@
+<%- include('partials/header', { title: 'Gestion des fournisseurs', user, role }) %>
+
+<div class="admin-content-wrapper">
+
+<div class="container-fluid px-3 mt-4">
+  <div class="row">
+    <div class="col-12">
+      <h2 class="mb-4">Gestion des fournisseurs</h2>
+      <p class="text-muted mb-4">Gérer les fournisseurs de produits</p>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-12">
+      <div class="d-flex flex-column flex-sm-row gap-2 mb-3">
+        <a href="/admin/suppliers/new" class="btn btn-success">
+          <i class="bi bi-plus-circle me-2"></i>Ajouter un fournisseur
+        </a>
+        <a href="/admin/menu" class="btn btn-outline-secondary">
+          <i class="bi bi-arrow-left me-2"></i>Retour au menu admin
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-12">
+      <% if (suppliers.length === 0) { %>
+        <div class="alert alert-info text-center">
+          <h4>Aucun fournisseur trouvé</h4>
+          <p>Commencez par créer votre premier fournisseur.</p>
+          <a href="/admin/suppliers/new" class="btn btn-primary">Créer un fournisseur</a>
+        </div>
+      <% } else { %>
+        <div class="card">
+          <div class="card-header">
+            <h5 class="card-title mb-0">
+              <i class="bi bi-truck me-2"></i>
+              Liste des fournisseurs (<%= suppliers.length %>)
+            </h5>
+          </div>
+          <div class="card-body">
+            <div class="table-responsive">
+              <table class="table table-hover" id="suppliersTable">
+                <thead>
+                  <tr>
+                    <th>Nom</th>
+                    <th>Email</th>
+                    <th>Téléphone</th>
+                    <th>Ville</th>
+                    <th>Produits</th>
+                    <th>Statut</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% suppliers.forEach(supplier => { %>
+                    <tr>
+                      <td>
+                        <a href="/admin/suppliers/<%= supplier.id %>" class="text-decoration-none">
+                          <strong><%= supplier.nom %></strong>
+                        </a>
+                      </td>
+                      <td>
+                        <% if (supplier.email) { %>
+                          <a href="mailto:<%= supplier.email %>"><%= supplier.email %></a>
+                        <% } else { %>
+                          <span class="text-muted">-</span>
+                        <% } %>
+                      </td>
+                      <td>
+                        <% if (supplier.telephone) { %>
+                          <%= supplier.telephone %>
+                        <% } else { %>
+                          <span class="text-muted">-</span>
+                        <% } %>
+                      </td>
+                      <td>
+                        <% if (supplier.ville) { %>
+                          <%= supplier.ville %>
+                        <% } else { %>
+                          <span class="text-muted">-</span>
+                        <% } %>
+                      </td>
+                      <td>
+                        <span class="badge bg-info">
+                          <%= supplier.nb_products || 0 %> produit(s)
+                        </span>
+                      </td>
+                      <td>
+                        <% if (supplier.is_active) { %>
+                          <span class="badge bg-success">Actif</span>
+                        <% } else { %>
+                          <span class="badge bg-secondary">Inactif</span>
+                        <% } %>
+                      </td>
+                      <td>
+                        <div class="btn-group btn-group-sm">
+                          <a href="/admin/suppliers/<%= supplier.id %>"
+                             class="btn btn-outline-primary"
+                             title="Voir les détails">
+                            <i class="bi bi-eye"></i>
+                          </a>
+                          <a href="/admin/suppliers/<%= supplier.id %>/edit"
+                             class="btn btn-outline-secondary"
+                             title="Modifier">
+                            <i class="bi bi-pencil"></i>
+                          </a>
+                        </div>
+                      </td>
+                    </tr>
+                  <% }); %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      <% } %>
+    </div>
+  </div>
+</div>
+
+<script>
+  $(document).ready(function() {
+    $('#suppliersTable').DataTable({
+      language: {
+        processing: "Traitement en cours...",
+        search: "Rechercher&nbsp;:",
+        lengthMenu: "Afficher _MENU_ &eacute;l&eacute;ments",
+        info: "Affichage de l'&eacute;l&eacute;ment _START_ &agrave; _END_ sur _TOTAL_ &eacute;l&eacute;ments",
+        infoEmpty: "Affichage de l'&eacute;l&eacute;ment 0 &agrave; 0 sur 0 &eacute;l&eacute;ment",
+        infoFiltered: "(filtr&eacute; de _MAX_ &eacute;l&eacute;ments au total)",
+        loadingRecords: "Chargement en cours...",
+        zeroRecords: "Aucun &eacute;l&eacute;ment &agrave; afficher",
+        emptyTable: "Aucune donn&eacute;e disponible dans le tableau",
+        paginate: {
+          first: "Premier",
+          previous: "Pr&eacute;c&eacute;dent",
+          next: "Suivant",
+          last: "Dernier"
+        },
+        aria: {
+          sortAscending: ": activer pour trier la colonne par ordre croissant",
+          sortDescending: ": activer pour trier la colonne par ordre d&eacute;croissant"
+        }
+      },
+      order: [[0, 'asc']],
+      pageLength: 25
+    });
+  });
+</script>
+
+</div>
+<%- include('partials/footer') %>

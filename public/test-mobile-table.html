@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Test Mobile Table Fix</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="/css/mobile-tables.css" rel="stylesheet">
+  <style>
+    body {
+      padding: 20px;
+    }
+    .info-box {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: #fff;
+      border: 2px solid #007bff;
+      padding: 10px;
+      border-radius: 5px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      z-index: 10000;
+      max-width: 200px;
+      font-size: 12px;
+    }
+    .test-section {
+      margin-bottom: 40px;
+    }
+  </style>
+</head>
+<body>
+  <div class="info-box">
+    <strong>Largeur actuelle:</strong><br>
+    <span id="currentWidth">-</span>px<br>
+    <small>Mobile: &lt;768px</small>
+  </div>
+
+  <div class="container-fluid">
+    <h1>Test Mobile Table Fix</h1>
+    <p class="text-muted">
+      Cette page teste le fix automatique des tableaux sur mobile.<br>
+      Réduisez la fenêtre à moins de 768px ou utilisez F12 → Device emulation.
+    </p>
+
+    <div class="test-section">
+      <h3>Test 1: Tableau simple</h3>
+      <table class="table table-bordered table-striped">
+        <thead>
+          <tr>
+            <th>Colonne 1</th>
+            <th>Colonne 2</th>
+            <th>Colonne 3</th>
+            <th>Colonne 4</th>
+            <th>Colonne 5</th>
+            <th>Colonne 6</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Donnée très longue pour colonne 1</td>
+            <td>Donnée très longue pour colonne 2</td>
+            <td>Donnée très longue pour colonne 3</td>
+            <td>Donnée très longue pour colonne 4</td>
+            <td>Donnée très longue pour colonne 5</td>
+            <td>Donnée très longue pour colonne 6</td>
+          </tr>
+          <tr>
+            <td>Autre donnée longue 1</td>
+            <td>Autre donnée longue 2</td>
+            <td>Autre donnée longue 3</td>
+            <td>Autre donnée longue 4</td>
+            <td>Autre donnée longue 5</td>
+            <td>Autre donnée longue 6</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="test-section">
+      <h3>Test 2: Tableau dans .table-responsive</h3>
+      <div class="table-responsive">
+        <table class="table table-hover">
+          <thead class="table-light">
+            <tr>
+              <th>Produit</th>
+              <th>Description</th>
+              <th>Prix</th>
+              <th>Quantité</th>
+              <th>Total</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Pain de campagne 400g</td>
+              <td>Pain traditionnel au levain naturel</td>
+              <td>3.50€</td>
+              <td>2</td>
+              <td>7.00€</td>
+              <td>
+                <button class="btn btn-sm btn-primary">Modifier</button>
+                <button class="btn btn-sm btn-danger">Supprimer</button>
+              </td>
+            </tr>
+            <tr>
+              <td>Fromage de chèvre 200g</td>
+              <td>Fromage fermier au lait cru</td>
+              <td>8.90€</td>
+              <td>1</td>
+              <td>8.90€</td>
+              <td>
+                <button class="btn btn-sm btn-primary">Modifier</button>
+                <button class="btn btn-sm btn-danger">Supprimer</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="alert alert-info">
+      <h5>Instructions de test:</h5>
+      <ol>
+        <li>Ouvrez la console (F12)</li>
+        <li>Activez "Toggle device toolbar" (Cmd+Shift+M sur Mac)</li>
+        <li>Sélectionnez "iPhone 12 Pro" ou réduisez la largeur à moins de 768px</li>
+        <li>Vérifiez dans la console les messages du mobile-table-fix.js</li>
+        <li>Les tableaux doivent être scrollables horizontalement</li>
+        <li>Sur localhost, vous verrez un bouton vert "🔧 Test Mobile Fix" en bas à droite</li>
+      </ol>
+      <h5>Commandes console disponibles:</h5>
+      <ul>
+        <li><code>applyMobileFixes()</code> - Applique les fixes (uniquement si largeur &lt;768px)</li>
+        <li><code>applyMobileFixes(true)</code> - Force l'application des fixes même en mode desktop</li>
+      </ul>
+    </div>
+
+    <div class="alert alert-success">
+      <h5>✅ Signes que le fix fonctionne:</h5>
+      <ul>
+        <li>Les tableaux sont contenus dans des <code>&lt;div class="table-responsive"&gt;</code></li>
+        <li>Les cellules ont un padding réduit (0.5rem 0.25rem)</li>
+        <li>La police des cellules est plus petite (0.875rem)</li>
+        <li>Vous pouvez faire défiler les tableaux horizontalement avec votre doigt/souris</li>
+        <li>Dans la console: "✅ Fixes appliqués!"</li>
+      </ul>
+    </div>
+  </div>
+
+  <script src="/js/mobile-table-fix.js"></script>
+  <script>
+    // Update width display
+    function updateWidth() {
+      document.getElementById('currentWidth').textContent = window.innerWidth;
+    }
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+
+    // Log when page loads
+    console.log('🧪 Page de test chargée');
+    console.log('📐 Largeur actuelle:', window.innerWidth);
+  </script>
+</body>
+</html>

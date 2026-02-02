@@ -1,0 +1,25 @@
+<%- include('partials/header', { title: action === 'add' ? 'Ajouter un utilisateur' : 'Éditer un utilisateur', user, role }) %>
+
+<style>
+.modal, .modal.show, .modal.d-block { z-index: 9999 !important; position: fixed !important; }
+.modal-backdrop, .modal-backdrop.show { z-index: 9998 !important; }
+</style>
+
+<div class="admin-content-wrapper">
+  <div id="admin-user-form-app"></div>
+</div>
+
+<script>
+window.CSRF_TOKEN = '<%= typeof csrfToken !== "undefined" ? csrfToken : "" %>';
+window.INITIAL_DATA = <%- JSON.stringify({
+  action: action || 'add',
+  user: user || null,
+  allRoles: allRoles || [],
+  userRoleIds: userRoleIds || [],
+  organizations: organizations || null,
+  error: error || null
+}) %>;
+</script>
+<script type="module" src="/dist/admin-user-form.js?v=<%= typeof APP_VERSION !== 'undefined' ? APP_VERSION : Date.now() %>"></script>
+
+<%- include('partials/footer') %>

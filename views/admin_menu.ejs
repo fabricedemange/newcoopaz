@@ -1,0 +1,103 @@
+<%- include('partials/header', { title: 'Menu administration', user, role }) %>
+
+<style>
+  .admin-content-wrapper .welcome-card {
+
+  .welcome-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 12px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  .stat-card {
+    background: white;
+    border-radius: 8px;
+    padding: 1.5rem;
+    border: 1px solid #e9ecef;
+    transition: all 0.2s ease;
+  }
+
+  .stat-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    transform: translateY(-2px);
+  }
+
+  .stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #007bff;
+  }
+
+  .stat-label {
+    font-size: 0.875rem;
+    color: #6c757d;
+    margin-top: 0.5rem;
+  }
+</style>
+
+<div class="admin-content-wrapper">
+  <div class="container-fluid px-3 mt-4">
+    <!-- Welcome Card -->
+    <div class="welcome-card">
+      <h2 class="mb-2">👋 Bienvenue dans l'administration</h2>
+      <p class="mb-0 opacity-75">Utilisez le menu de gauche pour accéder aux différentes sections</p>
+    </div>
+
+    <!-- Quick Stats -->
+    <% if (role === 'admin' || role === 'SuperAdmin' || role === 'referent') { %>
+    <h5 class="mb-3">Accès rapides</h5>
+    <div class="stats-grid">
+      <a href="/admin/dashboard/vue" class="text-decoration-none">
+        <div class="stat-card">
+          <i class="bi bi-basket text-primary" style="font-size: 2rem;"></i>
+          <div class="stat-label mt-3">Commandes & Paniers</div>
+        </div>
+      </a>
+
+      <a href="/admin/catalogues/vue" class="text-decoration-none">
+        <div class="stat-card">
+          <i class="bi bi-journal-text text-success" style="font-size: 2rem;"></i>
+          <div class="stat-label mt-3">Catalogues</div>
+        </div>
+      </a>
+
+      <a href="/admin/products/vue" class="text-decoration-none">
+        <div class="stat-card">
+          <i class="bi bi-box-seam text-info" style="font-size: 2rem;"></i>
+          <div class="stat-label mt-3">Produits</div>
+        </div>
+      </a>
+
+      <a href="/admin/stats" class="text-decoration-none">
+        <div class="stat-card">
+          <i class="bi bi-bar-chart-line text-warning" style="font-size: 2rem;"></i>
+          <div class="stat-label mt-3">Statistiques</div>
+        </div>
+      </a>
+    </div>
+    <% } %>
+
+    <!-- Help Section -->
+    <div class="card border-0 bg-light">
+      <div class="card-body">
+        <h6 class="card-title"><i class="bi bi-info-circle me-2"></i>Aide</h6>
+        <p class="card-text small text-muted mb-0">
+          Sur mobile, utilisez le bouton <i class="bi bi-list"></i> en bas à droite pour afficher le menu.
+          <br>Les sections sont organisées par thématique pour faciliter la navigation.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<%- include('partials/footer') %>

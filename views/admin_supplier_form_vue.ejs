@@ -1,0 +1,19 @@
+<%- include('partials/header', { title: supplier ? 'Modifier un fournisseur' : 'Nouveau fournisseur', user, role }) %>
+
+<div class="admin-content-wrapper">
+  <div id="admin-supplier-form-app"></div>
+</div>
+
+<script>
+window.CSRF_TOKEN = '<%= typeof csrfToken !== "undefined" ? csrfToken : "" %>';
+window.INITIAL_DATA = <%- JSON.stringify({
+  action: supplier ? 'edit' : 'add',
+  supplier: supplier || null,
+  supplierId: supplier ? supplier.id : null,
+  errorMessage: typeof errorMessage !== 'undefined' ? errorMessage : null,
+  successMessage: typeof successMessage !== 'undefined' ? successMessage : null
+}) %>;
+</script>
+<script type="module" src="/dist/admin-supplier-form.js?v=<%= typeof APP_VERSION !== 'undefined' ? APP_VERSION : Date.now() %>"></script>
+
+<%- include('partials/footer') %>

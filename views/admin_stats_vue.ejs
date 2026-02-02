@@ -1,0 +1,12 @@
+<%- include('partials/header', { title: 'Statistiques', user, role }) %>
+
+<div class="admin-content-wrapper">
+  <div id="admin-stats-app"></div>
+</div>
+
+<script>
+window.CSRF_TOKEN = '<%= typeof csrfToken !== "undefined" ? csrfToken : "" %>';
+</script>
+<script type="module" src="/dist/admin-stats.js?v=<%= typeof APP_VERSION !== 'undefined' ? APP_VERSION : Date.now() %>"></script>
+
+<%- include('partials/footer') %>

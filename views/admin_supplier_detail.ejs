@@ -1,0 +1,184 @@
+<%- include('partials/header', { title: 'Détails du fournisseur', user, role }) %>
+
+<div class="admin-content-wrapper">
+
+<div class="container-fluid px-3 mt-4">
+  <div class="row">
+    <div class="col-12">
+      <h2 class="mb-4">
+        <%= supplier.nom %>
+        <% if (supplier.is_active) { %>
+          <span class="badge bg-success">Actif</span>
+        <% } else { %>
+          <span class="badge bg-secondary">Inactif</span>
+        <% } %>
+      </h2>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-12 mb-3">
+      <div class="d-flex gap-2">
+        <a href="/admin/suppliers/<%= supplier.id %>/edit" class="btn btn-primary">
+          <i class="bi bi-pencil me-2"></i>Modifier
+        </a>
+        <a href="/admin/suppliers" class="btn btn-outline-secondary">
+          <i class="bi bi-arrow-left me-2"></i>Retour à la liste
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-12 col-lg-4 mb-3">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-info-circle me-2"></i>Informations
+          </h5>
+        </div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-sm-4">Email:</dt>
+            <dd class="col-sm-8">
+              <% if (supplier.email) { %>
+                <a href="mailto:<%= supplier.email %>"><%= supplier.email %></a>
+              <% } else { %>
+                <span class="text-muted">-</span>
+              <% } %>
+            </dd>
+
+            <dt class="col-sm-4">Téléphone:</dt>
+            <dd class="col-sm-8">
+              <%= supplier.telephone || '-' %>
+            </dd>
+
+            <dt class="col-sm-4">Site web:</dt>
+            <dd class="col-sm-8">
+              <% if (supplier.site_web) { %>
+                <a href="<%= supplier.site_web %>" target="_blank"><%= supplier.site_web %></a>
+              <% } else { %>
+                <span class="text-muted">-</span>
+              <% } %>
+            </dd>
+
+            <dt class="col-sm-4">Adresse:</dt>
+            <dd class="col-sm-8">
+              <% if (supplier.adresse || supplier.code_postal || supplier.ville) { %>
+                <%= supplier.adresse || '' %><br>
+                <%= supplier.code_postal || '' %> <%= supplier.ville || '' %><br>
+                <%= supplier.pays || 'France' %>
+              <% } else { %>
+                <span class="text-muted">-</span>
+              <% } %>
+            </dd>
+
+            <% if (supplier.notes) { %>
+              <dt class="col-sm-4">Notes:</dt>
+              <dd class="col-sm-8">
+                <%= supplier.notes %>
+              </dd>
+            <% } %>
+          </dl>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-8">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-box-seam me-2"></i>
+            Produits (<%= products.length %>)
+          </h5>
+        </div>
+        <div class="card-body">
+          <% if (products.length === 0) { %>
+            <div class="alert alert-info">
+              <i class="bi bi-info-circle me-2"></i>
+              Aucun produit n'est encore assigné à ce fournisseur.
+            </div>
+          <% } else { %>
+            <div class="table-responsive">
+              <table class="table table-hover" id="productsTable">
+                <thead>
+                  <tr>
+                    <th>Produit</th>
+                    <th>Catégorie</th>
+                    <th>Catalogues</th>
+                    <th>Statut</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% products.forEach(product => { %>
+                    <tr>
+                      <td>
+                        <a href="/admin/products/<%= product.id %>" class="text-decoration-none">
+                          <strong><%= product.nom %></strong>
+                        </a>
+                        <% if (product.description) { %>
+                          <br><small class="text-muted"><%= product.description.substring(0, 60) %><%= product.description.length > 60 ? '...' : '' %></small>
+                        <% } %>
+                      </td>
+                      <td>
+                        <% if (product.categorie) { %>
+                          <span class="badge" style="background-color: <%= product.categorie_couleur || '#6c757d' %>">
+                            <%= product.categorie %>
+                          </span>
+                        <% } else { %>
+                          <span class="text-muted">-</span>
+                        <% } %>
+                      </td>
+                      <td>
+                        <span class="badge bg-info">
+                          <%= product.nb_catalogues || 0 %>
+                        </span>
+                      </td>
+                      <td>
+                        <% if (product.is_active) { %>
+                          <span class="badge bg-success">Actif</span>
+                        <% } else { %>
+                          <span class="badge bg-secondary">Inactif</span>
+                        <% } %>
+                      </td>
+                      <td>
+                        <div class="btn-group btn-group-sm">
+                          <a href="/admin/products/<%= product.id %>"
+                             class="btn btn-outline-primary"
+                             title="Voir">
+                            <i class="bi bi-eye"></i>
+                          </a>
+                          <a href="/admin/products/<%= product.id %>/edit"
+                             class="btn btn-outline-secondary"
+                             title="Modifier">
+                            <i class="bi bi-pencil"></i>
+                          </a>
+                        </div>
+                      </td>
+                    </tr>
+                  <% }); %>
+                </tbody>
+              </table>
+            </div>
+          <% } %>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  $(document).ready(function() {
+    $('#productsTable').DataTable({
+      language: {
+        url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/fr-FR.json'
+      },
+      order: [[0, 'asc']],
+      pageLength: 25
+    });
+  });
+</script>
+
+</div>
+<%- include('partials/footer') %>

@@ -1,0 +1,291 @@
+body {
+  min-height: 100vh;
+}
+.card {
+  border-radius: 16px;
+}
+
+/* Styles pour les tableaux compacts dans admin_catalogues.ejs */
+.table-ultra-compact {
+  font-size: 0.8rem;
+  line-height: 1.1;
+}
+
+.table-ultra-compact td,
+.table-ultra-compact th {
+  padding: 0.2rem 0.3rem !important;
+  vertical-align: middle;
+  border-width: 1px;
+}
+
+.table-ultra-compact .fw-bold {
+  font-size: 0.85rem;
+  margin-bottom: 0.05rem;
+  line-height: 1.1;
+}
+
+.table-ultra-compact .small {
+  font-size: 0.7rem !important;
+  line-height: 1.0;
+  margin-bottom: 0.05rem;
+}
+
+.table-ultra-compact .badge {
+  font-size: 0.6rem;
+  padding: 0.15em 0.3em;
+  line-height: 1;
+}
+
+.table-ultra-compact .btn-sm {
+  padding: 0.1rem 0.3rem;
+  font-size: 0.7rem;
+  line-height: 1.1;
+}
+
+.table-ultra-compact .dropdown-toggle::after {
+  font-size: 0.5rem;
+}
+
+.table-ultra-compact .dropdown-menu {
+  font-size: 0.8rem;
+}
+
+/* ======================================
+   STYLES RESPONSIVE POUR CATALOGUE
+   ====================================== */
+
+/* Styles pour l'affichage desktop - pleine largeur */
+@media (min-width: 992px) {
+  /* Tableau optimisé pour desktop */
+  #tbarticles {
+    width: 100% !important;
+  }
+  
+  /* Colonnes bien proportionnées */
+  #tbarticles th:nth-child(1),
+  #tbarticles td:nth-child(1) {
+    width: 20%;
+  }
+  
+  #tbarticles th:nth-child(2),
+  #tbarticles td:nth-child(2) {
+    width: 35%;
+  }
+  
+  #tbarticles th:nth-child(3),
+  #tbarticles td:nth-child(3) {
+    width: 15%;
+  }
+  
+  #tbarticles th:nth-child(4),
+  #tbarticles td:nth-child(4) {
+    width: 15%;
+  }
+  
+  #tbarticles th:nth-child(5),
+  #tbarticles td:nth-child(5) {
+    width: 15%;
+  }
+}
+
+/* Styles pour l'affichage mobile/tablette des articles */
+@media (max-width: 991.98px) {
+  /* Optimisation du tableau sur mobile */
+  #tbarticles tbody tr td:first-child {
+    max-width: 100%;
+    word-wrap: break-word;
+  }
+  
+  /* Amélioration de l'espacement des actions mobiles */
+  .d-lg-none.mt-2:not(.d-md-none) {
+    border-top: 1px solid #dee2e6;
+    padding-top: 0.75rem;
+    margin-top: 0.75rem !important;
+  }
+  
+  /* Boutons mobiles plus lisibles */
+  .d-lg-none .btn-sm {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+  }
+  
+  /* Badge de quantité plus visible sur mobile */
+  .d-lg-none .badge {
+    min-width: 45px;
+  }
+}
+
+/* Styles spécifiques pour les notes sur mobile */
+@media (max-width: 767.98px) {
+  /* Section notes mobile compacte */
+  .note-section-mobile {
+    background-color: #f8f9fa;
+    padding: 0.5rem;
+    border-radius: 0.25rem;
+    border: 1px solid #e9ecef;
+    margin-top: 0.5rem !important;
+    margin-bottom: 0.25rem !important;
+  }
+  
+  /* Bouton de note compact */
+  .note-section-mobile .btn-outline-info {
+    font-size: 0.75rem !important;
+    padding: 0.25rem 0.5rem !important;
+  }
+  
+  /* Textarea de note mobile compact */
+  .note-section-mobile .note-form textarea.form-control-sm {
+    font-size: 0.75rem !important;
+    min-height: 50px;
+    padding: 0.25rem 0.5rem;
+  }
+  
+  /* Amélioration de l'affichage de la note existante */
+  .note-section-mobile [id^="note-display-article-mobile"] {
+    background-color: #fff3cd;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    border-left: 2px solid #ffc107;
+    font-size: 0.75rem !important;
+    margin-top: 0.25rem !important;
+  }
+  
+  /* Boutons du formulaire de note plus compacts */
+  .note-section-mobile .note-form .btn {
+    font-size: 0.75rem !important;
+    padding: 0.25rem 0.5rem !important;
+  }
+  
+  /* Badge dans le bouton de note */
+  .note-section-mobile .badge {
+    font-size: 0.6rem !important;
+    padding: 0.1rem 0.25rem;
+  }
+  
+  /* S'assurer que le formulaire de note est bien visible quand ouvert */
+  .d-md-none .note-form {
+    width: 100%;
+    max-width: 100%;
+  }
+  
+  .d-md-none .note-form[style*="display: block"] {
+    display: block !important;
+  }
+  
+  /* Assurer que le textarea soit visible */
+  .d-md-none .note-form textarea {
+    width: 100%;
+    display: block;
+  }
+  
+  /* Améliorer la visibilité du textarea */
+  .note-section-mobile textarea {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box;
+  }
+  
+  /* Affichage de la note existante */
+  .note-display-mobile {
+    font-size: 0.75rem !important;
+    background-color: #fff3cd;
+    border-left: 3px solid #ffc107;
+    border-radius: 0.25rem;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+}
+
+/* Styles pour tablettes */
+@media (min-width: 768px) and (max-width: 991.98px) {
+  /* Ajustement des colonnes pour tablettes */
+  #tbarticles tbody tr td {
+    padding: 0.75rem 0.5rem;
+  }
+}
+
+/* Optimisation des formulaires dans le tableau */
+.table form {
+  margin: 0;
+}
+
+/* Amélioration de l'affichage des notes */
+.note-form {
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Style pour le bouton de note avec badge */
+.btn-outline-info .badge {
+  margin-left: 0.25rem;
+}
+
+/* Amélioration de l'affichage des formulaires de quantité */
+input[type="number"].form-control-sm {
+  text-align: center;
+  font-weight: 600;
+}
+
+/* Gap entre les boutons et éléments flex */
+.gap-1 {
+  gap: 0.25rem !important;
+}
+
+.gap-2 {
+  gap: 0.5rem !important;
+}
+
+/* Amélioration de l'affichage des alertes info */
+.alert-info {
+  border-left: 4px solid #0dcaf0;
+}
+
+/* Style pour les badges de quantité */
+.badge.bg-primary.fs-6 {
+  font-size: 1rem !important;
+  font-weight: 600;
+  min-width: 40px;
+  padding: 0.5rem 0.75rem;
+}
+
+/* Optimisation des boutons d'action dans le tableau */
+.table .btn-sm i {
+  font-size: 1rem;
+}
+
+/* Amélioration de la lisibilité sur mobile */
+@media (max-width: 575.98px) {
+  .container-fluid.px-3 {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+  
+  h2 {
+    font-size: 1.5rem;
+  }
+  
+  /* Optimisation des alertes sur mobile */
+  .alert {
+    padding: 0.75rem;
+    font-size: 0.9rem;
+  }
+  
+  /* Formulaires de quantité mobile plus compacts */
+  .d-lg-none form input[type="number"] {
+    max-width: 80px;
+  }
+}
+
+.catalogue-description {
+  text-transform: capitalize;
+}

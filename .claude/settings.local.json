@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cloc:*)",
+      "Bash(mysql.server status:*)",
+      "Bash(mysql:*)",
+      "Bash(/Applications/XAMPP/xamppfiles/bin/mysql:*)",
+      "Bash(npm run dev:*)",
+      "Bash(lsof:*)",
+      "Bash(PORT=3100 npm start)",
+      "Bash(/Applications/XAMPP/xamppfiles/bin/mysql_upgrade:*)",
+      "Bash(sudo /Applications/XAMPP/xamppfiles/bin/mysql_upgrade:*)",
+      "Bash(node -c:*)",
+      "Bash(pkill:*)",
+      "Bash(npm start)",
+      "Bash(xargs kill:*)",
+      "Bash(curl:*)",
+      "Bash(node check_products.js:*)"
+    ]
+{
+  "allowedPrompts": [
+    {
+      "tool": "Bash",
+      "prompt": "list files and directories"
+    },
+    {
+      "tool": "Bash",
+      "prompt": "run node scripts"
+    },
+    {
+      "tool": "Bash",
+      "prompt": "restart server"
+    },
+    {
+      "tool": "Bash",
+      "prompt": "kill processes"
+    }
+  ]
+}
+
+  }
+
+}

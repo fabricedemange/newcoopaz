@@ -1,0 +1,138 @@
+
+<%- include('partials/header', { title: 'Articles du catalogue', user, role }) %>
+
+<div class="admin-content-wrapper">
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Sélectionner des articles</title>
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/datatables.net@2.0.8/js/dataTables.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/datatables.net-dt@2.0.8/css/dataTables.dataTables.min.css">
+</head>
+<body>
+  <h2>Filtrer et sélectionner les articles à importer</h2>
+  <form id="catalogForm">
+    <input type="hidden" name="_csrf" id="csrfTokenInput" value="<%= csrfToken %>" />
+    <button type="submit">Créer le catalogue</button>
+    <table id="sheetTable">
+      <thead>
+        <tr>
+          <th>
+            <input type="checkbox" id="selectAll" class="form-check-input">
+            <label for="selectAll" class="form-check-label ms-1">Sélection</label>
+          </th>
+          <% headers.forEach(h => { %>
+            <th><%= h %></th>
+          <% }) %>
+        </tr>
+        <tr>
+          <th></th>
+          <% headers.forEach(function(h, i) { %>
+            <th><input type="text" placeholder="Filtrer <%= h %>" style="width:95%" /></th>
+          <% }) %>
+        </tr>
+      </thead>
+      <tbody>
+        <% data.forEach((row, i) => { %>
+          <tr>
+            <td><input type="checkbox" class="row-checkbox"></td>
+            <% row.forEach(cell => { %>
+              <td><%= cell %></td>
+            <% }) %>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <button type="submit">Créer le catalogue</button>
+  </form>
+  <script>
+    $(document).ready(function() {
+      var table = $('#sheetTable').DataTable({
+        orderCellsTop: true,
+        fixedHeader: true,
+        columnDefs: [
+          {
+            targets: 0, // Première colonne (sélection)
+            orderable: false,
+            searchable: false
+          }
+        ]
+      });
+
+      // Filtre par colonne
+      $('#sheetTable thead tr:eq(1) th').each(function(i) {
+        if (i === 0) return; // Ignorer la colonne de sélection
+        $('input', this).on('keyup change', function() {
+          if (table.column(i).search() !== this.value) {
+            table
+              .column(i)
+              .search(this.value)
+              .draw();
+          }
+        });
+      });
+
+      // Gestion du "Tout sélectionner"
+      $('#selectAll').on('change', function() {
+        var isChecked = $(this).is(':checked');
+        // Sélectionner toutes les cases, même celles non visibles à cause de la pagination
+        table.rows().nodes().to$().find('.row-checkbox').prop('checked', isChecked);
+      });
+
+      // Gestion des cases individuelles
+      $(document).on('change', '.row-checkbox', function() {
+        // Compter toutes les cases du tableau, pas seulement celles visibles
+        var totalCheckboxes = table.rows().nodes().to$().find('.row-checkbox').length;
+        var checkedCheckboxes = table.rows().nodes().to$().find('.row-checkbox:checked').length;
+        
+        if (checkedCheckboxes === totalCheckboxes) {
+          $('#selectAll').prop('checked', true).prop('indeterminate', false);
+        } else if (checkedCheckboxes === 0) {
+          $('#selectAll').prop('checked', false).prop('indeterminate', false);
+        } else {
+          $('#selectAll').prop('checked', false).prop('indeterminate', true);
+        }
+      });
+
+      // Soumission du formulaire
+      $('#catalogForm').on('submit', function(e) {
+        e.preventDefault();
+        var rows = [];
+        // Parcourir toutes les lignes du tableau, pas seulement celles visibles
+        table.rows().nodes().to$().each(function() {
+          var $checkbox = $(this).find('.row-checkbox');
+          if ($checkbox.is(':checked')) {
+            var row = [];
+            $(this).find('td:not(:first-child)').each(function() {
+              row.push($(this).text().trim());
+            });
+            rows.push(row);
+          }
+        });
+        if (rows.length === 0) {
+          alert('Veuillez sélectionner au moins une ligne !');
+          return;
+        }
+        // Ajoute d'autres champs du formulaire si besoin
+        var formData = {
+          rows: rows,
+          _csrf: document.getElementById('csrfTokenInput').value
+        };
+        fetch('/admin/save-catalog', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        })
+        .then(res => res.text())
+        .then(msg => {
+          alert(msg);
+          window.location.href = "/admin/catalogues";
+        })
+        .catch(err => alert('Erreur : ' + err));
+      });
+    });
+  </script>
+
+</div>
+ <%- include('partials/footer') %>

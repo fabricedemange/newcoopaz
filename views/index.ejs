@@ -1,0 +1,279 @@
+<%- include('partials/header', { title: 'Accueil' , user, role }) %>
+
+<div class="admin-content-wrapper">
+<div class="container mt-5">
+    <% function capitalizeWords(str) { return str.split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+  } %>
+
+  <!-- Welcome Section -->
+  <div class="row mb-5">
+    <div class="col-12">
+      <div class="text-center p-5" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 15px; color: white;">
+        <h1 class="display-4 mb-3">👋 Bienvenue <%= capitalizeWords(user) %> !</h1>
+        <p class="lead">Votre espace personnel de commande</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Statistics Cards -->
+  <% if (typeof stats !== 'undefined') { %>
+  <div class="row mb-5">
+    <div class="col-md-4 mb-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body text-center p-4">
+          <div class="mb-3" style="font-size: 3rem; color: #28a745;">
+            <i class="bi bi-cart-check"></i>
+          </div>
+          <h3 class="mb-2" style="font-size: 2.5rem; font-weight: 700; color: #28a745;">
+            <%= stats.paniers %>
+          </h3>
+          <p class="text-muted mb-0">Panier<%= stats.paniers > 1 ? 's' : '' %> en cours</p>
+          <small class="text-muted">avec catalogue<%= stats.paniers > 1 ? 's' : '' %> encore valide<%= stats.paniers > 1 ? 's' : '' %></small>
+        </div>
+        <div class="card-footer bg-transparent border-0 text-center pb-3">
+          <a href="/panier/vue" class="btn btn-outline-success btn-sm">Voir mes paniers</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4 mb-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body text-center p-4">
+          <div class="mb-3" style="font-size: 3rem; color: #ffc107;">
+            <i class="bi bi-clock-history"></i>
+          </div>
+          <h3 class="mb-2" style="font-size: 2.5rem; font-weight: 700; color: #ffc107;">
+            <%= stats.commandes %>
+          </h3>
+          <p class="text-muted mb-0">Commande<%= stats.commandes > 1 ? 's' : '' %> en attente</p>
+          <small class="text-muted">de livraison</small>
+        </div>
+        <div class="card-footer bg-transparent border-0 text-center pb-3">
+          <a href="/commandes/vue" class="btn btn-outline-warning btn-sm">Voir mes commandes</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4 mb-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body text-center p-4">
+          <div class="mb-3" style="font-size: 3rem; color: #007bff;">
+            <i class="bi bi-journal-text"></i>
+          </div>
+          <h3 class="mb-2" style="font-size: 2.5rem; font-weight: 700; color: #007bff;">
+            <%= stats.catalogues %>
+          </h3>
+          <p class="text-muted mb-0">Catalogue<%= stats.catalogues > 1 ? 's' : '' %> disponible<%= stats.catalogues > 1 ? 's' : '' %></p>
+          <small class="text-muted">pour commander</small>
+        </div>
+        <div class="card-footer bg-transparent border-0 text-center pb-3">
+          <a href="/catalogues/vue" class="btn btn-outline-primary btn-sm">Voir les catalogues</a>
+        </div>
+      </div>
+    </div>
+  </div>
+  <% } %>
+
+  <!-- Mes paniers en cours -->
+  <% if (typeof paniersDetails !== 'undefined' && paniersDetails.length > 0) { %>
+  <div class="row mb-4">
+    <div class="col-12">
+      <h4 class="mb-3"><i class="bi bi-cart-check me-2"></i>Mes paniers en cours</h4>
+      <div class="card border-0 shadow-sm">
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table table-hover mb-0">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Catalogue</th>
+                  <th class="text-center">Articles</th>
+                  <th>Expiration</th>
+                  <th class="text-end">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% paniersDetails.forEach(function(panier) { %>
+                  <tr>
+                    <td>
+                      <span class="badge bg-light text-dark">#<%= panier.id %></span>
+                    </td>
+                    <td>
+                      <strong><%= panier.catalogue_nom %></strong>
+                    </td>
+                    <td class="text-center">
+                      <span class="badge bg-primary"><%= panier.nb_articles %> article<%= panier.nb_articles > 1 ? 's' : '' %></span>
+                    </td>
+                    <td>
+                      <%
+                        const expDate = new Date(panier.expiration_commande);
+                        const today = new Date();
+                        const diffTime = expDate - today;
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                        let badgeClass = 'bg-success';
+                        if (diffDays <= 1) badgeClass = 'bg-danger';
+                        else if (diffDays <= 3) badgeClass = 'bg-warning';
+                      %>
+                      <%= panier.expiration %>
+                      <% if (diffDays <= 3) { %>
+                        <span class="badge <%= badgeClass %> ms-2">
+                          <% if (diffDays === 0) { %>Expire aujourd'hui !<% } else if (diffDays === 1) { %>Expire demain<% } else { %>Dans <%= diffDays %> jours<% } %>
+                        </span>
+                      <% } %>
+                    </td>
+                    <td class="text-end">
+                      <a href="/panier/<%= panier.id %>/modifier/vue" class="btn btn-sm btn-primary">
+                        <i class="bi bi-pencil me-1"></i>Modifier
+                      </a>
+                    </td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <% } %>
+
+  <!-- Mes commandes en cours -->
+  <% if (typeof commandesDetails !== 'undefined' && commandesDetails.length > 0) { %>
+  <div class="row mb-4">
+    <div class="col-12">
+      <h4 class="mb-3"><i class="bi bi-clock-history me-2"></i>Mes commandes en attente de livraison</h4>
+      <div class="card border-0 shadow-sm">
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table table-hover mb-0">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Catalogue</th>
+                  <th class="text-center">Articles</th>
+                  <th>Statut</th>
+                  <th>Livraison estimée</th>
+                  <th class="text-end">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% commandesDetails.forEach(function(commande) { %>
+                  <tr>
+                    <td>
+                      <span class="badge bg-light text-dark">#<%= commande.id %></span>
+                    </td>
+                    <td>
+                      <strong><%= commande.catalogue_nom %></strong>
+                    </td>
+                    <td class="text-center">
+                      <span class="badge bg-info"><%= commande.nb_articles %> article<%= commande.nb_articles > 1 ? 's' : '' %></span>
+                    </td>
+                    <td>
+                      <%
+                        let statutBadge = 'bg-secondary';
+                        let statutText = commande.statut;
+                        if (commande.statut === 'en_attente') {
+                          statutBadge = 'bg-warning';
+                          statutText = 'En attente';
+                        } else if (commande.statut === 'validee') {
+                          statutBadge = 'bg-info';
+                          statutText = 'Validée';
+                        } else if (commande.statut === 'en_preparation') {
+                          statutBadge = 'bg-primary';
+                          statutText = 'En préparation';
+                        }
+                      %>
+                      <span class="badge <%= statutBadge %>"><%= statutText %></span>
+                    </td>
+                    <td>
+                      <% if (commande.livraison) { %>
+                        <%= commande.livraison %>
+                      <% } else { %>
+                        <span class="text-muted">Non définie</span>
+                      <% } %>
+                    </td>
+                    <td class="text-end">
+                      <a href="/commandes/<%= commande.id %>" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-eye me-1"></i>Voir
+                      </a>
+                    </td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <% } %>
+
+  <!-- Nouveaux catalogues -->
+  <% if (typeof nouveauxCatalogues !== 'undefined' && nouveauxCatalogues.length > 0) { %>
+  <div class="row mb-4">
+    <div class="col-12">
+      <h4 class="mb-3"><i class="bi bi-star me-2"></i>Nouveaux catalogues disponibles</h4>
+      <div class="row">
+        <% nouveauxCatalogues.forEach(function(catalogue) { %>
+          <div class="col-md-4 mb-3">
+            <div class="card h-100 border-0 shadow-sm">
+              <div class="card-body">
+                <div class="d-flex align-items-start mb-2">
+                  <span class="badge bg-success me-2">Nouveau</span>
+                  <h5 class="card-title mb-0"><%= catalogue.originalname %></h5>
+                </div>
+                <% if (catalogue.description) { %>
+                  <p class="card-text text-muted small"><%= catalogue.description.substring(0, 80) %><%= catalogue.description.length > 80 ? '...' : '' %></p>
+                <% } %>
+                <div class="mb-2">
+                  <small class="text-muted d-block">
+                    <i class="bi bi-calendar-event me-1"></i>Expire le: <strong><%= catalogue.expiration %></strong>
+                  </small>
+                  <% if (catalogue.livraison) { %>
+                    <small class="text-muted d-block">
+                      <i class="bi bi-truck me-1"></i>Livraison: <strong><%= catalogue.livraison %></strong>
+                    </small>
+                  <% } %>
+                </div>
+              </div>
+              <div class="card-footer bg-transparent border-0">
+                <a href="/panier/new/<%= catalogue.id %>" class="btn btn-primary btn-sm w-100">
+                  <i class="bi bi-cart-plus me-1"></i>Créer un panier
+                </a>
+              </div>
+            </div>
+          </div>
+        <% }) %>
+      </div>
+    </div>
+  </div>
+  <% } %>
+
+  <!-- Info Section -->
+  <div class="row">
+    <div class="col-12 col-md-8 offset-md-2">
+      <div class="card border-0 bg-light">
+        <div class="card-body text-center p-4">
+          <h5 class="card-title mb-3">
+            <i class="bi bi-info-circle me-2"></i>Comment ça marche ?
+          </h5>
+          <p class="card-text">
+            Sélectionnez un catalogue pour afficher les articles disponibles et passer une commande.
+            <br class="d-none d-md-block" />
+            Accédez à votre panier ou à l'historique de vos commandes à tout moment.
+          </p>
+          <a href="https://wp.coopaz.fr/index.php/coopazinfo/"
+             class="btn btn-success mt-2"
+             target="_blank">
+            <i class="bi bi-book me-2"></i>Informations Adhérents Coop'Az
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<%- include('partials/footer') %>

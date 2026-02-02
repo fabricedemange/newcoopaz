@@ -1,0 +1,3537 @@
+const express = require("express");
+//const { traceActionsMiddleware } = require("../middleware/trace.middleware");
+//const { logTrace } = require("../middleware/trace.middleware");
+const router = express.Router();
+//router.use(traceActionsMiddleware);
+const bcrypt = require("bcrypt");
+const fs = require("fs");
+const path = require("path");
+const xlsx = require("xlsx");
+const { google } = require("googleapis");
+const PdfPrinter = require("pdfmake");
+const sharp = require("sharp");
+const { db, queryWithTrace } = require("../config/db-trace-wrapper");
+const {
+  requireRole,
+  requireAdmin,
+  requireSuperAdmin,
+  requireReferent,
+} = require("../middleware/middleware");
+const emailService = require("../services/email.service");
+const { logger } = require("../config/logger");
+const { queryWithUser } = require("../config/db-trace-wrapper");
+const csrfProtection = require("../config/csrf");
+const {
+  insertCatalog,
+  insertArticle,
+  insertUser,
+  getCatalogsByOrg,
+  getAllCatalogs,
+  getUsersByOrg,
+  getAllUsers,
+  getAllOrganizations,
+} = require("../utils/db-helpers");
+const { renderAdminView } = require("../utils/view-helpers");
+const { validateCatalogOwnership } = require("../middleware/middleware");
+const {
+  handleDatabaseError,
+  handleQueryError,
+  handleExportError,
+} = require("../utils/error-helpers");
+const {
+  getCurrentOrgId,
+  getCurrentUserId,
+  getCurrentUserRole,
+  getCurrentUsername,
+  isSuperAdmin,
+  getOriginalUser,
+  isImpersonating,
+} = require("../utils/session-helpers");
+const { validateBandeauInput } = require("../utils/validation-helpers");
+
+// Configuration sécurisée pour l'upload de fichiers
+const {
+  upload,
+  validateUploadedFile,
+  handleMulterError,
+  cleanupFile: cleanupUploadedFile,
+} = require("../middleware/upload.middleware");
+
+const {
+  articleImageUpload,
+  cleanupFile: cleanupTempArticleImage,
+} = require("../middleware/article-image-upload.middleware");
+
+const {
+  catalogueImageUpload,
+  cleanupFile: cleanupTempCatalogueImage,
+} = require("../middleware/catalogue-image-upload.middleware");
+
+const ARTICLE_IMAGE_DIR = path.join(
+  __dirname,
+  "..",
+  "uploads",
+  "article-images"
+);
+
+const CATALOGUE_IMAGE_DIR = path.join(
+  __dirname,
+  "..",
+  "uploads",
+  "catalogue-images"
+);
+
+// Requête SQL réutilisable pour récupérer les produits d'un catalogue
+const GET_CATALOG_PRODUCTS_SQL = `
+  SELECT
+    cp.id,
+    cp.catalog_file_id,
+    cp.product_id,
+    cp.prix,
+    cp.unite,
+    p.nom as produit,
+    p.description,
+    p.image as image_filename,
+    c.nom as categorie,
+    c.couleur as categorie_couleur,
+    c.ordre as categorie_ordre,
+    s.nom as fournisseur
+  FROM catalog_products cp
+  INNER JOIN products p ON cp.product_id = p.id
+  LEFT JOIN categories c ON p.category_id = c.id
+  LEFT JOIN suppliers s ON p.supplier_id = s.id
+  WHERE cp.catalog_file_id = ?
+  ORDER BY c.ordre, p.nom
+`;
+
+// Requête pour récupérer un catalog_product spécifique
+const GET_CATALOG_PRODUCT_BY_ID_SQL = `
+  SELECT
+    cp.id,
+    cp.catalog_file_id,
+    cp.product_id,
+    cp.prix,
+    cp.unite,
+    p.nom as produit,
+    p.description,
+    p.image as image_filename,
+    c.nom as categorie,
+    s.nom as fournisseur
+  FROM catalog_products cp
+  INNER JOIN products p ON cp.product_id = p.id
+  LEFT JOIN categories c ON p.category_id = c.id
+  LEFT JOIN suppliers s ON p.supplier_id = s.id
+  WHERE cp.id = ? AND cp.catalog_file_id = ?
+`;
+
+// En prod, on veut que le dossier final existe dès le démarrage (comme tmp-article-images)
+try {
+  if (!fs.existsSync(ARTICLE_IMAGE_DIR)) {
+    fs.mkdirSync(ARTICLE_IMAGE_DIR, { recursive: true });
+  }
+} catch (e) {
+  // Ne bloque pas le démarrage, mais ça explique pourquoi les images ne peuvent pas être écrites.
+  console.error(
+    "Impossible de créer le dossier article-images:",
+    ARTICLE_IMAGE_DIR,
+    e
+  );
+}
+
+try {
+  if (!fs.existsSync(CATALOGUE_IMAGE_DIR)) {
+    fs.mkdirSync(CATALOGUE_IMAGE_DIR, { recursive: true });
+  }
+} catch (e) {
+  console.error(
+    "Impossible de créer le dossier catalogue-images:",
+    CATALOGUE_IMAGE_DIR,
+    e
+  );
+}
+
+// Configuration PDF printer
+const fonts = {
+  Roboto: {
+    normal: "./fonts/Roboto-Regular.ttf",
+    bold: "./fonts/Roboto-Bold.ttf",
+    italics: "./fonts/Roboto-ExtraBoldItalic.ttf",
+    bolditalics: "./fonts/Roboto-Light.ttf",
+  },
+};
+const printer = new PdfPrinter(fonts);
+
+function requireActiveImpersonation(req, res, next) {
+  if (req.session && req.session.originalUser) {
+    return next();
+  }
+  return res.redirect("/admin/dashboard");
+}
+
+// Helper functions pour les emails
+function envoimail(to, subject, text, attachment, { initiatedBy } = {}) {
+  const normalizeRecipients = (raw) => {
+    if (!raw) {
+      return [];
+    }
+    if (Array.isArray(raw)) {
+      return raw.filter(Boolean);
+    }
+    if (typeof raw === "string") {
+      return raw
+        .split(/[,;]/)
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+    }
+    return [];
+  };
+
+  const recipients = normalizeRecipients(to);
+  if (recipients.length === 0) {
+    return Promise.resolve([]);
+  }
+
+  const baseHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+      </head>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        <h1 style="color:blue;">Bonjour !</h1>
+        ${text}
+        <p>Retrouvez vos informations en ligne sur <a href="https://cde.coopaz.fr" style="color: #007bff; text-decoration: none;">Coopaz.fr</a>.</p>
+      </body>
+      </html>
+    `;
+
+  const buildMailOptions = (recipient) => {
+    const options = {
+      from: "contact@coopaz.fr",
+      to: recipient,
+      subject,
+      html: baseHtml,
+      initiatedBy: initiatedBy || null,
+    };
+
+    if (attachment && attachment.length > 0) {
+      options.attachments = [
+        {
+          filename: "synthese.pdf",
+          content: attachment,
+        },
+      ];
+    }
+
+    return options;
+  };
+
+  const jobs = recipients.map((recipient) =>
+    emailService.sendEmail(buildMailOptions(recipient))
+  );
+
+  return Promise.all(jobs);
+}
+
+function envoimailtous(sujet, messagemail, pj) {
+  db.query(
+    "SELECT email FROM users where is_validated=1 AND organization_id = ?",
+    [getCurrentOrgId(req)],
+    (err, rows) => {
+      if (err) throw err;
+      const emails = rows.map((row) => row.email);
+      envoimail(emails, sujet, messagemail, pj, {
+        initiatedBy: "system",
+      }).catch((err) => logger.error("Failed to send email to all users", err));
+    }
+  );
+}
+
+function formatDateFR(date) {
+  if (!date) return "";
+  if (date instanceof Date) {
+    return date.toLocaleDateString("fr-FR");
+  }
+  const d = new Date(date);
+  if (isNaN(d)) return "";
+  return d.toLocaleDateString("fr-FR");
+}
+
+function convertToSQLDate(dateStr) {
+  if (!dateStr) return null;
+  const [datePart, timePart = "00:00"] = dateStr.split(" ");
+  const [day, month, year] = datePart.split("/");
+  const timeSQL = timePart.length === 5 ? timePart + ":00" : timePart;
+  return `${year}-${month}-${day} ${timeSQL}`;
+}
+
+// ============================================
+// USERS MANAGEMENT
+// ============================================
+
+router.post("/impersonate", requireSuperAdmin, (req, res) => {
+  const targetUserId = parseInt(req.body.user_id, 10);
+  if (!Number.isInteger(targetUserId)) {
+    return res.status(400).send("Utilisateur cible invalide");
+  }
+
+  if (!req.session) {
+    return res.status(500).send("Session invalide");
+  }
+
+  if (req.session.originalUser) {
+    return res.status(400).send("Une session d'impersonation est déjà active");
+  }
+
+  if (targetUserId === req.session.userId) {
+    return res.redirect(req.get("referer") || "/admin/users");
+  }
+
+  db.query(
+    "SELECT id, username, role, organization_id FROM users WHERE id = ?",
+    [targetUserId],
+    (err, rows) => {
+      if (err) {
+        logger.error(
+          "Erreur lors de la récupération de l'utilisateur pour impersonation",
+          {
+            error: err,
+            targetUserId,
+          }
+        );
+        return res.status(500).send("Erreur serveur lors de l'impersonation");
+      }
+
+      if (!rows || rows.length === 0) {
+        return res.status(404).send("Utilisateur introuvable");
+      }
+
+      const targetUser = rows[0];
+
+      req.session.originalUser = {
+        userId: req.session.userId,
+        role: req.session.role,
+        username: req.session.username,
+        organization_id: req.session.organization_id,
+      };
+
+      req.session.userId = targetUser.id;
+      req.session.role = targetUser.role;
+      req.session.username = targetUser.username;
+      req.session.organization_id = targetUser.organization_id;
+      req.session.impersonatedUser = {
+        userId: targetUser.id,
+        username: targetUser.username,
+        role: targetUser.role,
+      };
+
+      logger.info("Impersonation démarrée", {
+        superAdminId: req.session.originalUser.userId,
+        targetUserId: targetUser.id,
+      });
+
+      req.session.save(() => {
+        res.redirect(req.get("referer") || "/");
+      });
+    }
+  );
+});
+
+router.post("/impersonate/stop", requireActiveImpersonation, (req, res) => {
+  const original = getOriginalUser(req);
+
+  if (!original) {
+    return res.redirect("/");
+  }
+
+  const impersonated = req.session.impersonatedUser || null;
+
+  req.session.userId = original.userId;
+  req.session.role = original.role;
+  req.session.username = original.username;
+  req.session.organization_id = original.organization_id;
+
+  delete req.session.originalUser;
+  delete req.session.impersonatedUser;
+
+  logger.info("Impersonation terminée", {
+    superAdminId: req.session.userId,
+    impersonatedUserId: impersonated ? impersonated.userId : null,
+  });
+
+  req.session.save(() => {
+    res.redirect(req.get("referer") || "/admin/dashboard");
+  });
+});
+
+// Liste utilisateurs
+router.get("/users", requireAdmin, (req, res) => {
+  const { debugLog } = require("../utils/logger-helpers");
+  const orgId = getCurrentOrgId(req);
+  debugLog(`DEBUG SESSION USERS`, {
+    organization_id: orgId,
+    role: getCurrentUserRole(req),
+    userId: getCurrentUserId(req),
+    username: getCurrentUsername(req),
+  });
+  const callback = (err, results) => {
+    renderAdminView(res, "admin_users", { users: results });
+  };
+  if (isSuperAdmin(req)) {
+    getAllUsers(callback);
+  } else {
+    getUsersByOrg(orgId, callback);
+  }
+});
+
+// Formulaire nouvel utilisateur
+router.get("/users/new", requireAdmin, (req, res) => {
+  if (isSuperAdmin(req)) {
+    getAllOrganizations((err, orgs) => {
+      renderAdminView(res, "admin_user_form", {
+        user: null,
+        error: null,
+        action: "add",
+        organizations: orgs,
+      });
+    });
+  } else {
+    renderAdminView(res, "admin_user_form", {
+      user: null,
+      error: null,
+      action: "add",
+      organizations: null,
+    });
+  }
+});
+
+// Ajout utilisateur
+router.post("/users/new", requireAdmin, async (req, res) => {
+  let {
+    username,
+    password,
+    email,
+    description,
+    role,
+    organization_id,
+    email_catalogue,
+  } = req.body;
+  const usernameLower = username.toLowerCase();
+  if (!username || !email || !password) {
+    return renderAdminView(res, "admin_user_form", {
+      user: null,
+      error: "Champs obligatoires manquants.",
+      action: "add",
+    });
+  }
+  const hashedPassword = await bcrypt.hash(password, 10);
+  const emailCatalogue =
+    email_catalogue === "1" ||
+    email_catalogue === "true" ||
+    email_catalogue === "on"
+      ? 1
+      : 0;
+  let orgIdToUse;
+  if (isSuperAdmin(req)) {
+    orgIdToUse = organization_id;
+    if (orgIdToUse === "" || orgIdToUse === "Toutes") {
+      orgIdToUse = null;
+    }
+  } else {
+    // Pour admin, impose l'organisation de la session
+    orgIdToUse = getCurrentOrgId(req);
+  }
+  insertUser(
+    usernameLower,
+    hashedPassword,
+    role,
+    email,
+    description,
+    emailCatalogue,
+    orgIdToUse,
+    req,
+    function (err) {
+      if (err) {
+        return renderAdminView(res, "admin_user_form", {
+          user: null,
+          error: "Erreur : nom ou email déjà utilisé.",
+          action: "add",
+        });
+      }
+      res.redirect("/admin/users");
+    },
+    req
+  );
+});
+
+// Formulaire édition utilisateur
+router.get(
+  "/users/:id/edit",
+  requireRole(["admin", "SuperAdmin"]),
+  (req, res) => {
+    const id = req.params.id;
+    if (getCurrentUserRole(req) === "SuperAdmin") {
+      db.query("SELECT * FROM users WHERE id = ?", [id], (err, results) => {
+        if (err || !results || results.length === 0)
+          return res.redirect("/admin/users");
+        const user = results[0];
+        getAllOrganizations((err, orgs) => {
+          res.render("admin_user_form", {
+            user,
+            error: null,
+            action: "edit",
+            organizations: orgs,
+          });
+        });
+      });
+    } else {
+      db.query(
+        "SELECT * FROM users WHERE id = ? AND organization_id = ?",
+        [id, getCurrentOrgId(req)],
+        (err, results) => {
+          if (err || !results || results.length === 0)
+            return res.redirect("/admin/users");
+          const user = results[0];
+          renderAdminView(res, "admin_user_form", {
+            user,
+            error: null,
+            action: "edit",
+            organizations: null,
+          });
+        }
+      );
+    }
+  }
+);
+
+// Modification utilisateur
+router.post("/users/:id/edit", requireAdmin, async (req, res) => {
+  let {
+    username,
+    password,
+    email,
+    description,
+    role,
+    organization_id,
+    email_catalogue,
+  } = req.body;
+  const usernameLower = username.toLowerCase();
+  const id = req.params.id;
+  const emailCatalogue =
+    email_catalogue === "1" ||
+    email_catalogue === "true" ||
+    email_catalogue === "on"
+      ? 1
+      : 0;
+
+  if (!username || !email) {
+    db.query(
+      "SELECT * FROM users WHERE id = ? AND organization_id = ?",
+      [id, getCurrentOrgId(req)],
+      (err, results) => {
+        const user = results && results.length > 0 ? results[0] : null;
+        return renderAdminView(res, "admin_user_form", {
+          user,
+          error: "Champs obligatoires manquants.",
+          action: "edit",
+        });
+      }
+    );
+  } else {
+    // Si SuperAdmin, permettre la modification de l'organisation
+    if (getCurrentUserRole(req) === "SuperAdmin") {
+      if (password) {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        queryWithUser(
+          "UPDATE users SET username=?, password=?, email=?, description=?, role=?, email_catalogue=?, organization_id=? WHERE id=?",
+          [
+            usernameLower,
+            hashedPassword,
+            email,
+            description,
+            role,
+            emailCatalogue,
+            organization_id,
+            id,
+          ],
+          function () {
+            res.redirect("/admin/users");
+          },
+          req
+        );
+      } else {
+        queryWithUser(
+          "UPDATE users SET username=?, email=?, description=?, role=?, email_catalogue=?, organization_id=? WHERE id=?",
+          [
+            usernameLower,
+            email,
+            description,
+            role,
+            emailCatalogue,
+            organization_id,
+            id,
+          ],
+          function () {
+            res.redirect("/admin/users");
+          },
+          req
+        );
+      }
+    } else {
+      if (password) {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        queryWithUser(
+          "UPDATE users SET username=?, password=?, email=?, description=?, role=?, email_catalogue=? WHERE id=?",
+          [
+            usernameLower,
+            hashedPassword,
+            email,
+            description,
+            role,
+            emailCatalogue,
+            id,
+          ],
+          function () {
+            res.redirect("/admin/users");
+          },
+
+          req
+        );
+      } else {
+        queryWithUser(
+          "UPDATE users SET username=?, email=?, description=?, role=?, email_catalogue=? WHERE id=?",
+          [usernameLower, email, description, role, emailCatalogue, id],
+          function () {
+            res.redirect("/admin/users");
+          },
+          req
+        );
+      }
+    }
+  }
+});
+
+// Suppression d'un utilisateur
+router.post("/users/:id/delete", requireAdmin, (req, res) => {
+  if (parseInt(req.params.id) === getCurrentUserId(req)) {
+    return res.redirect("/admin/users");
+  }
+  queryWithUser(
+    "DELETE FROM users WHERE id = ?",
+    [req.params.id],
+    function () {
+      res.redirect("/admin/users");
+    },
+    req
+  );
+});
+
+// Validation d'un utilisateur
+router.post("/users/:id/validate", requireAdmin, (req, res) => {
+  queryWithUser(
+    "UPDATE users SET is_validated = 1 WHERE id = ?",
+    [req.params.id],
+    function (err) {
+      res.redirect("/admin/users");
+    },
+    req
+  );
+});
+
+// File d'attente email
+router.get("/email-queue", requireAdmin, (req, res) => {
+  const rawLimit = parseInt(req.query.limit, 10);
+  const limit = Number.isFinite(rawLimit)
+    ? Math.min(Math.max(rawLimit, 10), 1000)
+    : 500;
+
+  const catalogSubjectFilter = "subject LIKE 'Nouveau catalogue disponible%'";
+  const productSubjectFilter = "subject LIKE 'Commande disponible%'";
+
+  const notificationSummarySql = `WITH filtered AS (
+      SELECT
+        subject,
+        COALESCE(from_address, '') AS initiator_key,
+        from_address AS initiated_by,
+        status,
+        updated_at
+      FROM email_queue
+      WHERE ${catalogSubjectFilter} OR ${productSubjectFilter}
+    ),
+    ranked AS (
+      SELECT
+        subject,
+        initiator_key,
+        initiated_by,
+        MAX(updated_at) AS last_activity
+      FROM filtered
+      GROUP BY subject, initiator_key, initiated_by
+    )
+    SELECT
+      r.subject,
+      r.initiated_by,
+      SUM(CASE WHEN f.status = 'sent' THEN 1 ELSE 0 END) AS sent_count,
+      SUM(CASE WHEN f.status IN ('pending','sending') THEN 1 ELSE 0 END) AS pending_count,
+      COUNT(*) AS total_count,
+      r.last_activity
+    FROM ranked r
+    JOIN filtered f
+      ON f.subject = r.subject
+     AND f.initiator_key = r.initiator_key
+    GROUP BY r.subject, r.initiated_by, r.last_activity
+    ORDER BY r.last_activity DESC`;
+
+  const entriesSql = `SELECT id, status, from_address AS initiated_by, to_addresses, subject,
+      attempt_count, last_error, scheduled_at, sent_at, created_at, updated_at
+    FROM email_queue
+    WHERE NOT (${catalogSubjectFilter} OR ${productSubjectFilter})
+    ORDER BY created_at DESC
+    LIMIT ?`;
+
+  db.query(entriesSql, [limit], (entryErr, rows) => {
+    if (entryErr) {
+      logger.error("Erreur lors de la récupération de la file email", {
+        error: entryErr,
+      });
+      return renderAdminView(
+        res,
+        "admin_email_queue",
+        { entries: [], limit, subjectSummary: [] },
+        "Erreur lors du chargement de la file d'attente email."
+      );
+    }
+
+    db.query(notificationSummarySql, (summaryErr, summaryRows) => {
+      if (summaryErr) {
+        logger.error("Erreur lors du calcul du résumé email", {
+          error: summaryErr,
+        });
+      }
+
+      const formatDateTime = (value) => {
+        if (!value) {
+          return "—";
+        }
+        try {
+          const date = value instanceof Date ? value : new Date(value);
+          if (Number.isNaN(date.getTime())) {
+            return String(value);
+          }
+          return date.toLocaleString("fr-FR", { timeZone: "Europe/Paris" });
+        } catch (formatError) {
+          return String(value);
+        }
+      };
+
+      const entries = (rows || []).map((row) => {
+        let toList = [];
+        if (row.to_addresses) {
+          try {
+            const parsed = JSON.parse(row.to_addresses);
+            if (Array.isArray(parsed)) {
+              toList = parsed.filter(Boolean).map(String);
+            } else if (parsed) {
+              toList = [String(parsed)];
+            }
+          } catch (parseError) {
+            toList = [String(row.to_addresses)];
+          }
+        }
+
+        return {
+          ...row,
+          to_display: toList.join(", ") || "—",
+          initiated_by_display: row.initiated_by || "—",
+          scheduled_at_formatted: formatDateTime(row.scheduled_at),
+          sent_at_formatted: formatDateTime(row.sent_at),
+          updated_at_formatted: formatDateTime(row.updated_at),
+        };
+      });
+
+      const subjectSummary = (summaryRows || []).map((row) => {
+        const rawLastActivity = row.last_activity;
+        let lastActivityTs = null;
+        if (rawLastActivity) {
+          const parsedDate =
+            rawLastActivity instanceof Date
+              ? rawLastActivity
+              : new Date(rawLastActivity);
+          if (!Number.isNaN(parsedDate.getTime())) {
+            lastActivityTs = parsedDate.getTime();
+          }
+        }
+
+        return {
+          subject: row.subject || "(Sujet vide)",
+          initiated_by_display: row.initiated_by || "—",
+          sent_count: row.sent_count || 0,
+          pending_count: row.pending_count || 0,
+          total_count: row.total_count || 0,
+          last_activity: rawLastActivity,
+          last_activity_ts: lastActivityTs,
+        };
+      });
+
+      renderAdminView(res, "admin_email_queue", {
+        entries,
+        limit,
+        subjectSummary,
+      });
+    });
+  });
+});
+
+// ============================================
+// CATALOGUES MANAGEMENT
+// ============================================
+
+// Liste des catalogues
+router.get("/catalogues", requireReferent, (req, res) => {
+  const orgId = getCurrentOrgId(req);
+  const role = getCurrentUserRole(req);
+  const isSuperAdminRole = role === "SuperAdmin";
+  const scopeToggleAvailable = !isSuperAdminRole;
+  if (scopeToggleAvailable && typeof req.query.scope === "undefined") {
+    return res.redirect("/admin/catalogues?scope=all");
+  }
+  const mineScopeActive =
+    scopeToggleAvailable && req.query.scope === "referent";
+  const showAllScope = !scopeToggleAvailable || !mineScopeActive;
+  const userId = getCurrentUserId(req);
+
+  const baseQuery = `
+    SELECT
+      c.*,
+      u.username
+    FROM catalog_files c
+    JOIN users u ON c.uploader_id = u.id
+    WHERE 1=1
+      ${!isSuperAdminRole ? "AND c.organization_id = ?" : ""}
+      ${scopeToggleAvailable && mineScopeActive ? "AND c.uploader_id = ?" : ""}
+    ORDER BY c.expiration_date ASC
+  `;
+
+  const params = [];
+  if (!isSuperAdminRole) {
+    params.push(orgId);
+  }
+  if (scopeToggleAvailable && mineScopeActive) {
+    params.push(userId);
+  }
+
+  queryWithUser(
+    baseQuery,
+    params,
+    (err, catalogues) => {
+      if (err) {
+        logger.error("Erreur lors de la récupération des catalogues", {
+          error: err,
+          userId,
+        });
+        return renderAdminView(res, "admin_catalogues", {
+          catalogues: [],
+          organization_id: orgId,
+          role,
+          user: getCurrentUsername(req),
+          referentScopeActive: scopeToggleAvailable,
+          showAllScope,
+        });
+      }
+
+      renderAdminView(res, "admin_catalogues", {
+        catalogues: catalogues || [],
+        organization_id: orgId,
+        role,
+        user: getCurrentUsername(req),
+        referentScopeActive: scopeToggleAvailable,
+        showAllScope,
+      });
+    },
+    req
+  );
+});
+
+// Formulaire nouveau catalogue
+router.get("/catalogues/new", requireReferent, (req, res) => {
+  renderAdminView(res, "admin_catalogue_form", { error: null });
+});
+
+// Création catalogue vide
+router.get(
+  "/catalogues/new2",
+  requireRole(["admin", "SuperAdmin", "referent"]),
+  (req, res) => {
+    const expirationDate = req.body.expirationDate || null;
+    const uploaderId = getCurrentUserId(req);
+    const organizationId = getCurrentOrgId(req);
+
+    queryWithUser(
+      `INSERT INTO catalog_files
+        (filename, originalname, upload_date, expiration_date, uploader_id, date_livraison, organization_id) 
+        VALUES (?, ?, NOW(), NOW(), ?, now(), ? )`,
+      ["A changer", "A changer", uploaderId, organizationId],
+      function (err, result) {
+        if (err) {
+          logger.error("Erreur lors de l'insertion du catalogue", {
+            error: err,
+          });
+          return res.status(500).send("Erreur lors de l'insertion");
+        }
+
+        const catalogFileId = result.insertId;
+        queryWithUser(
+          "INSERT INTO articles (catalog_file_id, produit, description, prix) VALUES (?, ?, ?, ?)",
+          [catalogFileId, "Produit1", "description1", 0],
+          function (err2) {
+            if (err2) {
+              logger.error("Erreur lors de l'insertion de l'article", {
+                error: err2,
+              });
+              return res
+                .status(500)
+                .send("Erreur lors de l'insertion de l'article");
+            }
+
+            res.redirect("/admin/catalogues/" + catalogFileId + "/edit");
+          },
+          req
+        );
+      },
+      req
+    );
+  }
+);
+
+// Upload catalogue Excel
+router.post(
+  "/catalogues/upload",
+  requireReferent,
+  upload.single("excel"),
+  validateUploadedFile, // Validation sécurisée du fichier
+  handleMulterError, // Gestion des erreurs d'upload
+  csrfProtection,
+  (req, res) => {
+    const file = req.file;
+    const expirationDate = req.body.expiration_date;
+    const description = req.body.description || "";
+
+    if (!file) {
+      return res.render("admin_catalogue_form", {
+        error: "Fichier Excel manquant.",
+        csrfToken: req.csrfToken(),
+      });
+    }
+
+    // Validation des données du formulaire
+    if (!expirationDate || isNaN(Date.parse(expirationDate))) {
+      cleanupUploadedFile(file.path);
+      return res.render("admin_catalogue_form", {
+        error: "Date d'expiration invalide.",
+        csrfToken: req.csrfToken(),
+      });
+    }
+
+    insertCatalog(
+      file,
+      expirationDate,
+      getCurrentUserId(req),
+      description,
+      req,
+      function (err, result) {
+        if (err) {
+          cleanupUploadedFile(file.path);
+          logger.error("Erreur DB lors de l'upload", { error: err });
+          return res.status(500).send("Erreur lors de l'upload.");
+        }
+
+        const catalogFileId = result.insertId;
+
+        // Lecture sécurisée du fichier Excel
+        let workbook, sheet, rows;
+        try {
+          workbook = xlsx.readFile(file.path);
+          sheet = workbook.Sheets[workbook.SheetNames[0]];
+          rows = xlsx.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+        } catch (xlsxError) {
+          cleanupUploadedFile(file.path);
+          logger.error(
+            "Erreur lors de la lecture du fichier Excel:",
+            xlsxError
+          );
+
+          // Supprimer l'entrée de la base de données
+          queryWithUser(
+            "DELETE FROM catalog_files WHERE id = ?",
+            [catalogFileId],
+            req
+          );
+
+          return res.status(400).render("admin_catalogue_form", {
+            error: "Fichier Excel corrompu ou format invalide.",
+            csrfToken: req.csrfToken(),
+          });
+        }
+
+        rows.slice(1).forEach((row) => {
+          const [produit, description, prix] = row;
+          if (produit && prix) {
+            insertArticle(
+              catalogFileId,
+              produit,
+              description,
+              prix,
+              req,
+              function (err) {}
+            );
+          }
+        });
+
+        fs.unlinkSync(file.path);
+        res.redirect("/admin/catalogues");
+      },
+      req
+    );
+  }
+);
+
+// Envoyer email pour nouveau catalogue
+router.post(
+  "/catalogues/:id/email",
+  requireRole(["admin", "referent", "SuperAdmin"]),
+  (req, res) => {
+    const orgId = getCurrentOrgId(req);
+    db.query(
+      "SELECT * FROM catalog_files WHERE id = ? AND organization_id = ?",
+      [req.params.id, orgId],
+      (err, rows) => {
+        if (err || !rows || rows.length === 0)
+          return res.redirect("/admin/catalogues");
+
+        const catalogue = rows[0];
+        const expiration = formatDateFR(catalogue.expiration_date);
+
+        db.query(
+          `SELECT email, username FROM users
+           WHERE organization_id = ?
+             AND is_validated = 1
+             AND email_catalogue = 1
+             AND email IS NOT NULL
+             AND email <> ''`,
+          [orgId],
+          (userErr, users) => {
+            if (userErr || !users || users.length === 0) {
+              debugLog("Notification catalogue", {
+                catalogueId: req.params.id,
+                usersFound: users ? users.length : 0,
+                error: userErr,
+              });
+              return res.redirect("/admin/catalogues");
+            }
+
+            const subject = `Nouveau catalogue disponible : ${
+              catalogue.originalname || catalogue.description || catalogue.id
+            }`;
+            const message = `
+              <p style="font-family: Arial, sans-serif;">Un nouveau catalogue est disponible dans votre espace Coopaz.</p>
+              <ul style="font-family: Arial, sans-serif;">
+                <li><strong>Nom :</strong> ${
+                  catalogue.originalname || "Catalogue"
+                }</li>
+                <li><strong>Description :</strong> ${
+                  catalogue.description || "Non renseignée"
+                }</li>
+                ${
+                  expiration
+                    ? `<li><strong>Expiration :</strong> ${expiration}</li>`
+                    : ""
+                }
+              </ul>
+              <p style="font-family: Arial, sans-serif;">Connectez-vous dès maintenant pour découvrir les nouveautés.</p>
+            `;
+
+            const sendJobs = users.map((user) =>
+              envoimail(user.email, subject, message, null, {
+                initiatedBy: req.session?.username || null,
+              }).catch((mailErr) => {
+                logger.error("Failed to queue catalogue notification", {
+                  error: mailErr,
+                  email: user.email,
+                  catalogueId: catalogue.id,
+                });
+                return null;
+              })
+            );
+
+            Promise.all(sendJobs)
+              .then(() => {
+                debugLog("Notification catalogue envoyée", {
+                  catalogueId: catalogue.id,
+                  recipients: users.length,
+                });
+              })
+              .finally(() => {
+                res.redirect("/admin/catalogues");
+              });
+          }
+        );
+      }
+    );
+  }
+);
+
+// Email arrivée commande
+router.post(
+  "/catalogues/:id/emailarrivee",
+  requireRole(["admin", "referent", "SuperAdmin"]),
+  (req, res) => {
+    db.query(
+      `SELECT u.email, u.id, c.description, c.originalname
+from users u
+join paniers p on u.id=p.user_id
+join catalog_files c on c.id=p.catalog_file_id
+where p.catalog_file_id=? and is_submitted=1  `,
+      [req.params.id],
+      (err, rows) => {
+        if (err || !rows || rows.length === 0)
+          return res.redirect("/admin/catalogues");
+        const catalogue = rows[0];
+        const emails = rows.map((row) => row.email);
+        const { debugLog } = require("../utils/logger-helpers");
+        debugLog("Emails envoyés", { emails });
+        envoimail(
+          emails,
+          "Commande disponible : " + catalogue.originalname,
+          `<h1 style="color:blue;">Votre commande  <br> *** ` +
+            catalogue.description +
+            " " +
+            catalogue.originalname +
+            ` ***<br> est disponible à la Coop </h1>`,
+          null,
+          {
+            initiatedBy: req.session?.username || null,
+          }
+        ).catch((err) =>
+          logger.error("Failed to send email for order available", err)
+        );
+        res.redirect("/admin/catalogues");
+      }
+    );
+  }
+);
+
+// Activer/désactiver l'email automatique au référent (Expiration + 8h)
+router.post(
+  "/catalogues/:id/reminder-referent",
+  requireReferent,
+  validateCatalogOwnership,
+  (req, res) => {
+    const referentOrderReminderEnabled = req.body
+      .referent_order_reminder_enabled
+      ? 1
+      : 0;
+
+    const sql = `UPDATE catalog_files
+      SET referent_order_reminder_enabled = ?,
+          referent_order_reminder_sent_at = referent_order_reminder_sent_at
+      WHERE id = ?`;
+
+    queryWithUser(
+      sql,
+      [referentOrderReminderEnabled, req.params.id],
+      () => {
+        res.redirect(req.get("referer") || "/admin/catalogues");
+      },
+      req
+    );
+  }
+);
+
+// Réinitialiser le rappel référent (autorise un renvoi)
+router.post(
+  "/catalogues/:id/reminder-referent-reset",
+  requireReferent,
+  validateCatalogOwnership,
+  (req, res) => {
+    const sql = `UPDATE catalog_files
+      SET referent_order_reminder_sent_at = NULL
+      WHERE id = ?`;
+
+    queryWithUser(
+      sql,
+      [req.params.id],
+      () => {
+        res.redirect(
+          req.get("referer") || `/admin/catalogues/${req.params.id}/edit`
+        );
+      },
+      req
+    );
+  }
+);
+
+// Mise à jour expiration et description
+router.post("/catalogues/:id/expiration", requireReferent, (req, res) => {
+  const { id } = req.params;
+  const { expiration_date, description } = req.body;
+  queryWithUser(
+    "UPDATE catalog_files SET expiration_date = ?, description = ? WHERE id = ?",
+    [expiration_date, description, id],
+    () => {
+      res.redirect("/admin/catalogues");
+    },
+
+    req
+  );
+});
+
+// Modifier la visibilité d'un catalogue (is_archived)
+router.post(
+  "/catalogues/:id/visibility",
+  requireReferent,
+  validateCatalogOwnership,
+  (req, res) => {
+    const raw = req.body.is_archived;
+    const nextVisibility = Number(raw);
+    const allowed = new Set([0, 2, 3]);
+
+    if (!allowed.has(nextVisibility)) {
+      return res.redirect(req.get("referer") || "/admin/catalogues");
+    }
+
+    queryWithUser(
+      "UPDATE catalog_files SET is_archived = ? WHERE id = ?",
+      [nextVisibility, req.params.id],
+      () => {
+        res.redirect(req.get("referer") || "/admin/catalogues");
+      },
+      req
+    );
+  }
+);
+
+// Archiver un catalogue
+router.post("/catalogues/:id/archive", requireReferent, (req, res) => {
+  queryWithUser(
+    "UPDATE catalog_files SET is_archived = 1 WHERE id = ?",
+    [req.params.id],
+    () => {
+      res.redirect("/admin/catalogues");
+    },
+    req
+  );
+});
+
+// Désarchiver un catalogue
+router.post("/catalogues/:id/unarchive", requireReferent, (req, res) => {
+  queryWithUser(
+    "UPDATE catalog_files SET is_archived = 0 WHERE id = ?",
+    [req.params.id],
+    () => {
+      res.redirect("/admin/catalogues");
+    },
+    req
+  );
+});
+
+// Suppression d'un catalogue
+router.post("/catalogues/:id/delete", requireReferent, (req, res) => {
+  const catalogueId = req.params.id;
+
+  db.query(
+    "SELECT image_filename, organization_id FROM catalog_files WHERE id = ?",
+    [catalogueId],
+    (selectErr, rows) => {
+      if (selectErr || !rows || rows.length === 0) {
+        return res.redirect("/admin/catalogues");
+      }
+
+      const { image_filename: oldFilename, organization_id: orgId } = rows[0];
+      if (
+        !isSuperAdmin(req) &&
+        Number(orgId) !== Number(getCurrentOrgId(req))
+      ) {
+        return res.status(403).send("Accès interdit");
+      }
+
+      if (oldFilename) {
+        const oldPath = path.join(CATALOGUE_IMAGE_DIR, oldFilename);
+        try {
+          if (fs.existsSync(oldPath)) {
+            fs.unlinkSync(oldPath);
+          }
+        } catch (_) {
+          // best-effort
+        }
+      }
+
+      queryWithUser(
+        "DELETE FROM catalog_files WHERE id = ?",
+        [catalogueId],
+        (err) => {
+          if (err) {
+            res.status(500).send("Erreur lors de la suppression du catalogue.");
+          } else {
+            res.redirect("/admin/catalogues");
+          }
+        },
+        req
+      );
+    }
+  );
+});
+
+// Upload image du catalogue (1 image par catalogue)
+router.post(
+  "/catalogues/:id/image",
+  requireReferent,
+  (req, res, next) => {
+    catalogueImageUpload.single("image")(req, res, (err) => {
+      if (err) {
+        logger.error("Erreur upload image catalogue (multer)", {
+          error: err,
+          catalogueId: req.params.id,
+        });
+
+        const catalogueId = req.params.id;
+        const userMessage = (() => {
+          const code = err && err.code ? String(err.code) : "";
+          if (code === "LIMIT_FILE_SIZE") {
+            return "Image trop lourde (max 8 MB).";
+          }
+          if (err && err.message) {
+            return err.message;
+          }
+          return "Upload impossible (erreur de fichier).";
+        })();
+
+        db.query(
+          GET_CATALOG_PRODUCTS_SQL,
+          [catalogueId],
+          (e2, articles) => {
+            db.query(
+              "SELECT * FROM catalog_files WHERE id = ?",
+              [catalogueId],
+              (e3, catalogues) => {
+                const catalogue =
+                  catalogues && catalogues.length > 0 ? catalogues[0] : null;
+                return renderAdminView(res, "admin_catalogue_edit_form", {
+                  catalogue,
+                  articles: articles || [],
+                  error: userMessage,
+                });
+              }
+            );
+          }
+        );
+        return;
+      }
+      next();
+    });
+  },
+  csrfProtection,
+  async (req, res) => {
+    const catalogueId = req.params.id;
+
+    if (!req.file) {
+      return res.redirect(`/admin/catalogues/${catalogueId}/edit`);
+    }
+
+    const tmpPath = req.file.path;
+
+    db.query(
+      "SELECT image_filename, organization_id FROM catalog_files WHERE id = ?",
+      [catalogueId],
+      async (err, rows) => {
+        if (err || !rows || rows.length === 0) {
+          cleanupTempCatalogueImage(tmpPath);
+          return res.redirect(`/admin/catalogues/${catalogueId}/edit`);
+        }
+
+        const { image_filename: oldFilename, organization_id: orgId } = rows[0];
+        if (
+          !isSuperAdmin(req) &&
+          Number(orgId) !== Number(getCurrentOrgId(req))
+        ) {
+          cleanupTempCatalogueImage(tmpPath);
+          return res.status(403).send("Accès interdit");
+        }
+
+        try {
+          if (!fs.existsSync(CATALOGUE_IMAGE_DIR)) {
+            fs.mkdirSync(CATALOGUE_IMAGE_DIR, { recursive: true });
+          }
+
+          const uniqueSuffix =
+            Date.now() + "-" + Math.round(Math.random() * 1e9);
+          const newFilename = `catalogue-${catalogueId}-${uniqueSuffix}.webp`;
+          const outputPath = path.join(CATALOGUE_IMAGE_DIR, newFilename);
+
+          await sharp(tmpPath)
+            .rotate()
+            .resize({
+              width: 1200,
+              height: 1200,
+              fit: "inside",
+              withoutEnlargement: true,
+            })
+            .webp({ quality: 82 })
+            .toFile(outputPath);
+
+          cleanupTempCatalogueImage(tmpPath);
+
+          if (oldFilename) {
+            const oldPath = path.join(CATALOGUE_IMAGE_DIR, oldFilename);
+            try {
+              if (fs.existsSync(oldPath)) {
+                fs.unlinkSync(oldPath);
+              }
+            } catch (_) {
+              // best-effort
+            }
+          }
+
+          queryWithUser(
+            "UPDATE catalog_files SET image_filename = ? WHERE id = ?",
+            [newFilename, catalogueId],
+            (updateErr) => {
+              if (updateErr) {
+                const isMissingColumn =
+                  updateErr &&
+                  (updateErr.code === "ER_BAD_FIELD_ERROR" ||
+                    /Unknown column/i.test(updateErr.message || ""));
+
+                logger.error(
+                  "Erreur DB lors de l'enregistrement image catalogue",
+                  {
+                    error: updateErr,
+                    catalogueId,
+                  }
+                );
+
+                try {
+                  if (fs.existsSync(outputPath)) {
+                    fs.unlinkSync(outputPath);
+                  }
+                } catch (_) {
+                  // best-effort
+                }
+
+                db.query(
+                  GET_CATALOG_PRODUCTS_SQL,
+                  [catalogueId],
+                  (e2, articles) => {
+                    db.query(
+                      "SELECT * FROM catalog_files WHERE id = ?",
+                      [catalogueId],
+                      (e3, catalogues) => {
+                        const catalogue =
+                          catalogues && catalogues.length > 0
+                            ? catalogues[0]
+                            : null;
+                        return renderAdminView(
+                          res,
+                          "admin_catalogue_edit_form",
+                          {
+                            catalogue,
+                            articles: articles || [],
+                            error: isMissingColumn
+                              ? "La base n'est pas à jour (colonne image manquante). Appliquez la migration 20260120_add_catalogue_image.sql puis réessayez."
+                              : "Erreur lors de l'enregistrement de l'image en base.",
+                          }
+                        );
+                      }
+                    );
+                  }
+                );
+                return;
+              }
+
+              return res.redirect(`/admin/catalogues/${catalogueId}/edit`);
+            },
+            req
+          );
+        } catch (e) {
+          cleanupTempCatalogueImage(tmpPath);
+          db.query(
+            GET_CATALOG_PRODUCTS_SQL,
+            [catalogueId],
+            (e2, articles) => {
+              db.query(
+                "SELECT * FROM catalog_files WHERE id = ?",
+                [catalogueId],
+                (e3, catalogues) => {
+                  const catalogue =
+                    catalogues && catalogues.length > 0 ? catalogues[0] : null;
+                  return renderAdminView(res, "admin_catalogue_edit_form", {
+                    catalogue,
+                    articles: articles || [],
+                    error:
+                      "Impossible de traiter l'image (format non supporté ou image corrompue).",
+                  });
+                }
+              );
+            }
+          );
+        }
+      }
+    );
+  }
+);
+
+// Upload image du catalogue via webcam (dataURL)
+router.post(
+  "/catalogues/:id/image/webcam",
+  requireReferent,
+  csrfProtection,
+  async (req, res) => {
+    const catalogueId = req.params.id;
+    const dataUrl = req.body && req.body.image_data_url;
+
+    if (!dataUrl || typeof dataUrl !== "string") {
+      return res.redirect(`/admin/catalogues/${catalogueId}/edit`);
+    }
+
+    const match = dataUrl.match(/^data:(image\/(jpeg|png|webp));base64,(.+)$/i);
+    if (!match) {
+      return res.status(400).send("Image invalide (format dataURL attendu). ");
+    }
+
+    const base64Payload = match[3];
+    let inputBuffer;
+    try {
+      inputBuffer = Buffer.from(base64Payload, "base64");
+    } catch (e) {
+      return res.status(400).send("Image invalide (base64). ");
+    }
+
+    db.query(
+      "SELECT image_filename, organization_id FROM catalog_files WHERE id = ?",
+      [catalogueId],
+      async (err, rows) => {
+        if (err || !rows || rows.length === 0) {
+          return res.redirect(`/admin/catalogues/${catalogueId}/edit`);
+        }
+
+        const { image_filename: oldFilename, organization_id: orgId } = rows[0];
+        if (
+          !isSuperAdmin(req) &&
+          Number(orgId) !== Number(getCurrentOrgId(req))
+        ) {
+          return res.status(403).send("Accès interdit");
+        }
+
+        try {
+          if (!fs.existsSync(CATALOGUE_IMAGE_DIR)) {
+            fs.mkdirSync(CATALOGUE_IMAGE_DIR, { recursive: true });
+          }
+
+          const uniqueSuffix =
+            Date.now() + "-" + Math.round(Math.random() * 1e9);
+          const newFilename = `catalogue-${catalogueId}-${uniqueSuffix}.webp`;
+          const outputPath = path.join(CATALOGUE_IMAGE_DIR, newFilename);
+
+          await sharp(inputBuffer)
+            .rotate()
+            .resize({
+              width: 1200,
+              height: 1200,
+              fit: "inside",
+              withoutEnlargement: true,
+            })
+            .webp({ quality: 82 })
+            .toFile(outputPath);
+
+          if (oldFilename) {
+            const oldPath = path.join(CATALOGUE_IMAGE_DIR, oldFilename);
+            try {
+              if (fs.existsSync(oldPath)) {
+                fs.unlinkSync(oldPath);
+              }
+            } catch (_) {
+              // best-effort
+            }
+          }
+
+          queryWithUser(
+            "UPDATE catalog_files SET image_filename = ? WHERE id = ?",
+            [newFilename, catalogueId],
+            (updateErr) => {
+              if (updateErr) {
+                const isMissingColumn =
+                  updateErr &&
+                  (updateErr.code === "ER_BAD_FIELD_ERROR" ||
+                    /Unknown column/i.test(updateErr.message || ""));
+
+                logger.error(
+                  "Erreur DB lors de l'enregistrement image catalogue webcam",
+                  {
+                    error: updateErr,
+                    catalogueId,
+                  }
+                );
+
+                try {
+                  if (fs.existsSync(outputPath)) {
+                    fs.unlinkSync(outputPath);
+                  }
+                } catch (_) {
+                  // best-effort
+                }
+
+                db.query(
+                  GET_CATALOG_PRODUCTS_SQL,
+                  [catalogueId],
+                  (e2, articles) => {
+                    db.query(
+                      "SELECT * FROM catalog_files WHERE id = ?",
+                      [catalogueId],
+                      (e3, catalogues) => {
+                        const catalogue =
+                          catalogues && catalogues.length > 0
+                            ? catalogues[0]
+                            : null;
+                        return renderAdminView(
+                          res,
+                          "admin_catalogue_edit_form",
+                          {
+                            catalogue,
+                            articles: articles || [],
+                            error: isMissingColumn
+                              ? "La base utilisée par l'application n'a pas la colonne image_filename. Vérifiez que la migration a été appliquée sur la bonne base (DB_NAME)."
+                              : "Erreur lors de l'enregistrement de l'image webcam en base.",
+                          }
+                        );
+                      }
+                    );
+                  }
+                );
+                return;
+              }
+
+              return res.redirect(`/admin/catalogues/${catalogueId}/edit`);
+            },
+            req
+          );
+        } catch (e) {
+          logger.error("Erreur traitement image catalogue webcam", {
+            error: e && e.message ? e.message : e,
+            catalogueId,
+          });
+          return res
+            .status(400)
+            .send(
+              "Impossible de traiter l'image webcam (format non supporté ou image corrompue)."
+            );
+        }
+      }
+    );
+  }
+);
+
+// Suppression de l'image d'un catalogue
+router.post(
+  "/catalogues/:id/image/delete",
+  requireReferent,
+  csrfProtection,
+  (req, res) => {
+    const catalogueId = req.params.id;
+
+    db.query(
+      "SELECT image_filename, organization_id FROM catalog_files WHERE id = ?",
+      [catalogueId],
+      (err, rows) => {
+        if (err || !rows || rows.length === 0) {
+          return res.redirect(`/admin/catalogues/${catalogueId}/edit`);
+        }
+
+        const { image_filename: oldFilename, organization_id: orgId } = rows[0];
+        if (
+          !isSuperAdmin(req) &&
+          Number(orgId) !== Number(getCurrentOrgId(req))
+        ) {
+          return res.status(403).send("Accès interdit");
+        }
+
+        if (oldFilename) {
+          const oldPath = path.join(CATALOGUE_IMAGE_DIR, oldFilename);
+          try {
+            if (fs.existsSync(oldPath)) {
+              fs.unlinkSync(oldPath);
+            }
+          } catch (_) {
+            // best-effort
+          }
+        }
+
+        queryWithUser(
+          "UPDATE catalog_files SET image_filename = NULL WHERE id = ?",
+          [catalogueId],
+          (updateErr) => {
+            if (updateErr) {
+              logger.error("Erreur DB lors de la suppression image catalogue", {
+                error: updateErr,
+                catalogueId,
+              });
+            }
+            return res.redirect(`/admin/catalogues/${catalogueId}/edit`);
+          },
+          req
+        );
+      }
+    );
+  }
+);
+
+// Synthèse globale du catalogue
+router.get("/catalogues/:id/synthese", requireReferent, (req, res) => {
+  const catalogueId = req.params.id;
+  db.query(
+    `SELECT o.name AS organization_name, o.email AS organization_email FROM catalog_files c LEFT JOIN organizations o ON c.organization_id = o.id WHERE c.id = ?`,
+    [catalogueId],
+    (err, orgRows) => {
+      const organizationName =
+        orgRows && orgRows[0] && orgRows[0].organization_name
+          ? orgRows[0].organization_name
+          : "l'organisation";
+      db.query(
+        `SELECT a.produit, a.description, a.prix,
+           COALESCE(NULLIF(p.note, ''), '') AS note,
+           COALESCE(NULLIF(pa.note, ''), '') AS note_article,
+           SUM(pa.quantity) AS total_commande
+FROM articles a
+JOIN panier_articles pa ON pa.article_id = a.id
+JOIN paniers p ON pa.panier_id = p.id
+WHERE a.catalog_file_id = ? AND p.is_submitted = 1
+GROUP BY a.id, note, note_article
+ORDER BY a.produit`,
+        [catalogueId],
+        (err, synthese) => {
+          if (err)
+            return res.status(500).send("Erreur lors du calcul de la synthèse");
+          res.render("admin_catalogue_synthese", {
+            synthese,
+            catalogueId: catalogueId,
+            organizationName,
+          });
+        }
+      );
+    }
+  );
+});
+
+// Synthèse détaillée
+router.get(
+  "/catalogues/:id/synthese-detaillee",
+  requireReferent,
+  (req, res) => {
+    const catalogueId = req.params.id;
+    // First, get the organization name for this catalogue
+    db.query(
+      `SELECT o.name AS organization_name FROM catalog_files c LEFT JOIN organizations o ON c.organization_id = o.id WHERE c.id = ?`,
+      [catalogueId],
+      (err, orgRows) => {
+        const organizationName =
+          orgRows && orgRows[0] && orgRows[0].organization_name
+            ? orgRows[0].organization_name
+            : "l'organisation";
+        db.query(
+          `SELECT 
+  CONCAT(u.username, ' (panier N°', c.id, ')') as username2, 
+  a.produit, 
+  a.description, 
+  a.prix, 
+  SUM(pa.quantity) as quantite, 
+  ROUND(SUM(pa.quantity * a.prix), 2) as montant_utilisateur, 
+  c.note, pa.note as note_article
+FROM paniers c
+JOIN panier_articles pa ON pa.panier_id = c.id
+JOIN articles a ON pa.article_id = a.id
+JOIN users u ON c.user_id = u.id
+WHERE a.catalog_file_id = ? and c.is_submitted = 1
+GROUP BY u.id, a.id, c.id
+ORDER BY username2 ASC, a.produit ASC`,
+          [catalogueId],
+          (err, details) => {
+            if (err)
+              return res
+                .status(500)
+                .send("Erreur lors du calcul de la synthèse détaillée");
+            res.render("admin_catalogue_synthese_detaillee", {
+              details,
+              catalogueId,
+              organizationName,
+            });
+          }
+        );
+      }
+    );
+  }
+);
+
+// Afficher le formulaire d'édition d'un catalogue
+router.get(
+  "/catalogues/:id/edit",
+  requireReferent,
+  validateCatalogOwnership,
+  (req, res) => {
+    db.query(
+      GET_CATALOG_PRODUCTS_SQL,
+      [req.params.id],
+      (err, articles) => {
+        renderAdminView(res, "admin_catalogue_edit_form", {
+          catalogue: req.catalog,
+          articles,
+        });
+      }
+    );
+  }
+);
+
+// Valider le formulaire d'édition d'un catalogue
+router.post(
+  "/catalogues/:id/edit",
+  requireReferent,
+  validateCatalogOwnership,
+  (req, res) => {
+    const {
+      originalname,
+      expiration_date,
+      description,
+      is_archived,
+      date_livraison,
+    } = req.body;
+
+    const referentOrderReminderEnabled = req.body
+      .referent_order_reminder_enabled
+      ? 1
+      : 0;
+
+    const sql = `UPDATE catalog_files
+      SET originalname = ?,
+          expiration_date = ?,
+          description = ?,
+          is_archived = ?,
+          date_livraison = ?,
+          referent_order_reminder_enabled = ?,
+          referent_order_reminder_sent_at = referent_order_reminder_sent_at
+      WHERE id = ?`;
+
+    queryWithUser(
+      sql,
+      [
+        originalname,
+        expiration_date,
+        description,
+        is_archived,
+        date_livraison,
+        referentOrderReminderEnabled,
+        req.params.id,
+      ],
+      (err) => {
+        if (err) {
+          renderAdminView(res, "admin_catalogue_edit_form", {
+            catalogue: {
+              ...req.catalog,
+              ...req.body,
+              referent_order_reminder_enabled: referentOrderReminderEnabled,
+            },
+            articles: [],
+            error: "Erreur lors de la modification.",
+          });
+          return;
+        }
+
+        res.redirect(`/admin/catalogues/${req.params.id}/edit`);
+      },
+      req
+    );
+  }
+);
+
+// Ajouter un article au catalogue
+router.post("/catalogues/:id/articles/add", requireReferent, (req, res) => {
+  const { produit, description, prix, unite } = req.body;
+  const catalogueId = req.params.id;
+
+  if (!produit || !prix) {
+    db.query(
+      "SELECT * FROM catalog_files WHERE id = ? AND organization_id = ?",
+      [id, getCurrentOrgId(req)],
+      [catalogueId],
+      (err, catalogues) => {
+        const catalogue =
+          catalogues && catalogues.length > 0 ? catalogues[0] : null;
+        db.query(
+          "SELECT * FROM articles WHERE catalog_file_id = ?",
+          [catalogueId],
+          (err, articles) => {
+            renderAdminView(res, "admin_catalogue_edit_form", {
+              catalogue,
+              articles,
+              error: "Le nom du produit et le prix sont obligatoires.",
+              user: getCurrentUsername(req),
+              role: getCurrentUserRole(req),
+            });
+          }
+        );
+      }
+    );
+    return;
+  }
+
+  queryWithUser(
+    "INSERT INTO articles (catalog_file_id, produit, description, prix, unite) VALUES (?, ?, ?, ?, ?)",
+    [catalogueId, produit, description, prix, unite],
+    function (err) {
+      res.redirect(`/admin/catalogues/${catalogueId}/edit`);
+    },
+    req
+  );
+});
+
+// Supprimer un article du catalogue
+router.post(
+  "/catalogues/:catalogue_id/articles/:article_id/delete",
+  requireReferent,
+  (req, res) => {
+    const { catalogue_id, article_id } = req.params;
+    queryWithUser(
+      "DELETE FROM articles WHERE id = ? AND catalog_file_id = ?",
+      [article_id, catalogue_id],
+      (err) => {
+        res.redirect(`/admin/catalogues/${catalogue_id}/edit`);
+      },
+      req
+    );
+  }
+);
+
+// Formulaire d'édition d'un article
+router.get(
+  "/catalogues/:catalogue_id/articles/:article_id/edit",
+  requireReferent,
+  (req, res) => {
+    db.query(
+      "SELECT id, catalog_file_id, produit, description, prix, unite, image_filename FROM articles WHERE id = ? AND catalog_file_id = ?",
+      [req.params.article_id, req.params.catalogue_id],
+      (err, results) => {
+        if (err || !results || results.length === 0)
+          return res.redirect(
+            `/admin/catalogues/${req.params.catalogue_id}/edit`
+          );
+        const article = results[0];
+        renderAdminView(res, "admin_article_edit_form", {
+          article,
+          catalogue_id: req.params.catalogue_id,
+          error: null,
+        });
+      }
+    );
+  }
+);
+
+// Validation édition d'un article
+router.post(
+  "/catalogues/:catalogue_id/articles/:article_id/edit",
+  requireReferent,
+  (req, res) => {
+    const { produit, description, prix, unite } = req.body;
+    queryWithUser(
+      "UPDATE articles SET produit = ?, description = ?, prix = ?, unite = ? WHERE id = ? AND catalog_file_id = ?",
+      [
+        produit,
+        description,
+        prix,
+        unite,
+        req.params.article_id,
+        req.params.catalogue_id,
+      ],
+      function (err) {
+        if (err) {
+          db.query(
+            "SELECT id, catalog_file_id, produit, description, prix, unite, image_filename FROM articles WHERE id = ? AND catalog_file_id = ?",
+            [req.params.article_id, req.params.catalogue_id],
+            (e, results) => {
+              const article = results && results.length > 0 ? results[0] : null;
+              renderAdminView(res, "admin_article_edit_form", {
+                article,
+                catalogue_id: req.params.catalogue_id,
+                error: "Erreur lors de la modification.",
+              });
+            }
+          );
+        } else {
+          res.redirect(`/admin/catalogues/${req.params.catalogue_id}/edit`);
+        }
+      },
+      req
+    );
+  }
+);
+
+// Upload / remplacement d'une image pour un article
+router.post(
+  "/catalogues/:catalogue_id/articles/:article_id/image",
+  requireReferent,
+  (req, res, next) => {
+    articleImageUpload.single("image")(req, res, (err) => {
+      if (err) {
+        const catalogueId = req.params.catalogue_id;
+        db.query(
+          GET_CATALOG_PRODUCTS_SQL,
+          [catalogueId],
+          (e2, articles) => {
+            db.query(
+              "SELECT * FROM catalog_files WHERE id = ?",
+              [catalogueId],
+              (e3, catalogues) => {
+                const catalogue =
+                  catalogues && catalogues.length > 0 ? catalogues[0] : null;
+                return renderAdminView(res, "admin_catalogue_edit_form", {
+                  catalogue,
+                  articles: articles || [],
+                  error:
+                    err && err.message
+                      ? err.message
+                      : "Erreur lors de l'upload de l'image.",
+                });
+              }
+            );
+          }
+        );
+        return;
+      }
+      next();
+    });
+  },
+  csrfProtection,
+  async (req, res) => {
+    const { catalogue_id: catalogueId, article_id: articleId } = req.params;
+
+    if (!req.file) {
+      return res.redirect(`/admin/catalogues/${catalogueId}/edit`);
+    }
+
+    const tmpPath = req.file.path;
+
+    db.query(
+      `SELECT a.image_filename, c.organization_id
+       FROM articles a
+       JOIN catalog_files c ON c.id = a.catalog_file_id
+       WHERE a.id = ? AND a.catalog_file_id = ?`,
+      [articleId, catalogueId],
+      async (err, rows) => {
+        if (err || !rows || rows.length === 0) {
+          cleanupTempArticleImage(tmpPath);
+          return res.redirect(`/admin/catalogues/${catalogueId}/edit`);
+        }
+
+        const { image_filename: oldFilename, organization_id: orgId } = rows[0];
+        if (
+          !isSuperAdmin(req) &&
+          Number(orgId) !== Number(getCurrentOrgId(req))
+        ) {
+          cleanupTempArticleImage(tmpPath);
+          return res.status(403).send("Accès interdit");
+        }
+
+        try {
+          if (!fs.existsSync(ARTICLE_IMAGE_DIR)) {
+            fs.mkdirSync(ARTICLE_IMAGE_DIR, { recursive: true });
+          }
+
+          const uniqueSuffix =
+            Date.now() + "-" + Math.round(Math.random() * 1e9);
+          const newFilename = `article-${articleId}-${uniqueSuffix}.webp`;
+          const outputPath = path.join(ARTICLE_IMAGE_DIR, newFilename);
+
+          await sharp(tmpPath)
+            .rotate()
+            .resize({
+              width: 900,
+              height: 900,
+              fit: "inside",
+              withoutEnlargement: true,
+            })
+            .webp({ quality: 80 })
+            .toFile(outputPath);
+
+          cleanupTempArticleImage(tmpPath);
+
+          if (oldFilename) {
+            const oldPath = path.join(ARTICLE_IMAGE_DIR, oldFilename);
+            try {
+              if (fs.existsSync(oldPath)) {
+                fs.unlinkSync(oldPath);
+              }
+            } catch (_) {
+              // best-effort
+            }
+          }
+
+          queryWithUser(
+            "UPDATE articles SET image_filename = ? WHERE id = ? AND catalog_file_id = ?",
+            [newFilename, articleId, catalogueId],
+            (updateErr) => {
+              if (updateErr) {
+                // Si la migration n'a pas été appliquée, on le signale explicitement.
+                const isMissingColumn =
+                  updateErr &&
+                  (updateErr.code === "ER_BAD_FIELD_ERROR" ||
+                    /Unknown column/i.test(updateErr.message || ""));
+
+                logger.error(
+                  "Erreur DB lors de l'enregistrement image article",
+                  {
+                    error: updateErr,
+                    articleId,
+                    catalogueId,
+                  }
+                );
+
+                // Nettoyage du fichier généré si la DB refuse l'update
+                try {
+                  if (fs.existsSync(outputPath)) {
+                    fs.unlinkSync(outputPath);
+                  }
+                } catch (_) {
+                  // best-effort
+                }
+
+                db.query(
+                  GET_CATALOG_PRODUCTS_SQL,
+                  [catalogueId],
+                  (e2, articles) => {
+                    db.query(
+                      "SELECT * FROM catalog_files WHERE id = ?",
+                      [catalogueId],
+                      (e3, catalogues) => {
+                        const catalogue =
+                          catalogues && catalogues.length > 0
+                            ? catalogues[0]
+                            : null;
+                        return renderAdminView(
+                          res,
+                          "admin_catalogue_edit_form",
+                          {
+                            catalogue,
+                            articles: articles || [],
+                            error: isMissingColumn
+                              ? "La base n'est pas à jour (colonne image manquante). Appliquez la migration 20260115_add_article_image.sql puis réessayez."
+                              : "Erreur lors de l'enregistrement de l'image en base.",
+                          }
+                        );
+                      }
+                    );
+                  }
+                );
+                return;
+              }
+
+              return res.redirect(`/admin/catalogues/${catalogueId}/edit`);
+            },
+            req
+          );
+        } catch (e) {
+          cleanupTempArticleImage(tmpPath);
+          db.query(
+            GET_CATALOG_PRODUCTS_SQL,
+            [catalogueId],
+            (e2, articles) => {
+              db.query(
+                "SELECT * FROM catalog_files WHERE id = ?",
+                [catalogueId],
+                (e3, catalogues) => {
+                  const catalogue =
+                    catalogues && catalogues.length > 0 ? catalogues[0] : null;
+                  return renderAdminView(res, "admin_catalogue_edit_form", {
+                    catalogue,
+                    articles: articles || [],
+                    error:
+                      "Impossible de traiter l'image (format non supporté ou image corrompue).",
+                  });
+                }
+              );
+            }
+          );
+        }
+      }
+    );
+  }
+);
+
+// Upload image via webcam (dataURL) - fallback ultra-compatible (sans multipart)
+router.post(
+  "/catalogues/:catalogue_id/articles/:article_id/image/webcam",
+  requireReferent,
+  csrfProtection,
+  async (req, res) => {
+    const { catalogue_id: catalogueId, article_id: articleId } = req.params;
+    const dataUrl = req.body && req.body.image_data_url;
+
+    if (!dataUrl || typeof dataUrl !== "string") {
+      return res.redirect(`/admin/catalogues/${catalogueId}/edit`);
+    }
+
+    const match = dataUrl.match(/^data:(image\/(jpeg|png|webp));base64,(.+)$/i);
+    if (!match) {
+      return res.status(400).send("Image invalide (format dataURL attendu). ");
+    }
+
+    const base64Payload = match[3];
+    let inputBuffer;
+    try {
+      inputBuffer = Buffer.from(base64Payload, "base64");
+    } catch (e) {
+      return res.status(400).send("Image invalide (base64). ");
+    }
+
+    db.query(
+      `SELECT a.image_filename, c.organization_id
+       FROM articles a
+       JOIN catalog_files c ON c.id = a.catalog_file_id
+       WHERE a.id = ? AND a.catalog_file_id = ?`,
+      [articleId, catalogueId],
+      async (err, rows) => {
+        if (err || !rows || rows.length === 0) {
+          return res.redirect(`/admin/catalogues/${catalogueId}/edit`);
+        }
+
+        const { image_filename: oldFilename, organization_id: orgId } = rows[0];
+        if (
+          !isSuperAdmin(req) &&
+          Number(orgId) !== Number(getCurrentOrgId(req))
+        ) {
+          return res.status(403).send("Accès interdit");
+        }
+
+        try {
+          if (!fs.existsSync(ARTICLE_IMAGE_DIR)) {
+            fs.mkdirSync(ARTICLE_IMAGE_DIR, { recursive: true });
+          }
+
+          const uniqueSuffix =
+            Date.now() + "-" + Math.round(Math.random() * 1e9);
+          const newFilename = `article-${articleId}-${uniqueSuffix}.webp`;
+          const outputPath = path.join(ARTICLE_IMAGE_DIR, newFilename);
+
+          await sharp(inputBuffer)
+            .rotate()
+            .resize({
+              width: 900,
+              height: 900,
+              fit: "inside",
+              withoutEnlargement: true,
+            })
+            .webp({ quality: 80 })
+            .toFile(outputPath);
+
+          if (oldFilename) {
+            const oldPath = path.join(ARTICLE_IMAGE_DIR, oldFilename);
+            try {
+              if (fs.existsSync(oldPath)) {
+                fs.unlinkSync(oldPath);
+              }
+            } catch (_) {
+              // best-effort
+            }
+          }
+
+          queryWithUser(
+            "UPDATE articles SET image_filename = ? WHERE id = ? AND catalog_file_id = ?",
+            [newFilename, articleId, catalogueId],
+            (updateErr) => {
+              if (updateErr) {
+                const isMissingColumn =
+                  updateErr &&
+                  (updateErr.code === "ER_BAD_FIELD_ERROR" ||
+                    /Unknown column/i.test(updateErr.message || ""));
+
+                logger.error(
+                  "Erreur DB lors de l'enregistrement image webcam",
+                  {
+                    error: updateErr,
+                    articleId,
+                    catalogueId,
+                  }
+                );
+
+                // Nettoyage du fichier généré si la DB refuse l'update
+                try {
+                  if (fs.existsSync(outputPath)) {
+                    fs.unlinkSync(outputPath);
+                  }
+                } catch (_) {
+                  // best-effort
+                }
+
+                db.query(
+                  "SELECT * FROM articles WHERE catalog_file_id = ?",
+                  [catalogueId],
+                  (e2, articles) => {
+                    db.query(
+                      "SELECT * FROM catalog_files WHERE id = ?",
+                      [catalogueId],
+                      (e3, catalogues) => {
+                        const catalogue =
+                          catalogues && catalogues.length > 0
+                            ? catalogues[0]
+                            : null;
+                        return renderAdminView(
+                          res,
+                          "admin_catalogue_edit_form",
+                          {
+                            catalogue,
+                            articles: articles || [],
+                            error: isMissingColumn
+                              ? "La base utilisée par l'application n'a pas la colonne image_filename. Vérifiez que la migration a été appliquée sur la bonne base (DB_NAME)."
+                              : "Erreur lors de l'enregistrement de l'image webcam en base.",
+                          }
+                        );
+                      }
+                    );
+                  }
+                );
+                return;
+              }
+
+              return res.redirect(`/admin/catalogues/${catalogueId}/edit`);
+            },
+            req
+          );
+        } catch (e) {
+          logger.error("Erreur traitement image webcam", {
+            error: e && e.message ? e.message : e,
+            articleId,
+            catalogueId,
+          });
+          return res
+            .status(400)
+            .send(
+              "Impossible de traiter l'image webcam (format non supporté ou image corrompue)."
+            );
+        }
+      }
+    );
+  }
+);
+
+// Suppression de l'image d'un article
+router.post(
+  "/catalogues/:catalogue_id/articles/:article_id/image/delete",
+  requireReferent,
+  csrfProtection,
+  (req, res) => {
+    const { catalogue_id: catalogueId, article_id: articleId } = req.params;
+
+    db.query(
+      `SELECT a.image_filename, c.organization_id
+       FROM articles a
+       JOIN catalog_files c ON c.id = a.catalog_file_id
+       WHERE a.id = ? AND a.catalog_file_id = ?`,
+      [articleId, catalogueId],
+      (err, rows) => {
+        if (err || !rows || rows.length === 0) {
+          return res.redirect(`/admin/catalogues/${catalogueId}/edit`);
+        }
+
+        const { image_filename: oldFilename, organization_id: orgId } = rows[0];
+        if (
+          !isSuperAdmin(req) &&
+          Number(orgId) !== Number(getCurrentOrgId(req))
+        ) {
+          return res.status(403).send("Accès interdit");
+        }
+
+        if (oldFilename) {
+          const oldPath = path.join(ARTICLE_IMAGE_DIR, oldFilename);
+          try {
+            if (fs.existsSync(oldPath)) {
+              fs.unlinkSync(oldPath);
+            }
+          } catch (_) {
+            // best-effort
+          }
+        }
+
+        queryWithUser(
+          "UPDATE articles SET image_filename = NULL WHERE id = ? AND catalog_file_id = ?",
+          [articleId, catalogueId],
+          (updateErr) => {
+            if (updateErr) {
+              logger.error("Erreur DB lors de la suppression image article", {
+                error: updateErr,
+                articleId,
+                catalogueId,
+              });
+            }
+            return res.redirect(`/admin/catalogues/${catalogueId}/edit`);
+          },
+          req
+        );
+      }
+    );
+  }
+);
+
+// Dupliquer un catalogue
+router.post("/catalogues/:id/duplicate", requireReferent, (req, res) => {
+  const id = req.params.id;
+  db.query(
+    "SELECT * FROM catalog_files WHERE id = ? AND organization_id = ?",
+    [id, getCurrentOrgId(req)],
+    (err, catalogues) => {
+      if (err || !catalogues || catalogues.length === 0)
+        return res.redirect("/admin/catalogues");
+      const catalogue = catalogues[0];
+
+      queryWithUser(
+        `INSERT INTO catalog_files (filename, originalname, upload_date, expiration_date, uploader_id, description, is_archived, organization_id)
+       VALUES (?, ?, NOW(), NOW(), ?, ?, 0, ?)`,
+        [
+          catalogue.filename,
+          catalogue.originalname.replace(/(\.\w+)?$/, " (copie)$1"),
+          getCurrentUserId(req),
+          "[COPIE] " + (catalogue.description || ""),
+          getCurrentOrgId(req),
+        ],
+        function (err, result) {
+          if (err) return res.redirect("/admin/catalogues");
+          const newCatalogId = result.insertId;
+
+          // Duplique l'image du catalogue si présente (évite le partage de fichier)
+          if (catalogue.image_filename) {
+            try {
+              const srcPath = path.join(
+                CATALOGUE_IMAGE_DIR,
+                catalogue.image_filename
+              );
+              if (fs.existsSync(srcPath)) {
+                const uniqueSuffix =
+                  Date.now() + "-" + Math.round(Math.random() * 1e9);
+                const newFilename = `catalogue-${newCatalogId}-${uniqueSuffix}.webp`;
+                const dstPath = path.join(CATALOGUE_IMAGE_DIR, newFilename);
+
+                if (!fs.existsSync(CATALOGUE_IMAGE_DIR)) {
+                  fs.mkdirSync(CATALOGUE_IMAGE_DIR, { recursive: true });
+                }
+
+                fs.copyFileSync(srcPath, dstPath);
+
+                queryWithUser(
+                  "UPDATE catalog_files SET image_filename = ? WHERE id = ?",
+                  [newFilename, newCatalogId],
+                  () => {},
+                  req
+                );
+              }
+            } catch (copyErr) {
+              logger.error(
+                "Erreur duplication image catalogue lors de la duplication catalogue",
+                {
+                  error: copyErr,
+                  srcImage: catalogue.image_filename,
+                  newCatalogId,
+                }
+              );
+            }
+          }
+
+          db.query(
+            "SELECT id, produit, description, prix, unite, image_filename FROM articles WHERE catalog_file_id = ?",
+            [id],
+            (err, articles) => {
+              if (!articles || articles.length === 0) {
+                return res.redirect("/admin/catalogues");
+              }
+
+              let idx = 0;
+              const next = () => {
+                if (idx >= articles.length) {
+                  return res.redirect("/admin/catalogues");
+                }
+
+                const a = articles[idx++];
+                queryWithUser(
+                  "INSERT INTO articles (catalog_file_id, produit, description, prix, unite, image_filename) VALUES (?, ?, ?, ?, ?, NULL)",
+                  [newCatalogId, a.produit, a.description, a.prix, a.unite],
+                  (insertErr, insertResult) => {
+                    if (insertErr || !insertResult || !insertResult.insertId) {
+                      return next();
+                    }
+
+                    const newArticleId = insertResult.insertId;
+
+                    // Duplique le fichier image si présent, pour éviter le partage de fichier entre catalogues.
+                    if (!a.image_filename) {
+                      return next();
+                    }
+
+                    try {
+                      const srcPath = path.join(
+                        ARTICLE_IMAGE_DIR,
+                        a.image_filename
+                      );
+                      if (!fs.existsSync(srcPath)) {
+                        return next();
+                      }
+
+                      const ext =
+                        path.extname(a.image_filename || "").toLowerCase() ||
+                        ".webp";
+                      const uniqueSuffix =
+                        Date.now() + "-" + Math.round(Math.random() * 1e9);
+                      const newFilename = `article-${newArticleId}-${uniqueSuffix}${ext}`;
+                      const dstPath = path.join(ARTICLE_IMAGE_DIR, newFilename);
+
+                      if (!fs.existsSync(ARTICLE_IMAGE_DIR)) {
+                        fs.mkdirSync(ARTICLE_IMAGE_DIR, { recursive: true });
+                      }
+
+                      fs.copyFileSync(srcPath, dstPath);
+
+                      queryWithUser(
+                        "UPDATE articles SET image_filename = ? WHERE id = ? AND catalog_file_id = ?",
+                        [newFilename, newArticleId, newCatalogId],
+                        () => next(),
+                        req
+                      );
+                    } catch (copyErr) {
+                      logger.error(
+                        "Erreur duplication image article lors de la duplication catalogue",
+                        {
+                          error: copyErr,
+                          srcImage: a.image_filename,
+                          newArticleId,
+                          newCatalogId,
+                        }
+                      );
+                      return next();
+                    }
+                  },
+                  req
+                );
+              };
+
+              next();
+            }
+          );
+        },
+        req
+      );
+    }
+  );
+});
+
+// ============================================
+// DASHBOARD ADMIN
+// ============================================
+
+router.get("/dashboard", requireReferent, (req, res) => {
+  const role = getCurrentUserRole(req);
+  const isSuperAdmin = role === "SuperAdmin";
+  const scopeToggleAvailable = !isSuperAdmin;
+  const showAllScope = !scopeToggleAvailable || req.query.scope === "all";
+  const orgId = getCurrentOrgId(req);
+  const userId = getCurrentUserId(req);
+
+  const buildFilters = ({ alias }) => {
+    const clauses = [];
+    const params = [];
+
+    if (!isSuperAdmin) {
+      const organizationColumn =
+        alias === "c" ? "c.organization_id" : `${alias}.organization_id`;
+      clauses.push(`${organizationColumn} = ?`);
+      params.push(orgId);
+    }
+
+    if (scopeToggleAvailable && !showAllScope) {
+      clauses.push("cf.uploader_id = ?");
+      params.push(userId);
+    }
+
+    return {
+      clause: clauses.length ? ` AND ${clauses.join(" AND ")}` : "",
+      params,
+    };
+  };
+
+  const commandeFilter = buildFilters({ alias: "u" });
+  const panierFilter = buildFilters({ alias: "u" });
+
+  const commandeQuery = `
+    SELECT
+      c.id,
+      c.id AS panier_id,
+      c.user_id,
+      c.created_at,
+      c.note,
+      u.username,
+      u.organization_id,
+      o.name as organization_name,
+      cf.originalname AS catalogue,
+      cf.description,
+      cf.id AS catalog_file_id,
+      cf.id AS id2,
+      cf.expiration_date,
+      cf.is_archived,
+      cf.date_livraison
+    FROM paniers c
+    JOIN users u ON c.user_id = u.id
+    LEFT JOIN organizations o ON u.organization_id = o.id
+    JOIN catalog_files cf ON c.catalog_file_id = cf.id
+    WHERE c.is_submitted = 1 AND cf.is_archived IN (0,2)${commandeFilter.clause}
+    ORDER BY c.created_at DESC
+  `;
+
+  const panierQuery = `
+    SELECT
+      p.id,
+      p.user_id,
+      p.created_at,
+      p.note,
+      u.username,
+      u.organization_id,
+      o.name as organization_name,
+      cf.originalname AS catalogue,
+      cf.description,
+      cf.id AS catalog_file_id,
+      cf.id AS id2,
+      cf.expiration_date,
+      cf.is_archived,
+      cf.date_livraison
+    FROM paniers p
+    JOIN users u ON p.user_id = u.id
+    LEFT JOIN organizations o ON u.organization_id = o.id
+    JOIN catalog_files cf ON p.catalog_file_id = cf.id
+    WHERE p.is_submitted = 0 AND cf.is_archived IN (0,2)${panierFilter.clause}
+    ORDER BY p.created_at DESC
+  `;
+
+  const catalogClauses = ["p.is_submitted = 1", "c.is_archived IN (0,2)"];
+  const catalogParams = [];
+  if (!isSuperAdmin) {
+    catalogClauses.push("c.organization_id = ?");
+    catalogParams.push(orgId);
+  }
+  if (scopeToggleAvailable && !showAllScope) {
+    catalogClauses.push("c.uploader_id = ?");
+    catalogParams.push(userId);
+  }
+  const catalogQuery = `
+    SELECT DISTINCT
+      c.id,
+      c.originalname,
+      c.description,
+      c.expiration_date,
+      c.date_livraison,
+      c.organization_id,
+      o.name as organization_name
+    FROM paniers p
+    JOIN catalog_files c ON p.catalog_file_id = c.id
+    LEFT JOIN organizations o ON c.organization_id = o.id
+    WHERE ${catalogClauses.join(" AND ")}
+    ORDER BY c.id DESC
+  `;
+
+  const userQuery = `SELECT users.*, organizations.name as organization_name
+    FROM users LEFT JOIN organizations ON users.organization_id = organizations.id
+    ${!isSuperAdmin ? " WHERE users.organization_id = ?" : ""}`;
+
+  const userParams = !isSuperAdmin ? [orgId] : [];
+
+  Promise.all([
+    new Promise((resolve) =>
+      db.query(commandeQuery, commandeFilter.params, (err, result) =>
+        resolve(result || [])
+      )
+    ),
+    new Promise((resolve) =>
+      db.query(panierQuery, panierFilter.params, (err, result) =>
+        resolve(result || [])
+      )
+    ),
+    new Promise((resolve) =>
+      db.query(catalogQuery, catalogParams, (err, result) =>
+        resolve(result || [])
+      )
+    ),
+    new Promise((resolve) =>
+      db.query(userQuery, userParams, (err, result) => resolve(result || []))
+    ),
+  ]).then(([commandes, paniers, catalogues, utilisateurs]) => {
+    const hier = new Date();
+    hier.setDate(hier.getDate() - 1);
+
+    paniers.forEach((panier) => {
+      // La modifiabilité d'un panier dépend de l'expiration du catalogue,
+      // pas de sa visibilité (is_archived).
+      panier.modifiable =
+        !panier.expiration_date || new Date(panier.expiration_date) >= hier;
+    });
+
+    res.render("admin_dashboard", {
+      commandes: commandes || [],
+      paniers: paniers || [],
+      utilisateurs: utilisateurs || [],
+      catalogues: catalogues || [],
+      referentScopeActive: scopeToggleAvailable,
+      showAllScope,
+    });
+  });
+});
+
+// Suppression d'une commande
+router.post("/commandes/:id/delete", requireReferent, (req, res) => {
+  const commandeId = req.params.id;
+  queryWithUser(
+    "DELETE FROM paniers WHERE id = ?",
+    [commandeId],
+    () => {
+      res.redirect("/admin/dashboard");
+    },
+    req
+  );
+});
+
+// Suppression d'un panier
+router.post("/paniers/:id/delete", requireReferent, (req, res) => {
+  const panierId = req.params.id;
+  queryWithUser(
+    "DELETE FROM panier_articles WHERE panier_id = ?",
+    [panierId],
+    () => {
+      queryWithUser(
+        "DELETE FROM paniers WHERE id = ?",
+        [panierId],
+        () => {
+          res.redirect("/admin/dashboard");
+        },
+        req
+      );
+    },
+    req
+  );
+});
+
+// Edition d'un panier
+router.get("/paniers/:id/edit", requireReferent, (req, res) => {
+  const panierId = req.params.id;
+  db.query(
+    `SELECT paniers.*, users.username, catalog_files.originalname as catalogue, paniers.catalog_file_id
+     FROM paniers
+     JOIN users ON paniers.user_id = users.id
+     JOIN catalog_files ON paniers.catalog_file_id = catalog_files.id
+     WHERE paniers.id = ?`,
+    [panierId],
+    (err, paniers) => {
+      if (err || !paniers || paniers.length === 0)
+        return res.redirect("/admin/dashboard");
+      const panier = paniers[0];
+
+      db.query(
+        `SELECT pa.*, a.produit, a.description, a.prix, a.unite
+         FROM panier_articles pa
+         JOIN articles a ON pa.article_id = a.id
+         WHERE pa.panier_id = ?`,
+        [panierId],
+        (err, articles) => {
+          db.query(
+            `SELECT * FROM articles WHERE catalog_file_id = ?`,
+            [panier.catalog_file_id],
+            (err, allArticles) => {
+              res.render("admin_edit_panier", {
+                panier,
+                articles,
+                allArticles,
+              });
+            }
+          );
+        }
+      );
+    }
+  );
+});
+
+// Ajout d'articles dans le panier
+router.post("/paniers/:id/articles/add", requireReferent, (req, res) => {
+  const panierId = req.params.id;
+  const { article_id, quantity } = req.body;
+
+  db.query(
+    "SELECT * FROM panier_articles WHERE panier_id = ? AND article_id = ?",
+    [panierId, article_id],
+    (err, paRows) => {
+      if (paRows && paRows.length > 0) {
+        let newQuantity = parseFloat(quantity) + paRows[0].quantity;
+        newQuantity = Math.max(0, newQuantity);
+        queryWithUser(
+          "UPDATE panier_articles SET quantity = GREATEST(0, ?) WHERE id = ?",
+          [newQuantity, paRows[0].id],
+          () => res.redirect(`/admin/paniers/${panierId}/edit`),
+          req
+        );
+      } else {
+        queryWithUser(
+          "INSERT INTO panier_articles (panier_id, article_id, quantity) VALUES (?, ?, GREATEST(0, ?))",
+          [panierId, article_id, quantity],
+          () => res.redirect(`/admin/paniers/${panierId}/edit`),
+          req
+        );
+      }
+    }
+  );
+});
+
+// Suppression d'article du panier
+router.post("/paniers/:id/articles/remove", requireReferent, (req, res) => {
+  const panierId = req.params.id;
+  const panier_article_id = req.body.panier_article_id;
+  queryWithUser(
+    "DELETE FROM panier_articles WHERE id = ?",
+    [panier_article_id],
+    () => {
+      res.redirect(`/admin/paniers/${panierId}/edit`);
+    },
+    req
+  );
+});
+
+// ============================================
+// BANDEAUX
+// ============================================
+
+router.get("/bandeaux", requireAdmin, (req, res) => {
+  let sql = `SELECT b.*, o.name AS organization_name
+              FROM bandeaux b
+              LEFT JOIN organizations o ON b.organization_id = o.id`;
+  let params = [];
+  if (getCurrentUserRole(req) !== "SuperAdmin") {
+    sql += " WHERE b.organization_id = ?";
+    params.push(getCurrentOrgId(req));
+  }
+  sql += " ORDER BY b.expiration_date ASC";
+  db.query(sql, params, (err, bandeaux2) => {
+    if (err) {
+      logger.error("Erreur lors de la récupération des bandeaux", {
+        error: err,
+      });
+      return res.render("admin_bandeaux", {
+        bandeaux: [],
+        error: "Erreur lors du chargement des bandeaux",
+        csrfToken: req.csrfToken && req.csrfToken(),
+      });
+    }
+    res.render("admin_bandeaux", {
+      bandeaux2: bandeaux2 || [],
+      error: null,
+      csrfToken: req.csrfToken && req.csrfToken(),
+      organization_id: getCurrentOrgId(req),
+      role: getCurrentUserRole(req),
+    });
+  });
+});
+
+router.get("/bandeaux/new", requireAdmin, (req, res) => {
+  if (getCurrentUserRole(req) === "SuperAdmin") {
+    getAllOrganizations((err, orgs) => {
+      res.render("admin_bandeau_form", {
+        error: null,
+        organizations: orgs,
+        csrfToken: req.csrfToken && req.csrfToken(),
+        organization_id: null,
+      });
+    });
+  } else {
+    res.render("admin_bandeau_form", {
+      error: null,
+      organizations: null,
+      csrfToken: req.csrfToken && req.csrfToken(),
+      organization_id: getCurrentOrgId(req),
+    });
+  }
+});
+
+router.post("/bandeaux/new", requireAdmin, validateBandeauInput, (req, res) => {
+  let { message, expiration_date, page_cible, type, organization_id } =
+    req.body;
+  if (!page_cible || page_cible.trim() === "") {
+    page_cible = null;
+  }
+  if (getCurrentUserRole(req) !== "SuperAdmin") {
+    organization_id = getCurrentOrgId(req);
+  }
+  if (organization_id === "") {
+    organization_id = null;
+  }
+  queryWithUser(
+    `INSERT INTO bandeaux (message, expiration_date, page_cible, type, organization_id) VALUES (?, ?, ?, ?, ?)`,
+    [
+      message,
+      expiration_date || null,
+      page_cible || null,
+      type,
+      organization_id,
+    ],
+    (err) => {
+      if (err) {
+        getAllOrganizations((err2, orgs) => {
+          return res.render("admin_bandeau_form", {
+            error: "Erreur lors de l'ajout.",
+            organizations: orgs,
+            csrfToken: req.csrfToken && req.csrfToken(),
+          });
+        });
+        return;
+      }
+      res.redirect("/admin/bandeaux");
+    },
+    req
+  );
+});
+
+router.post("/bandeaux/:id/delete", requireAdmin, (req, res) => {
+  db.query(
+    "SELECT * FROM bandeaux WHERE id = ?",
+    [req.params.id],
+    (err, results) => {
+      if (err || results.length === 0) {
+        return res.redirect("/admin/bandeaux");
+      }
+      const bandeau = results[0];
+      if (
+        getCurrentUserRole(req) !== "SuperAdmin" &&
+        bandeau.organization_id != getCurrentOrgId(req)
+      ) {
+        return res.status(403).render("403", {
+          user: getCurrentUsername(req),
+          role: getCurrentUserRole(req),
+        });
+      }
+      queryWithUser(
+        "DELETE FROM bandeaux WHERE id = ?",
+        [req.params.id],
+        () => {
+          res.redirect("/admin/bandeaux");
+        },
+        req
+      );
+    }
+  );
+});
+
+router.get("/bandeaux/:id/edit", requireAdmin, (req, res) => {
+  db.query(
+    "SELECT * FROM bandeaux WHERE id = ?",
+    [req.params.id],
+    (err, results) => {
+      if (err || results.length === 0) {
+        return res.redirect("/admin/bandeaux");
+      }
+      const bandeau = results[0];
+      if (
+        getCurrentUserRole(req) !== "SuperAdmin" &&
+        bandeau.organization_id != getCurrentOrgId(req)
+      ) {
+        return res.status(403).render("403", {
+          user: getCurrentUsername(req),
+          role: getCurrentUserRole(req),
+        });
+      }
+      getAllOrganizations((err2, orgs) => {
+        res.render("admin_bandeau_edit", {
+          user: getCurrentUsername(req),
+          role: getCurrentUserRole(req),
+          bandeau,
+          organizations: orgs,
+          error: null,
+          csrfToken: req.csrfToken && req.csrfToken(),
+        });
+      });
+    }
+  );
+});
+
+router.post("/bandeaux/:id/edit", requireAdmin, (req, res) => {
+  const { message, page_cible, expiration_date, type, organization_id } =
+    req.body;
+
+  if (!message || !type || !["info", "important"].includes(type)) {
+    db.query(
+      "SELECT * FROM bandeaux WHERE id = ?",
+      [req.params.id],
+      (err, results) => {
+        getAllOrganizations((err2, orgs) => {
+          if (err || results.length === 0) {
+            return res.redirect("/admin/bandeaux");
+          }
+          res.render("admin_bandeau_edit", {
+            user: getCurrentUsername(req),
+            role: getCurrentUserRole(req),
+            bandeau: results[0],
+            organizations: orgs,
+            error: !message
+              ? "Le message est obligatoire"
+              : "Le type de bandeau est obligatoire",
+            csrfToken: req.csrfToken && req.csrfToken(),
+          });
+        });
+      }
+    );
+    return;
+  }
+
+  const expirationValue = expiration_date || null;
+  const pageCibleValue = page_cible || null;
+
+  queryWithUser(
+    "UPDATE bandeaux SET message = ?, page_cible = ?, expiration_date = ?, type = ?, organization_id = ? WHERE id = ?",
+    [
+      message,
+      pageCibleValue,
+      expirationValue,
+      type,
+      organization_id || null,
+      req.params.id,
+    ],
+    (err) => {
+      if (err) {
+        db.query(
+          "SELECT * FROM bandeaux WHERE id = ?",
+          [req.params.id],
+          (err2, results) => {
+            getAllOrganizations((err3, orgs) => {
+              if (err2 || results.length === 0) {
+                return res.redirect("/admin/bandeaux");
+              }
+              res.render("admin_bandeau_edit", {
+                user: getCurrentUsername(req),
+                role: getCurrentUserRole(req),
+                bandeau: results[0],
+                organizations: orgs,
+                error: "Erreur lors de la modification",
+                csrfToken: req.csrfToken && req.csrfToken(),
+              });
+            });
+          }
+        );
+        return;
+      }
+      res.redirect("/admin/bandeaux");
+    },
+    req
+  );
+});
+
+// ============================================
+// MENU ADMIN
+// ============================================
+
+router.get("/menu", requireReferent, (req, res) => {
+  res.render("admin_menu");
+});
+
+router.get("/", requireReferent, (req, res) => {
+  res.redirect("/admin/menu");
+});
+
+// ============================================
+// EXPORTS EXCEL
+// ============================================
+
+router.get(
+  "/catalogues/:id/synthese/export/xlsx",
+  requireRole(["admin", "referent", "SuperAdmin"]),
+  (req, res) => {
+    const catalogueId = req.params.id;
+    db.query(
+      `SELECT  a.produit, a.description, a.prix, pa.note as note_article,
+           SUM(pa.quantity) AS total_commande
+FROM articles a
+JOIN panier_articles pa ON pa.article_id = a.id
+JOIN paniers p ON pa.panier_id = p.id
+WHERE a.catalog_file_id = ? AND p.is_submitted = 1
+GROUP BY a.id, pa.note
+ORDER BY a.produit ASC`,
+      [catalogueId],
+      (err, rows) => {
+        if (err) return handleExportError(err, res, "Excel synthèse simple");
+        const worksheet = xlsx.utils.json_to_sheet(rows);
+        const workbook = xlsx.utils.book_new();
+        xlsx.utils.book_append_sheet(workbook, worksheet, "SyntheseSimple");
+        const buffer = xlsx.write(workbook, {
+          type: "buffer",
+          bookType: "xlsx",
+        });
+        res.header(
+          "Content-Type",
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        );
+        res.attachment("synthese_simple_" + catalogueId + ".xlsx");
+        res.send(buffer);
+      }
+    );
+  }
+);
+
+router.get(
+  "/catalogues/:id/synthese-detaillee/export/xlsx/",
+  requireRole(["admin", "referent", "SuperAdmin"]),
+  (req, res) => {
+    const catalogueId = req.params.id;
+    db.query(
+      `SELECT u.username,  a.produit, a.description, a.prix, 
+           SUM(pa.quantity) as quantite, 
+           SUM(pa.quantity * a.prix) as montant_utilisateur, COALESCE(c.note, '') AS note , pa.note as note_article
+    FROM paniers c
+    JOIN panier_articles pa ON pa.panier_id = c.id
+    JOIN articles a ON pa.article_id = a.id
+    JOIN users u ON c.user_id = u.id
+    WHERE a.catalog_file_id = ? and is_submitted=1
+    GROUP BY u.id, a.id, c.id
+    ORDER BY u.username ASC, a.produit ASC`,
+      [catalogueId],
+      (err, rows) => {
+        if (err) return handleExportError(err, res, "Excel synthèse détaillée");
+        const worksheet = xlsx.utils.json_to_sheet(rows);
+        const workbook = xlsx.utils.book_new();
+        xlsx.utils.book_append_sheet(workbook, worksheet, "SyntheseDetaillee");
+        const buffer = xlsx.write(workbook, {
+          type: "buffer",
+          bookType: "xlsx",
+        });
+        res.header(
+          "Content-Type",
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        );
+        res.attachment("synthese_detaillee_" + catalogueId + ".xlsx");
+        res.send(buffer);
+      }
+    );
+  }
+);
+
+router.get(
+  "/catalogues/:id/synthese-utilisateur/export/xlsx",
+  requireRole(["admin", "referent", "SuperAdmin"]),
+  (req, res) => {
+    const catalogueId = req.params.id;
+    db.query(
+      `SELECT 
+      u.username, 
+      u.email, 
+      SUM(pa.quantity * a.prix) AS montant_total
+    FROM paniers c
+    JOIN panier_articles pa ON pa.panier_id = c.id
+    JOIN articles a ON pa.article_id = a.id
+    JOIN users u ON c.user_id = u.id
+    WHERE a.catalog_file_id = ? and is_submitted=1
+    GROUP BY u.id
+    ORDER BY montant_total DESC`,
+      [catalogueId],
+      (err, rows) => {
+        if (err)
+          return handleExportError(err, res, "Excel montant par utilisateur");
+        const worksheet = xlsx.utils.json_to_sheet(rows);
+        const workbook = xlsx.utils.book_new();
+        xlsx.utils.book_append_sheet(
+          workbook,
+          worksheet,
+          "Synthese utilisateur"
+        );
+        const buffer = xlsx.write(workbook, {
+          type: "buffer",
+          bookType: "xlsx",
+        });
+        res.header(
+          "Content-Type",
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        );
+        res.attachment(
+          "synthese_total_utilisateur_catalogue_" + catalogueId + ".xlsx"
+        );
+        res.send(buffer);
+      }
+    );
+  }
+);
+
+// ============================================
+// EXPORTS PDF
+// ============================================
+
+router.get("/catalogues/:id/synthese/export/pdf/:action", (req, res) => {
+  const catalogueId = req.params.id;
+  const action = req.params.action;
+  const { generateAndSendPdf } = require("../utils/exports");
+  generateAndSendPdf(catalogueId, "simple", action, res, req);
+});
+
+router.get(
+  "/catalogues/:id/synthese-detaillee/export/pdf/:action",
+  (req, res) => {
+    const catalogueId = req.params.id;
+    const action = req.params.action;
+    const { generateAndSendPdf } = require("../utils/exports");
+    generateAndSendPdf(catalogueId, "detailed", action, res, req);
+  }
+);
+
+// ============================================
+// HELP MANAGEMENT
+// ============================================
+
+router.get("/help", requireRole(["admin", "SuperAdmin"]), (req, res) => {
+  const editId = req.query.edit ? parseInt(req.query.edit, 10) : null;
+  db.query("SELECT * FROM help_texts ORDER BY page", (err, helpList) => {
+    if (err)
+      return handleQueryError(err, res, "récupération des textes d'aide");
+    res.render("admin-help-menu", { helpList, editId });
+  });
+});
+
+router.post("/help/add", requireRole(["admin", "SuperAdmin"]), (req, res) => {
+  const { page, content } = req.body;
+  queryWithUser(
+    "INSERT INTO help_texts (page, content) VALUES (?, ?)",
+    [page, content],
+    function (err) {
+      if (err) logger.error("Erreur lors de l'action", { error: err });
+      res.redirect("/admin/help");
+    },
+    req
+  );
+});
+
+router.post(
+  "/help/:id/edit",
+  requireRole(["admin", "SuperAdmin"]),
+  (req, res) => {
+    const { page, content } = req.body;
+    const id = parseInt(req.params.id, 10);
+    queryWithUser(
+      "UPDATE help_texts SET content = ?, page = ? WHERE id = ?",
+      [content, page, id],
+      function (err) {
+        if (err) logger.error("Erreur lors de l'action", { error: err });
+        res.redirect("/admin/help");
+      },
+      req
+    );
+  }
+);
+
+router.post(
+  "/help/:id/delete",
+  requireRole(["admin", "SuperAdmin"]),
+  (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    queryWithUser(
+      "DELETE FROM help_texts WHERE id = ?",
+      [id],
+      function (err) {
+        if (err) logger.error("Erreur lors de l'action", { error: err });
+        res.redirect("/admin/help");
+      },
+      req
+    );
+  }
+);
+
+// ============================================
+// GOOGLE SHEETS IMPORT
+// ============================================
+
+const auth = new google.auth.GoogleAuth({
+  keyFile: "credentials.json",
+  scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
+});
+const sheets = google.sheets({ version: "v4", auth });
+
+router.get(
+  "/import",
+  requireRole(["admin", "referent", "SuperAdmin"]),
+  (req, res) => {
+    res.render("import");
+  }
+);
+
+router.post(
+  "/import",
+  requireRole(["admin", "referent", "SuperAdmin"]),
+  async (req, res) => {
+    const { sheetId, range } = req.body;
+    try {
+      const result = await sheets.spreadsheets.values.get({
+        spreadsheetId: sheetId,
+        range: range || "A1:F3000",
+      });
+      const rows = result.data.values;
+      if (!rows || rows.length < 2) {
+        return res.send("Aucune donnée trouvée.");
+      }
+      const headers = rows[0];
+      const data = rows.slice(1);
+      res.render("table", {
+        headers,
+        data,
+        sheetId,
+        range,
+        csrfToken: req.csrfToken && req.csrfToken(),
+      });
+    } catch (err) {
+      res.send("Erreur lors de la lecture de la sheet : " + err.message);
+    }
+  }
+);
+
+router.post(
+  "/save-catalog",
+  requireRole(["admin", "referent", "SuperAdmin"]),
+  (req, res) => {
+    const {
+      rows,
+      filename,
+      originalname,
+      expiration_date,
+      uploader_id,
+      description,
+    } = req.body;
+
+    if (!rows || !Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).send("Aucune ligne sélectionnée.");
+    }
+
+    const organizationId = getCurrentOrgId(req);
+    queryWithUser(
+      `INSERT INTO catalog_files (filename, originalname, upload_date, expiration_date, uploader_id, description, organization_id)
+      VALUES (?, ?, NOW(), NOW(), ?, ?, ?)`,
+      [
+        filename || "import_sheet",
+        originalname ||
+          "Google Sheet import par " + (res.locals.user || "admin"),
+        getCurrentUserId(req) || null,
+        description || "",
+        organizationId,
+      ],
+      function (err, result) {
+        if (err)
+          return handleDatabaseError(
+            err,
+            res,
+            "Erreur lors de l'import du catalogue"
+          );
+        const catalog_file_id = result.insertId;
+        let inserted = 0;
+        rows.forEach((row) => {
+          const prix = parseFloat(
+            (row[7] || "")
+              .replace(/\s/g, "")
+              .replace(",", ".")
+              .replace(/[^0-9.]/g, "")
+          );
+          queryWithUser(
+            "INSERT INTO articles (catalog_file_id, produit, description, prix) VALUES (?, ?, ?, ?)",
+            [catalog_file_id, row[0], row[1], prix],
+            (err) => {
+              inserted++;
+              if (inserted === rows.length) {
+                res.send("Catalogue importé avec succès !");
+              }
+            },
+            req
+          );
+        });
+        if (rows.length === 0) res.send("Catalogue importé avec succès !");
+      },
+      req
+    );
+  }
+);
+
+// ============================================
+// TRACE
+// ============================================
+
+router.get("/trace", requireRole(["admin", "SuperAdmin"]), (req, res) => {
+  db.query(
+    `DELETE FROM trace 
+     WHERE id NOT IN (
+       SELECT id FROM (SELECT id FROM trace ORDER BY id DESC LIMIT 50000) AS sub
+     )`,
+    [],
+    (err) => {
+      if (err) {
+        return res
+          .status(500)
+          .send("Erreur lors de la purge de la table trace");
+      }
+      db.query("SELECT * FROM trace ORDER BY id DESC", [], (err, rows) => {
+        if (err) {
+          return res
+            .status(500)
+            .send("Erreur lors de la récupération des traces.");
+        }
+        res.render("trace", { traces: rows });
+      });
+    }
+  );
+});
+
+// ============================================
+// STATS
+// ============================================
+
+router.get(
+  "/stats",
+  requireRole(["admin", "referent", "SuperAdmin"]),
+  (req, res) => {
+    let orgFilter = "";
+    let orgParams = [];
+    if (getCurrentUserRole(req) !== "SuperAdmin") {
+      orgFilter = " AND organization_id = ?";
+      orgParams = [getCurrentOrgId(req)];
+    }
+    let sql;
+    if (getCurrentUserRole(req) === "SuperAdmin") {
+      sql = `SELECT 
+        (SELECT COUNT(*) FROM paniers WHERE is_submitted = 1) as total_commandes,
+        (SELECT COUNT(*) FROM users) as total_utilisateurs,
+        (SELECT COUNT(*) FROM catalog_files) as total_catalogues`;
+      db.query(sql, [], (err, counters) => {
+        if (err) {
+          logger.error("Erreur lors de la récupération des compteurs", {
+            error: err,
+          });
+          return res
+            .status(500)
+            .send("Erreur lors de la récupération des statistiques.");
+        }
+        const stats = counters[0] || {
+          total_commandes: 0,
+          total_utilisateurs: 0,
+          total_catalogues: 0,
+        };
+        res.render("stats", { stats });
+      });
+    } else {
+      // Pour admin/referent : count commandes limité à l'organisation
+      sql = `SELECT 
+        (SELECT COUNT(*) FROM paniers p JOIN users u ON p.user_id = u.id WHERE p.is_submitted = 1 AND u.organization_id = ?) as total_commandes,
+        (SELECT COUNT(*) FROM users WHERE organization_id = ?) as total_utilisateurs,
+        (SELECT COUNT(*) FROM catalog_files WHERE organization_id = ?) as total_catalogues`;
+      db.query(
+        sql,
+        [getCurrentOrgId(req), getCurrentOrgId(req), getCurrentOrgId(req)],
+        (err, counters) => {
+          if (err) {
+            logger.error("Erreur lors de la récupération des compteurs", {
+              error: err,
+            });
+            return res
+              .status(500)
+              .send("Erreur lors de la récupération des statistiques.");
+          }
+          const stats = counters[0] || {
+            total_commandes: 0,
+            total_utilisateurs: 0,
+            total_catalogues: 0,
+          };
+          res.render("stats", { stats });
+        }
+      );
+    }
+  }
+);
+
+// API statistiques - Commandes
+router.get(
+  "/stats/commandes",
+  requireRole(["admin", "referent", "SuperAdmin"]),
+  (req, res) => {
+    let orgFilter = "";
+    let orgParams = [];
+    if (getCurrentUserRole(req) !== "SuperAdmin") {
+      orgFilter = " AND users.organization_id = ? ";
+      orgParams = [getCurrentOrgId(req)];
+    }
+    db.query(
+      `SELECT paniers.id as commande_id, concat(users.username, ' (id:', users.id, ', ') as username, concat(catalog_files.originalname, ' (', catalog_files.id, ')') as catalogue,  paniers.created_at, organizations.name AS organization_name
+     FROM paniers
+     JOIN users ON paniers.user_id = users.id
+     JOIN catalog_files ON paniers.catalog_file_id = catalog_files.id
+     LEFT JOIN organizations ON users.organization_id = organizations.id
+     WHERE paniers.is_submitted = 1` +
+        orgFilter +
+        ` ORDER BY paniers.created_at DESC`,
+      orgParams,
+      (err, rows) => {
+        if (err) return res.status(500).json([]);
+        res.json(rows);
+      }
+    );
+  }
+);
+
+// API statistiques - Utilisateurs
+router.get(
+  "/stats/utilisateurs",
+  requireRole(["admin", "referent", "SuperAdmin"]),
+  (req, res) => {
+    let orgFilter = "";
+    let orgParams = [];
+    if (getCurrentUserRole(req) !== "SuperAdmin") {
+      orgFilter = " WHERE users.organization_id = ? ";
+      orgParams = [getCurrentOrgId(req)];
+    }
+    db.query(
+      `SELECT users.id, users.username, users.email, users.role, users.last_login, organizations.name AS organization_name
+       FROM users
+       LEFT JOIN organizations ON users.organization_id = organizations.id` +
+        orgFilter +
+        ` ORDER BY users.username ASC`,
+      orgParams,
+      (err, rows) => {
+        if (err) return res.status(500).json([]);
+        res.json(rows);
+      }
+    );
+  }
+);
+
+// API statistiques - Catalogues
+router.get(
+  "/stats/catalogues",
+  requireRole(["admin", "referent", "SuperAdmin"]),
+  (req, res) => {
+    let orgFilter = "";
+    let orgParams = [];
+    if (getCurrentUserRole(req) !== "SuperAdmin") {
+      orgFilter = " WHERE c.organization_id = ? ";
+      orgParams = [getCurrentOrgId(req)];
+    }
+    db.query(
+      `SELECT c.id as catalogue_id, c.originalname as originalname_id, c.expiration_date,
+            COUNT(DISTINCT p.id) as nombre_commandes,
+            COALESCE(SUM(pa.quantity * a.prix), 0) as montant_total,
+            organizations.name AS organization_name
+     FROM catalog_files c
+     LEFT JOIN organizations ON c.organization_id = organizations.id
+     LEFT JOIN paniers p ON p.catalog_file_id = c.id AND p.is_submitted = 1
+     LEFT JOIN panier_articles pa ON pa.panier_id = p.id
+     LEFT JOIN articles a ON pa.article_id = a.id
+     ` +
+        orgFilter +
+        `
+     GROUP BY c.id
+     ORDER BY c.expiration_date DESC`,
+      orgParams,
+      (err, rows) => {
+        if (err) return res.status(500).json([]);
+        res.json(rows);
+      }
+    );
+  }
+);
+module.exports = router;

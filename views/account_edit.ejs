@@ -1,0 +1,59 @@
+<%- include('partials/header', { title: 'Mon compte', user, role }) %>
+
+<div class="admin-content-wrapper">
+<div class="container">
+  <h2>Mon compte</h2>
+  <% if (error) { %>
+    <div class="alert alert-danger"><%= error %></div>
+  <% } %>
+  <% if (success) { %>
+    <div class="alert alert-success"><%= success %></div>
+  <% } %>
+  <form method="post" action="/account">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <div class="mb-3">
+      <label for="username" class="form-label">Nom d'utilisateur</label>
+      <input type="text" id="username" class="form-control" value="<%= account.username %>" disabled>
+    </div>
+    <div class="mb-3">
+      <label for="email" class="form-label">Email</label>
+      <input type="email" name="email" id="email" class="form-control" required value="<%= account.email %>">
+    </div>
+    <input type="hidden" name="email_catalogue" value="0">
+    <div class="form-check form-switch mb-4">
+      <input
+        class="form-check-input"
+        type="checkbox"
+        id="email_catalogue"
+        name="email_catalogue"
+        value="1"
+        <%= account.email_catalogue ? "checked" : "" %>
+      >
+      <label class="form-check-label" for="email_catalogue">
+        Recevoir les notifications des nouveaux catalogues
+      </label>
+      <div class="form-text">
+        En cochant cette case, vous serez informé par email dès qu'un catalogue est publié.
+      </div>
+    </div>
+
+    <hr>
+    <h4>Changer de mot de passe</h4>
+    <div class="mb-3">
+      <label for="current_password" class="form-label">Mot de passe actuel</label>
+      <input type="password" name="current_password" id="current_password" class="form-control">
+    </div>
+    <div class="mb-3">
+      <label for="new_password" class="form-label">Nouveau mot de passe</label>
+      <input type="password" name="new_password" id="new_password" class="form-control">
+    </div>
+    <div class="mb-3">
+      <label for="confirm_password" class="form-label">Confirmer le nouveau mot de passe</label>
+      <input type="password" name="confirm_password" id="confirm_password" class="form-control">
+    </div>
+    <button type="submit" class="btn btn-primary">Enregistrer</button>
+    <a href="/" class="btn btn-secondary">Annuler</a>
+  </form>
+</div>
+</div>
+<%- include('partials/footer') %>

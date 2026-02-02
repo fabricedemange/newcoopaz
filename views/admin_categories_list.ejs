@@ -1,0 +1,147 @@
+<%- include('partials/header', { title: 'Gestion des catégories', user, role }) %>
+
+<div class="admin-content-wrapper">
+
+<div class="container-fluid px-3 mt-4">
+  <div class="row">
+    <div class="col-12">
+      <h2 class="mb-4">Gestion des catégories</h2>
+      <p class="text-muted mb-4">Organiser les produits par catégories et sous-catégories</p>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-12">
+      <div class="d-flex flex-column flex-sm-row gap-2 mb-3">
+        <a href="/admin/categories/new" class="btn btn-success">
+          <i class="bi bi-plus-circle me-2"></i>Ajouter une catégorie
+        </a>
+        <a href="/admin/menu" class="btn btn-outline-secondary">
+          <i class="bi bi-arrow-left me-2"></i>Retour au menu admin
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-12">
+      <% if (categories.length === 0) { %>
+        <div class="alert alert-info text-center">
+          <h4>Aucune catégorie trouvée</h4>
+          <p>Commencez par créer votre première catégorie.</p>
+          <a href="/admin/categories/new" class="btn btn-primary">Créer une catégorie</a>
+        </div>
+      <% } else { %>
+        <div class="card">
+          <div class="card-header">
+            <h5 class="card-title mb-0">
+              <i class="bi bi-tags me-2"></i>
+              Liste des catégories (<%= categories.length %>)
+            </h5>
+          </div>
+          <div class="card-body">
+            <div class="table-responsive">
+              <table class="table table-hover" id="categoriesTable">
+                <thead>
+                  <tr>
+                    <th>Catégorie</th>
+                    <th>Icône</th>
+                    <th>Parent</th>
+                    <th>Ordre</th>
+                    <th>Produits</th>
+                    <th>Statut</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% categories.forEach(category => { %>
+                    <tr>
+                      <td>
+                        <a href="/admin/categories/<%= category.id %>" class="text-decoration-none">
+                          <span class="badge" style="background-color: <%= category.couleur || '#6c757d' %>">
+                            <%= category.nom %>
+                          </span>
+                        </a>
+                      </td>
+                      <td>
+                        <% if (category.icon) { %>
+                          <i class="<%= category.icon %>"></i> <small class="text-muted"><%= category.icon %></small>
+                        <% } else { %>
+                          <span class="text-muted">-</span>
+                        <% } %>
+                      </td>
+                      <td>
+                        <% if (category.parent_nom) { %>
+                          <span class="badge bg-secondary"><%= category.parent_nom %></span>
+                        <% } else { %>
+                          <span class="badge bg-primary">Principale</span>
+                        <% } %>
+                      </td>
+                      <td>
+                        <%= category.ordre || 0 %>
+                      </td>
+                      <td>
+                        <span class="badge bg-info">
+                          <%= category.nb_products || 0 %> produit(s)
+                        </span>
+                      </td>
+                      <td>
+                        <% if (category.is_active) { %>
+                          <span class="badge bg-success">Active</span>
+                        <% } else { %>
+                          <span class="badge bg-secondary">Inactive</span>
+                        <% } %>
+                      </td>
+                      <td>
+                        <div class="btn-group btn-group-sm">
+                          <a href="/admin/categories/<%= category.id %>/edit"
+                             class="btn btn-outline-secondary"
+                             title="Modifier">
+                            <i class="bi bi-pencil"></i>
+                          </a>
+                        </div>
+                      </td>
+                    </tr>
+                  <% }); %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      <% } %>
+    </div>
+  </div>
+</div>
+
+<script>
+  $(document).ready(function() {
+    $('#categoriesTable').DataTable({
+      language: {
+        processing: "Traitement en cours...",
+        search: "Rechercher&nbsp;:",
+        lengthMenu: "Afficher _MENU_ &eacute;l&eacute;ments",
+        info: "Affichage de l'&eacute;l&eacute;ment _START_ &agrave; _END_ sur _TOTAL_ &eacute;l&eacute;ments",
+        infoEmpty: "Affichage de l'&eacute;l&eacute;ment 0 &agrave; 0 sur 0 &eacute;l&eacute;ment",
+        infoFiltered: "(filtr&eacute; de _MAX_ &eacute;l&eacute;ments au total)",
+        loadingRecords: "Chargement en cours...",
+        zeroRecords: "Aucun &eacute;l&eacute;ment &agrave; afficher",
+        emptyTable: "Aucune donn&eacute;e disponible dans le tableau",
+        paginate: {
+          first: "Premier",
+          previous: "Pr&eacute;c&eacute;dent",
+          next: "Suivant",
+          last: "Dernier"
+        },
+        aria: {
+          sortAscending: ": activer pour trier la colonne par ordre croissant",
+          sortDescending: ": activer pour trier la colonne par ordre d&eacute;croissant"
+        }
+      },
+      order: [[3, 'asc']],
+      pageLength: 50
+    });
+  });
+</script>
+
+</div>
+<%- include('partials/footer') %>

@@ -1,0 +1,12 @@
+<%- include('partials/header', { title: 'File d\'attente email', user, role }) %>
+
+<div class="admin-content-wrapper">
+  <div id="admin-email-queue-app"></div>
+</div>
+
+<script>
+window.CSRF_TOKEN = '<%= typeof csrfToken !== "undefined" ? csrfToken : "" %>';
+</script>
+<script type="module" src="/dist/admin-email-queue.js?v=<%= typeof APP_VERSION !== 'undefined' ? APP_VERSION : Date.now() %>"></script>
+
+<%- include('partials/footer') %>

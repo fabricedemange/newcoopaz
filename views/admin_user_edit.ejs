@@ -1,0 +1,49 @@
+<%- include('partials/header', { user, role, title: isNew ? "Nouvel utilisateur" : "Éditer utilisateur" }) %>
+
+<div class="admin-content-wrapper">
+<div class="row justify-content-center">
+  <div class="col-md-7 col-lg-6">
+    <div class="card shadow">
+      <div class="card-body">
+        <h2 class="mb-4"><%= isNew ? "Nouvel utilisateur" : "Éditer un utilisateur" %></h2>
+        <% if (error) { %><div class="alert alert-danger"><%= error %></div><% } %>
+        <form method="post" action="<%= isNew ? '/admin/users/new' : '/admin/users/' + formUser.id + '/edit' %>">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+  
+          <div class="mb-3">
+            <label class="form-label">Nom</label>
+            <input type="text" class="form-control" name="username" value="<%= formUser.username || '' %>" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Email</label>
+            <input type="email" class="form-control" name="email" value="<%= formUser.email || '' %>" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Commentaire</label>
+            <input type="text" class="form-control" name="comment" value="<%= formUser.comment || '' %>">
+          </div>
+          <div class="mb-3 form-check">
+           <option value="admin" <% if (u.id === panier.user_id) { %>selected<% } %>>
+            <input type="checkbox" class="form-check-input" id="admin" name="admin" value="1" <%= formUser.admin ? "checked" : "" %>>
+            <label class="form-check-label" for="admin">Admin</label>
+          </div>
+          <% if (isNew) { %>
+            <div class="mb-3">
+              <label class="form-label">Mot de passe</label>
+              <input type="password" class="form-control" name="password" required>
+            </div>
+          <% } else { %>
+            <div class="mb-3">
+              <label class="form-label">Nouveau mot de passe (laisser vide sinon)</label>
+              <input type="password" class="form-control" name="new_password">
+            </div>
+          <% } %>
+          <button type="submit" class="btn btn-primary"><%= isNew ? "Créer" : "Enregistrer" %></button>
+          <a href="/admin/users" class="btn btn-secondary ms-2">Annuler</a>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+<%- include('partials/footer') %>

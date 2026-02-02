@@ -1,0 +1,939 @@
+<%- include('partials/header', { title: 'Gestion des catalogues', user, role }) %>
+
+<div class="admin-content-wrapper">
+  <style>
+    .overflow-visible {
+      overflow-x: auto;
+      overflow-y: visible;
+    }
+  </style>
+
+  <div class="container-fluid px-3 mt-4">
+    <div class="row">
+      <div class="col-12">
+        <h2 class="mb-4">Gestion des catalogues</h2>
+
+        <% if (referentScopeActive) { %>
+          <div class="alert alert-secondary d-flex flex-column flex-md-row align-items-md-center justify-content-md-between gap-2" role="status">
+            <span>
+              <strong>Vue actuelle :</strong>
+              <%= showAllScope ? 'tous les catalogues de votre organisation.' : 'uniquement les catalogues dont vous êtes référent.' %>
+            </span>
+            <div class="d-flex flex-wrap gap-2">
+              <a class="btn btn-outline-primary btn-sm" href="?scope=<%= showAllScope ? 'referent' : 'all' %>#cataloguesTable">
+                <i class="bi bi-filter"></i>
+                <%= showAllScope ? 'Voir uniquement mes catalogues' : 'Voir tous les catalogues' %>
+              </a>
+            </div>
+          </div>
+        <% } %>
+
+        <!-- Boutons d'action principaux -->
+        <div class="d-flex flex-wrap gap-2 mb-4">
+          <a href="/admin/catalogues/new" class="btn btn-success">Ajouter un catalogue Excel</a>
+          <a href="/admin/catalogues/new2" class="btn btn-success">Ajouter un catalogue vierge</a>
+          <% if (role === 'SuperAdmin' || organization_id == 1) { %>
+            <form method="POST" action="/admin/import">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <input type="hidden" name="sheetId" value="1okI49-rXJ9tXF0Ztbw2_3RVHSkIJGsMNEs95ygOsMYc" required>
+              <input type="hidden" name="range" value="A1:H3000">
+              <button type="submit" class="btn btn-success">Charger Google Sheet</button>
+            </form>
+          <% } %>
+        </div>
+      </div>
+    </div>
+
+    <!-- Premier tableau : Catalogues actifs (is_archived: 0, 1, 2) -->
+    <div class="row">
+      <div class="col-12">
+        <h3 class="mb-3">Catalogues actifs</h3>
+        <div class="table-responsive overflow-visible">
+          <table class="table table-bordered table-striped table-sm table-ultra-compact align-middle" id="cataloguesTable">
+            <thead class="table-dark">
+              <tr>
+                <th class="text-center">N°</th>
+                <th>Nom</th>
+                <th class="d-none d-md-table-cell">Description</th>
+                <th class="d-none d-lg-table-cell">Date fin Cde</th>
+                <th class="d-none d-lg-table-cell">Date de livraison</th>
+                <th class="d-none d-sm-table-cell">Statut</th>
+                <th>Actions</th>
+                <th class="d-none d-md-table-cell">Référent</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% const cataloguesActifs = catalogues.filter(cat => cat.is_archived !== 3); %>
+              <% if (cataloguesActifs && cataloguesActifs.length) { %>
+                <% cataloguesActifs.forEach(function(catalogue) { %>
+                  <% 
+                    const now = new Date();
+                    const catalogueExpirationDate = catalogue.expiration_date ? new Date(catalogue.expiration_date) : null;
+                    const catalogueIsExpired = catalogueExpirationDate ? catalogueExpirationDate < now : false;
+                    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+                    const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+                    const showPrevoirCommande = catalogueExpirationDate
+                      ? ((now - catalogueExpirationDate) >= ONE_DAY_MS && (now - catalogueExpirationDate) <= THREE_DAYS_MS)
+                      : false;
+                  %>
+                  <tr>
+                    <td class="text-center" data-order="<%= catalogue.id %>" data-search="<%= catalogue.id %>">
+                      <%= catalogue.id %>
+                    </td>
+                    <td>
+                      <div class="fw-bold lh-1 mb-1">
+                          <%= catalogue.originalname %>
+                          <% if (role === 'SuperAdmin' && catalogue.organization_name) { %>
+                            <span class="badge bg-secondary ms-1"><%= catalogue.organization_name %></span>
+                          <% } %>
+                      </div>
+                      <!-- Informations supplémentaires sur mobile -->
+                      <div class="d-md-none small text-muted lh-1">
+                        <div class="catalogue-description mb-1"><%= catalogue.description || '' %></div>
+                        <div class="mb-1">
+                          <% if (catalogue.date_livraison) { %>
+                            <% 
+                              const livrDate = new Date(catalogue.date_livraison);
+                              const dayNames = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+                              const livrDayName = dayNames[livrDate.getDay()];
+                            %>
+                            🚚 <%= livrDayName %> <%= formatDate(catalogue.date_livraison) %>
+                          <% } else { %>
+                            🚚 Non définie
+                          <% } %>
+                          •
+                          <% if (catalogue.expiration_date) { %>
+                            <% 
+                              const expDate = catalogueExpirationDate;
+                              const expDayNames = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+                              const expDayName = expDate ? expDayNames[expDate.getDay()] : '';
+                            %>
+                            ⏰ <%= expDayName %> <%= formatDate(catalogue.expiration_date) %>
+                            <% if (showPrevoirCommande) { %>
+                              <span class="text-danger fw-bold ms-1">prévoir la commande</span>
+                            <% } %>
+                          <% } else { %>
+                            ⏰ Non définie
+                          <% } %>
+                        </div>
+                        <div>
+                          <% if (catalogue.is_archived == 0) { %>
+                            <span class="badge bg-success">Visible</span>
+                          <% } else if (catalogue.is_archived == 1) { %>
+                            <span class="badge bg-warning">Gestion</span>
+                          <% } else if (catalogue.is_archived == 2) { %>
+                            <span class="badge bg-info">Admin</span>
+                          <% } else if (catalogue.is_archived == 3) { %>
+                            <span class="badge bg-danger">Invisible</span>
+                          <% } else { %>
+                            <span class="badge bg-secondary">?</span>
+                          <% } %>
+                          <small class="ms-2 text-muted"><%= catalogue.username %></small>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="d-none d-md-table-cell">
+                      <div class="catalogue-description small"><%= catalogue.description || '' %></div>
+                    </td>
+                    <td class="d-none d-lg-table-cell">
+                      <% if (catalogue.expiration_date) { %>
+                        <% 
+                          const expDate = catalogueExpirationDate;
+                          const dayNames = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+                          const dayName = expDate ? dayNames[expDate.getDay()] : '';
+                        %>
+                        <small class="text-muted d-block"><%= dayName %></small>
+                        <small><%= formatDate(catalogue.expiration_date) %></small>
+                        <% if (showPrevoirCommande) { %>
+                          <small class="text-danger fw-bold d-block">prévoir la commande</small>
+                        <% } %>
+                      <% } %>
+                    </td>
+                    <td class="d-none d-lg-table-cell">
+                      <% if (catalogue.date_livraison) { %>
+                        <% 
+                          const livrDate = new Date(catalogue.date_livraison);
+                          const livrDayNames = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+                          const livrDayName = livrDayNames[livrDate.getDay()];
+                        %>
+                        <small class="text-muted d-block"><%= livrDayName %></small>
+                        <small><%= formatDate(catalogue.date_livraison) %></small>
+                      <% } %>
+                    </td>
+
+                    <td class="d-none d-sm-table-cell">
+                      <% if (catalogue.is_archived == 0) { %>
+                        <span class="badge bg-success">Visible</span>
+                      <% } else if (catalogue.is_archived == 1) { %>
+                        <span class="badge bg-warning">Gestion</span>
+                      <% } else if (catalogue.is_archived == 2) { %>
+                        <span class="badge bg-info">Admin</span>
+                      <% } else if (catalogue.is_archived == 3) { %>
+                        <span class="badge bg-danger">Masqué</span>
+                      <% } else { %>
+                        <span class="badge bg-secondary">Inconnu</span>
+                      <% } %>
+                    </td>
+                    <td>
+                      <!-- Actions sur mobile : menu déroulant -->
+                      <div class="d-md-none">
+                        <div class="dropdown">
+                          <button class="btn btn-outline-secondary btn-sm" type="button"
+                            data-bs-toggle="dropdown">
+                            ⋯
+                          </button>
+                          <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="/admin/catalogues/<%= catalogue.id %>/edit">✏️ Modifier</a>
+                            </li>
+                            <li>
+                              <form action="/admin/catalogues/<%= catalogue.id %>/duplicate" method="post">
+                                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                <button type="submit" class="dropdown-item">📋 Dupliquer</button>
+                              </form>
+                            </li>
+                            <li>
+                              <form action="/admin/catalogues/<%= catalogue.id %>/email" method="post">
+                                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                <button type="submit" class="dropdown-item"
+                                  onclick="return confirm('Voulez-vous envoyer un mail à tous pour le changement sur ce catalogue?')">
+                                  📧 Notifier à Tous de la dispo du Catalogue
+                                </button>
+                              </form>
+                            </li>
+                            <li>
+                              <form action="/admin/catalogues/<%= catalogue.id %>/emailarrivee" method="post">
+                                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                <button type="submit" class="dropdown-item"
+                                  onclick="return confirm('Voulez-vous envoyer un mail à toutes les personnes ayant fait une commande pour ce catalogue ?')">
+                                  📦 Notifier de la livraison des Produits
+                                </button>
+                              </form>
+                            </li>
+                            <li>
+                              <hr class="dropdown-divider">
+                            </li>
+                            <li class="dropdown-item-text">
+                              <form action="/admin/catalogues/<%= catalogue.id %>/reminder-referent" method="post" class="m-0">
+                                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                <div class="form-check">
+                                  <input class="form-check-input" type="checkbox" name="referent_order_reminder_enabled" id="reminder_referent_<%= catalogue.id %>"
+                                    <%= (catalogue.referent_order_reminder_enabled === 0 || catalogue.referent_order_reminder_enabled === '0') ? '' : 'checked' %>>
+                                  <label class="form-check-label small" for="reminder_referent_<%= catalogue.id %>">
+                                    Mail référent (Expiration + 8h)
+                                  </label>
+                                </div>
+                                <button type="submit" class="btn btn-sm btn-outline-secondary mt-2">Appliquer</button>
+                              </form>
+                            </li>
+                            <% if (catalogue.referent_order_reminder_sent_at) { %>
+                              <li>
+                                <form action="/admin/catalogues/<%= catalogue.id %>/reminder-referent-reset" method="post" class="m-0">
+                                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                  <button type="submit" class="dropdown-item text-danger"
+                                    onclick="return confirm('Réinitialiser le rappel référent ? Si Expiration + 8h est déjà dépassée, un nouveau mail pourra être envoyé rapidement.')">
+                                    Réinitialiser le rappel référent
+                                  </button>
+                                </form>
+                              </li>
+                            <% } %>
+
+                            <li>
+                              <hr class="dropdown-divider">
+                            </li>
+                            <li class="dropdown-item-text"><small class="text-muted">Visibilité</small></li>
+                            <li>
+                              <form action="/admin/catalogues/<%= catalogue.id %>/visibility" method="post">
+                                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                <input type="hidden" name="is_archived" value="0">
+                                <button type="submit" class="dropdown-item">👁️ Visible</button>
+                              </form>
+                            </li>
+                            <li>
+                              <form action="/admin/catalogues/<%= catalogue.id %>/visibility" method="post">
+                                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                <input type="hidden" name="is_archived" value="2">
+                                <button type="submit" class="dropdown-item">🙈 Invisible utilisateurs</button>
+                              </form>
+                            </li>
+                            <li>
+                              <form action="/admin/catalogues/<%= catalogue.id %>/visibility" method="post">
+                                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                <input type="hidden" name="is_archived" value="3">
+                                <button type="submit" class="dropdown-item text-danger"
+                                  onclick="return confirm('Mettre ce catalogue en Invisible de tous (archivé) ?')">🚫 Invisible de tous</button>
+                              </form>
+                            </li>
+
+                            <li>
+                              <hr class="dropdown-divider">
+                            </li>
+                            <li><a class="dropdown-item"
+                                href="/admin/catalogues/<%= catalogue.id %>/synthese">📊 Synthèse</a></li>
+                            <li><a class="dropdown-item"
+                                href="/admin/catalogues/<%= catalogue.id %>/synthese-detaillee">📈 Synthèse détaillée</a>
+                            </li>
+                          </ul>
+                        </div>
+                      </div>
+
+                      <!-- Actions sur desktop : boutons en ligne -->
+                      <div class="d-none d-md-block">
+                        <div class="d-flex gap-1">
+                          <a href="/admin/catalogues/<%= catalogue.id %>/edit"
+                            class="btn btn-primary btn-sm px-2" title="Modifier">✏️</a>
+
+                          <div class="dropdown d-inline">
+                            <button class="btn btn-outline-secondary btn-sm px-2" type="button"
+                              data-bs-toggle="dropdown" title="Plus d'actions">
+                              ⋯
+                            </button>
+                            <ul class="dropdown-menu">
+                              <li>
+                                <form action="/admin/catalogues/<%= catalogue.id %>/duplicate" method="post">
+                                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                  <button type="submit" class="dropdown-item">📋 Dupliquer</button>
+                                </form>
+                              </li>
+                                                            <li>
+                                                              <hr class="dropdown-divider">
+                                                            </li>
+                              <li>
+                                <form action="/admin/catalogues/<%= catalogue.id %>/email" method="post">
+                                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                  <button type="submit" class="dropdown-item"
+                                    onclick="return confirm('Voulez-vous envoyer un mail à tous pour le changement sur ce catalogue?')">
+                                    📧 Notifier à Tous de la dispo du Catalogue
+                                  </button>
+                                </form>
+                              </li>
+                              <li>
+                                <form action="/admin/catalogues/<%= catalogue.id %>/emailarrivee" method="post">
+                                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                  <button type="submit" class="dropdown-item"
+                                    onclick="return confirm('Voulez-vous envoyer un mail à toutes les personnes ayants fait une commandes pour ce catalogue?')">
+                                    📦 Notifier de la livraison des Produits
+                                  </button>
+                                </form>   
+                              </li>
+                              <li>
+                                <hr class="dropdown-divider">
+                              </li>
+                              <li class="dropdown-item-text">
+                                <form action="/admin/catalogues/<%= catalogue.id %>/reminder-referent" method="post" class="m-0">
+                                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                  <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="referent_order_reminder_enabled" id="reminder_referent_desktop_<%= catalogue.id %>"
+                                      <%= (catalogue.referent_order_reminder_enabled === 0 || catalogue.referent_order_reminder_enabled === '0') ? '' : 'checked' %>>
+                                    <label class="form-check-label small" for="reminder_referent_desktop_<%= catalogue.id %>">
+                                      Mail référent (Expiration + 8h)
+                                    </label>
+                                  </div>
+                                  <button type="submit" class="btn btn-sm btn-outline-secondary mt-2">Appliquer</button>
+                                </form>
+                              </li>
+                              <% if (catalogue.referent_order_reminder_sent_at) { %>
+                                <li>
+                                  <form action="/admin/catalogues/<%= catalogue.id %>/reminder-referent-reset" method="post" class="m-0">
+                                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                    <button type="submit" class="dropdown-item text-danger"
+                                      onclick="return confirm('Réinitialiser le rappel référent ? Si Expiration + 8h est déjà dépassée, un nouveau mail pourra être envoyé rapidement.')">
+                                      Réinitialiser le rappel référent
+                                    </button>
+                                  </form>
+                                </li>
+                              <% } %>
+
+                              <li>
+                                <hr class="dropdown-divider">
+                              </li>
+                              <li class="dropdown-item-text"><small class="text-muted">Visibilité</small></li>
+                              <li>
+                                <form action="/admin/catalogues/<%= catalogue.id %>/visibility" method="post">
+                                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                  <input type="hidden" name="is_archived" value="0">
+                                  <button type="submit" class="dropdown-item">👁️ Visible</button>
+                                </form>
+                              </li>
+                              <li>
+                                <form action="/admin/catalogues/<%= catalogue.id %>/visibility" method="post">
+                                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                  <input type="hidden" name="is_archived" value="2">
+                                  <button type="submit" class="dropdown-item">🙈 Invisible utilisateurs</button>
+                                </form>
+                              </li>
+                              <li>
+                                <form action="/admin/catalogues/<%= catalogue.id %>/visibility" method="post">
+                                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                  <input type="hidden" name="is_archived" value="3">
+                                  <button type="submit" class="dropdown-item text-danger"
+                                    onclick="return confirm('Mettre ce catalogue en Invisible de tous (archivé) ?')">🚫 Invisible de tous</button>
+                                </form>
+                              </li>
+                              <li>
+                                <hr class="dropdown-divider">
+                              </li>
+                              <li><a class="dropdown-item"
+                                  href="/admin/catalogues/<%= catalogue.id %>/synthese">📊 Synthèse</a></li>
+                              <li><a class="dropdown-item"
+                                  href="/admin/catalogues/<%= catalogue.id %>/synthese-detaillee">📈 Synthèse détaillée</a></li>
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="d-none d-md-table-cell">
+                      <small class="text-muted"><%= catalogue.username %></small>
+                    </td>
+                  </tr>
+                  <% }); %>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Second tableau : Catalogues archivés définitivement (is_archived: 3) -->
+    <div class="row mt-5">
+      <div class="col-12">
+        <h3 class="mb-3">Catalogues Archivés <br>
+          Ils n'apparaissent nulle part, mais les commandes sont conservées, les adhérents peuvent toujours les consulter.</h3>
+        <div class="table-responsive overflow-visible">
+          <table class="table table-bordered table-striped table-sm table-ultra-compact align-middle" id="cataloguesArchivesTable">
+            <thead class="table-dark">
+              <tr>
+                <th class="text-center">N°</th>
+                <th>Nom</th>
+                <th class="d-none d-md-table-cell">Description</th>
+                <th class="d-none d-lg-table-cell">Date fin Cde</th>
+                <th class="d-none d-lg-table-cell">Date de livraison</th>
+                <th class="d-none d-sm-table-cell">Statut</th>
+                <th>Actions</th>
+                <th class="d-none d-md-table-cell">Référent</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% const cataloguesArchives = catalogues.filter(cat => cat.is_archived === 3); %>
+              <% if (cataloguesArchives && cataloguesArchives.length) { %>
+                <% cataloguesArchives.forEach(function(catalogue) { %>
+                  <tr>
+                    <td class="text-center" data-order="<%= catalogue.id %>" data-search="<%= catalogue.id %>">
+                      <%= catalogue.id %>
+                    </td>
+                    <td>
+                      <div class="fw-bold lh-1 mb-1">
+                          <%= catalogue.originalname %>
+                          <% if (role === 'SuperAdmin' && catalogue.organization_name) { %>
+                            <span class="badge bg-secondary ms-1"><%= catalogue.organization_name %></span>
+                          <% } %>
+                      </div>
+                      <!-- Informations supplémentaires sur mobile -->
+                      <div class="d-md-none small text-muted lh-1">
+                        <div class="catalogue-description mb-1"><%= catalogue.description || '' %></div>
+                        <div class="mb-1">
+                          <% if (catalogue.date_livraison) { %>
+                            <% 
+                              const livrDate = new Date(catalogue.date_livraison);
+                              const dayNames = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+                              const livrDayName = dayNames[livrDate.getDay()];
+                            %>
+                            🚚 <%= livrDayName %> <%= formatDate(catalogue.date_livraison) %>
+                          <% } else { %>
+                            🚚 Non définie
+                          <% } %>
+                          •
+                          <% if (catalogue.expiration_date) { %>
+                            <% 
+                              const expDate = new Date(catalogue.expiration_date);
+                              const expDayNames = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+                              const expDayName = expDayNames[expDate.getDay()];
+                            %>
+                            ⏰ <%= expDayName %> <%= formatDate(catalogue.expiration_date) %>
+                          <% } else { %>
+                            ⏰ Non définie
+                          <% } %>
+                        </div>
+                        <div>
+                          <span class="badge bg-danger">Archivé</span>
+                          <small class="ms-2 text-muted"><%= catalogue.username %></small>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="d-none d-md-table-cell">
+                      <div class="catalogue-description small"><%= catalogue.description || '' %></div>
+                    </td>
+                    <td class="d-none d-lg-table-cell">
+                      <% if (catalogue.expiration_date) { %>
+                        <% 
+                          const expDate = new Date(catalogue.expiration_date);
+                          const dayNames = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+                          const dayName = dayNames[expDate.getDay()];
+                        %>
+                        <small class="text-muted d-block"><%= dayName %></small>
+                        <small><%= formatDate(catalogue.expiration_date) %></small>
+                      <% } %>
+                    </td>
+                    <td class="d-none d-lg-table-cell">
+                      <% if (catalogue.date_livraison) { %>
+                        <% 
+                          const livrDate = new Date(catalogue.date_livraison);
+                          const livrDayNames = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+                          const livrDayName = livrDayNames[livrDate.getDay()];
+                        %>
+                        <small class="text-muted d-block"><%= livrDayName %></small>
+                        <small><%= formatDate(catalogue.date_livraison) %></small>
+                      <% } %>
+                    </td>
+                    <td class="d-none d-sm-table-cell">
+                      <span class="badge bg-danger">Archivé</span>
+                    </td>
+                    <td>
+                      <!-- Actions complètes pour les archives -->
+                      <div class="d-md-none">
+                        <div class="dropdown">
+                          <button class="btn btn-outline-secondary btn-sm" type="button"
+                            data-bs-toggle="dropdown">
+                            ⋯
+                          </button>
+                          <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="/admin/catalogues/<%= catalogue.id %>/edit">✏️ Modifier</a>
+                            </li>
+                            <li>
+                              <form action="/admin/catalogues/<%= catalogue.id %>/duplicate" method="post">
+                                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                <button type="submit" class="dropdown-item">📋 Dupliquer</button>
+                              </form>
+                            </li>
+                            <li>
+                              <hr class="dropdown-divider">
+                            </li>
+
+                            <li class="dropdown-item-text"><small class="text-muted">Visibilité</small></li>
+                            <li>
+                              <form action="/admin/catalogues/<%= catalogue.id %>/visibility" method="post">
+                                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                <input type="hidden" name="is_archived" value="0">
+                                <button type="submit" class="dropdown-item">👁️ Visible</button>
+                              </form>
+                            </li>
+                            <li>
+                              <form action="/admin/catalogues/<%= catalogue.id %>/visibility" method="post">
+                                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                <input type="hidden" name="is_archived" value="2">
+                                <button type="submit" class="dropdown-item">🙈 Invisible utilisateurs</button>
+                              </form>
+                            </li>
+                            <li>
+                              <form action="/admin/catalogues/<%= catalogue.id %>/visibility" method="post">
+                                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                <input type="hidden" name="is_archived" value="3">
+                                <button type="submit" class="dropdown-item text-danger"
+                                  onclick="return confirm('Mettre ce catalogue en Invisible de tous (archivé) ?')">🚫 Invisible de tous</button>
+                              </form>
+                            </li>
+
+                            <li>
+                              <hr class="dropdown-divider">
+                            </li>
+                            <li><a class="dropdown-item"
+                                href="/admin/catalogues/<%= catalogue.id %>/synthese">📊 Synthèse</a></li>
+                            <li><a class="dropdown-item"
+                                href="/admin/catalogues/<%= catalogue.id %>/synthese-detaillee">📈 Synthèse détaillée</a>
+                            </li>
+                          </ul>
+                        </div>
+                      </div>
+                      <div class="d-none d-md-block">
+                        <div class="d-flex gap-1">
+                          <a href="/admin/catalogues/<%= catalogue.id %>/edit"
+                            class="btn btn-primary btn-sm px-2" title="Modifier">✏️</a>
+
+                          <form action="/admin/catalogues/<%= catalogue.id %>/duplicate" method="post"
+                            style="display:inline;">
+                            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                            <button type="submit" class="btn btn-info btn-sm px-2" title="Dupliquer">📋</button>
+                          </form>
+
+                          <div class="dropdown d-inline">
+                            <button class="btn btn-outline-secondary btn-sm px-2" type="button"
+                              data-bs-toggle="dropdown" title="Plus d'actions">
+                              ⋯
+                            </button>
+                            <ul class="dropdown-menu">
+                              <li class="dropdown-item-text"><small class="text-muted">Visibilité</small></li>
+                              <li>
+                                <form action="/admin/catalogues/<%= catalogue.id %>/visibility" method="post">
+                                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                  <input type="hidden" name="is_archived" value="0">
+                                  <button type="submit" class="dropdown-item">👁️ Visible</button>
+                                </form>
+                              </li>
+                              <li>
+                                <form action="/admin/catalogues/<%= catalogue.id %>/visibility" method="post">
+                                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                  <input type="hidden" name="is_archived" value="2">
+                                  <button type="submit" class="dropdown-item">🙈 Invisible utilisateurs</button>
+                                </form>
+                              </li>
+                              <li>
+                                <form action="/admin/catalogues/<%= catalogue.id %>/visibility" method="post">
+                                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                  <input type="hidden" name="is_archived" value="3">
+                                  <button type="submit" class="dropdown-item text-danger"
+                                    onclick="return confirm('Mettre ce catalogue en Invisible de tous (archivé) ?')">🚫 Invisible de tous</button>
+                                </form>
+                              </li>
+                              <li>
+                                <hr class="dropdown-divider">
+                              </li>
+                              <li><a class="dropdown-item"
+                                  href="/admin/catalogues/<%= catalogue.id %>/synthese">📊 Synthèse</a></li>
+                              <li><a class="dropdown-item"
+                                  href="/admin/catalogues/<%= catalogue.id %>/synthese-detaillee">📈 Synthèse détaillée</a></li>
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="d-none d-md-table-cell">
+                      <small class="text-muted"><%= catalogue.username %></small>
+                    </td>
+                  </tr>
+                  <% }); %>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="row mt-4">
+      <div class="col-12">
+        <a href="/admin/menu" class="btn btn-secondary">← Retour menu admin</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- DataTables CSS et JS -->
+  <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+
+  <!-- Calcul du nombre d'archives pour JavaScript -->
+  <% var archivedCount = catalogues.filter(cat => cat.is_archived === 3).length; %>
+
+  <script>
+    $(document).ready(function() {
+      // Initialisation des tooltips Bootstrap
+      var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"], [title]'));
+      var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+      });
+
+      // Configuration pour le tableau des catalogues actifs
+      $('#cataloguesTable').DataTable({
+        "language": {
+          "url": "https://cdn.datatables.net/plug-ins/1.13.6/i18n/fr-FR.json"
+        },
+        "order": [[0, "asc"]], // Tri par défaut sur la colonne Numéro
+        "pageLength": 25,
+        "responsive": true,
+        "dom": '<"row justify-content-center"<"col-auto"f><"col-auto"p>>rt<"row justify-content-center"<"col-auto"i><"col-auto"l>>',
+        "columnDefs": [
+          {
+            "targets": [0], // Numéro de catalogue
+            "className": "text-center",
+            "type": "num",
+            "render": function(data, type) {
+              if (type === 'sort' || type === 'type') {
+                if (data) {
+                  const clean = data.toString().replace(/<[^>]*>/g, '');
+                  const match = clean.match(/\d+/);
+                  return match ? parseInt(match[0], 10) : 0;
+                }
+                return 0;
+              }
+              return data;
+            }
+          },
+          { 
+            "targets": [1], // Nom du catalogue
+            "className": "text-start",
+            "type": "string",
+            "render": function(data, type) {
+              if (type === 'sort' || type === 'type') {
+                if (data) {
+                  let text = data.toString().trim();
+                  text = text.replace(/<[^>]*>/g, '');
+                  text = text.replace(/\s+/g, ' ').trim();
+                  text = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                  return text.toLowerCase();
+                }
+                return '';
+              }
+              return data;
+            }
+          },
+          { 
+            "targets": [2], // Description
+            "className": "text-start",
+            "type": "string",
+            "render": function(data, type, row) {
+              if (type === 'sort' || type === 'type') {
+                // Pour le tri de la description, normaliser le texte
+                if (data) {
+                  let text = data.toString().trim();
+                  text = text.replace(/<[^>]*>/g, '');
+                  text = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                  return text.toLowerCase();
+                }
+                return '';
+              }
+              return data;
+            }
+          },
+          { 
+            "targets": [3], // Date fin Cde
+            "type": "date",
+            "render": function(data, type, row) {
+              if (type === 'sort' || type === 'type') {
+                // Pour le tri des dates, extraire seulement la date DD/MM/YYYY du HTML
+                if (data && data !== 'N/A' && data.trim() !== '') {
+                  // Extraire tout le texte du HTML
+                  let dateText = data.toString().replace(/<[^>]*>/g, '').trim();
+                  
+                  // Chercher un pattern DD/MM/YYYY dans le texte
+                  const dateMatch = dateText.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+                  if (dateMatch) {
+                    // Convertir DD/MM/YYYY en YYYY-MM-DD pour tri correct
+                    const day = dateMatch[1].padStart(2, '0');
+                    const month = dateMatch[2].padStart(2, '0');
+                    const year = dateMatch[3];
+                    return year + '-' + month + '-' + day;
+                  }
+                }
+                return '';
+              }
+              return data;
+            }
+          },
+          { 
+            "targets": [4], // Date de livraison
+            "type": "date",
+            "render": function(data, type, row) {
+              if (type === 'sort' || type === 'type') {
+                // Pour le tri des dates, extraire seulement la date DD/MM/YYYY du HTML
+                if (data && data !== 'N/A' && data.trim() !== '') {
+                  // Extraire tout le texte du HTML
+                  let dateText = data.toString().replace(/<[^>]*>/g, '').trim();
+                  
+                  // Chercher un pattern DD/MM/YYYY dans le texte
+                  const dateMatch = dateText.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+                  if (dateMatch) {
+                    // Convertir DD/MM/YYYY en YYYY-MM-DD pour tri correct
+                    const day = dateMatch[1].padStart(2, '0');
+                    const month = dateMatch[2].padStart(2, '0');
+                    const year = dateMatch[3];
+                    return year + '-' + month + '-' + day;
+                  }
+                }
+                return '';
+              }
+              return data;
+            }
+          },
+          { 
+            "targets": [5], // Statut
+            "type": "string",
+            "render": function(data, type, row) {
+              if (type === 'sort' || type === 'type') {
+                // Pour le tri des badges de statut, extraire le texte
+                if (data) {
+                  if (data.includes('Visible')) return '1_visible';
+                  if (data.includes('Gestion')) return '2_gestion';
+                  if (data.includes('Admin')) return '3_admin';
+                  if (data.includes('Masqué') || data.includes('Invisible')) return '4_masque';
+                  return data.toString().toLowerCase();
+                }
+                return '';
+              }
+              return data;
+            }
+          },
+          { "orderable": false, "targets": [6] }, // Désactiver le tri sur la colonne Actions
+          { "searchable": false, "targets": [6] }, // Désactiver la recherche sur la colonne Actions
+          { 
+            "targets": [7], // Référent
+            "className": "text-start",
+            "type": "string",
+            "render": function(data, type, row) {
+              if (type === 'sort' || type === 'type') {
+                // Pour le tri du référent, normaliser le texte
+                if (data) {
+                  let text = data.toString().trim();
+                  text = text.replace(/<[^>]*>/g, '');
+                  text = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                  return text.toLowerCase();
+                }
+                return '';
+              }
+              return data;
+            }
+          }
+        ]
+      });
+
+      // Configuration pour le tableau des archives définitives (seulement s'il y a des données)
+      var hasArchives = Number('<%= archivedCount || 0 %>');
+      if (hasArchives > 0) {
+        $('#cataloguesArchivesTable').DataTable({
+          "language": {
+            "url": "https://cdn.datatables.net/plug-ins/1.13.6/i18n/fr-FR.json"
+          },
+          "order": [[0, "asc"]], // Tri par défaut sur la colonne Numéro
+          "pageLength": 10, // Moins d'éléments par page pour les archives
+          "responsive": true,
+          "dom": '<"row justify-content-center"<"col-auto"f><"col-auto"p>>rt<"row justify-content-center"<"col-auto"i><"col-auto"l>>',
+          "columnDefs": [
+            {
+              "targets": [0], // Numéro de catalogue
+              "className": "text-center",
+              "type": "num",
+              "render": function(data, type) {
+                if (type === 'sort' || type === 'type') {
+                  if (data) {
+                    const clean = data.toString().replace(/<[^>]*>/g, '');
+                    const match = clean.match(/\d+/);
+                    return match ? parseInt(match[0], 10) : 0;
+                  }
+                  return 0;
+                }
+                return data;
+              }
+            },
+            { 
+              "targets": [1], // Nom du catalogue
+              "className": "text-start",
+              "type": "string",
+              "render": function(data, type) {
+                if (type === 'sort' || type === 'type') {
+                  if (data) {
+                    let text = data.toString().trim();
+                    text = text.replace(/<[^>]*>/g, '');
+                    text = text.replace(/\s+/g, ' ').trim();
+                    text = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                    return text.toLowerCase();
+                  }
+                  return '';
+                }
+                return data;
+              }
+            },
+            { 
+              "targets": [2], // Description
+              "className": "text-start",
+              "type": "string",
+              "render": function(data, type, row) {
+                if (type === 'sort' || type === 'type') {
+                  if (data) {
+                    let text = data.toString().trim();
+                    text = text.replace(/<[^>]*>/g, '');
+                    text = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                    return text.toLowerCase();
+                  }
+                  return '';
+                }
+                return data;
+              }
+            },
+            { 
+                "targets": [3], // Date fin Cde
+              "type": "date",
+              "render": function(data, type, row) {
+                if (type === 'sort' || type === 'type') {
+                  // Pour le tri des dates, extraire seulement la date DD/MM/YYYY du HTML
+                  if (data && data !== 'N/A' && data.trim() !== '') {
+                    // Extraire tout le texte du HTML
+                    let dateText = data.toString().replace(/<[^>]*>/g, '').trim();
+                    
+                    // Chercher un pattern DD/MM/YYYY dans le texte
+                    const dateMatch = dateText.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+                    if (dateMatch) {
+                      // Convertir DD/MM/YYYY en YYYY-MM-DD pour tri correct
+                      const day = dateMatch[1].padStart(2, '0');
+                      const month = dateMatch[2].padStart(2, '0');
+                      const year = dateMatch[3];
+                      return year + '-' + month + '-' + day;
+                    }
+                  }
+                  return '';
+                }
+                return data;
+              }
+            },
+            { 
+                "targets": [4], // Date de livraison
+              "type": "date",
+              "render": function(data, type, row) {
+                if (type === 'sort' || type === 'type') {
+                  // Pour le tri des dates, extraire seulement la date DD/MM/YYYY du HTML
+                  if (data && data !== 'N/A' && data.trim() !== '') {
+                    // Extraire tout le texte du HTML
+                    let dateText = data.toString().replace(/<[^>]*>/g, '').trim();
+                    
+                    // Chercher un pattern DD/MM/YYYY dans le texte
+                    const dateMatch = dateText.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+                    if (dateMatch) {
+                      // Convertir DD/MM/YYYY en YYYY-MM-DD pour tri correct
+                      const day = dateMatch[1].padStart(2, '0');
+                      const month = dateMatch[2].padStart(2, '0');
+                      const year = dateMatch[3];
+                      return year + '-' + month + '-' + day;
+                    }
+                  }
+                  return '';
+                }
+                return data;
+              }
+            },
+            { 
+                "targets": [5], // Statut
+              "type": "string",
+              "render": function(data, type, row) {
+                if (type === 'sort' || type === 'type') {
+                  if (data && data.includes('Archivé')) return 'archive';
+                  return data.toString().toLowerCase();
+                }
+                return data;
+              }
+            },
+            { "orderable": false, "targets": [6] }, // Désactiver le tri sur la colonne Actions
+            { "searchable": false, "targets": [6] }, // Désactiver la recherche sur la colonne Actions
+            { 
+              "targets": [7], // Référent
+              "className": "text-start",
+              "type": "string",
+              "render": function(data, type, row) {
+                if (type === 'sort' || type === 'type') {
+                  // Pour le tri du référent, normaliser le texte
+                  if (data) {
+                    let text = data.toString().trim();
+                    text = text.replace(/<[^>]*>/g, '');
+                    text = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                    return text.toLowerCase();
+                  }
+                  return '';
+                }
+                return data;
+              }
+            }
+          ]
+        });
+      }
+    });
+  </script>
+
+  </div>
+</div>
+<%- include('partials/footer') %>

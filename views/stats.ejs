@@ -1,0 +1,1245 @@
+<%- include('partials/header', { title: 'Statistiques', user, role }) %>
+
+<style>
+    .stats-header {
+        background: linear-gradient(90deg, #4e54c8 0%, #8f94fb 100%);
+        color: white;
+        border-radius: 0.5rem;
+        box-shadow: 0 4px 24px rgba(78, 84, 200, 0.10);
+        padding: 2rem 1rem 1rem 1.5rem;
+        margin-bottom: 2rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        font-size: 1.5rem;
+    }
+
+    .stat-card {
+        transition: transform 0.15s, box-shadow 0.15s;
+        border: none;
+        border-radius: 1rem;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-8px) scale(1.03);
+        box-shadow: 0 8px 32px rgba(78, 84, 200, 0.20);
+        z-index: 2;
+    }
+
+    .stat-icon {
+        font-size: 2.5rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .stat-value {
+        font-size: 2.2rem;
+        font-weight: 600;
+        color: #4e54c8;
+    }
+
+    .stat-label {
+        color: #888;
+        margin-top: 0.2rem;
+        font-size: 1.05rem;
+    }
+
+    .stat-card {
+        cursor: pointer;
+    }
+
+    .detail-table {
+        margin-top: 2rem;
+        display: none;
+    }
+
+    .detail-table.show {
+        display: block;
+    }
+
+    .table-header {
+        background: linear-gradient(90deg, #4e54c8 0%, #8f94fb 100%);
+        color: white;
+        border-radius: 0.5rem 0.5rem 0 0;
+        padding: 1rem;
+        margin-bottom: 0;
+    }
+
+    /* Styles personnalisés pour DataTables */
+    .dataTables_wrapper .dataTables_length,
+    .dataTables_wrapper .dataTables_filter,
+    .dataTables_wrapper .dataTables_info,
+    .dataTables_wrapper .dataTables_paginate {
+        margin: 10px 0;
+    }
+
+    .dataTables_wrapper .dataTables_filter input {
+        border-radius: 0.375rem;
+        border: 1px solid #ced4da;
+        padding: 0.375rem 0.75rem;
+    }
+
+    .dataTables_wrapper .dataTables_length select {
+        border-radius: 0.375rem;
+        border: 1px solid #ced4da;
+        padding: 0.375rem 0.75rem;
+    }
+
+    .table-responsive .dataTables_wrapper {
+        overflow-x: visible;
+    }
+
+    /* Alignement pour les badges et montants */
+    .table td .badge {
+        font-size: 0.875rem;
+    }
+
+    .table td strong {
+        font-weight: 600;
+    }
+
+    #periodes-dt tbody tr.periode-mois td {
+        background-color: #eef2ff;
+        font-weight: 600;
+        border-top: 2px solid #c7d2fe;
+    }
+
+    #periodes-dt tbody tr.periode-semaine td {
+        background-color: #f8f9ff;
+    }
+
+    #periodes-dt tbody tr.periode-semaine td:nth-child(2) {
+        padding-left: 2.5rem;
+        position: relative;
+    }
+
+    #periodes-dt tbody tr.periode-semaine td:nth-child(2)::before {
+        content: '↳';
+        position: absolute;
+        left: 1rem;
+        color: #6c757d;
+        font-size: 0.85rem;
+    }
+</style>
+
+<div class="admin-content-wrapper">
+<div class="container-fluid px-3 mt-4">
+    <!-- Bouton de retour -->
+    <div class="mb-3">
+        <a href="/admin" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-2"></i>Retour au menu Administration
+        </a>
+    </div>
+    
+    <div class="stats-header">
+        <i class="bi bi-bar-chart-fill"></i>
+        <span>Statistiques générales</span>
+    </div>
+    <div class="row g-4">
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card text-center stat-card shadow-sm" onclick="showCommandes()">
+                <div class="card-body">
+                    <div class="stat-icon text-primary mb-2">
+                        <i class="bi bi-bag-check-fill"></i>
+                    </div>
+                    <div class="stat-value">
+                        <%= stats.total_commandes || 0 %>
+                    </div>
+                    <div class="stat-label">
+                        Commandes validées
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card text-center stat-card shadow-sm" onclick="showUtilisateurs()">
+                <div class="card-body">
+                    <div class="stat-icon text-warning mb-2">
+                        <i class="bi bi-people-fill"></i>
+                    </div>
+                    <div class="stat-value">
+                        <%= stats.total_utilisateurs || 0 %>
+                    </div>
+                    <div class="stat-label">
+                        Utilisateurs inscrits
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card text-center stat-card shadow-sm" onclick="showCatalogues()">
+                <div class="card-body">
+                    <div class="stat-icon text-info mb-2">
+                        <i class="bi bi-book-fill"></i>
+                    </div>
+                    <div class="stat-value">
+                        <%= stats.total_catalogues || 0 %>
+                    </div>
+                    <div class="stat-label">
+                        Catalogues
+                    </div>
+                </div>
+            </div>
+        </div>
+            <div class="col-12 col-sm-6 col-lg-3">
+                <div class="card text-center stat-card shadow-sm" onclick="showCommandesPeriode()">
+                    <div class="card-body">
+                        <div class="stat-icon text-success mb-2">
+                            <i class="bi bi-calendar-week"></i>
+                        </div>
+                        <div class="stat-value">
+                            <%= stats.total_commandes || 0 %>
+                        </div>
+                        <div class="stat-label">
+                            Commandes par période
+                        </div>
+                    </div>
+                </div>
+            </div>
+    </div>
+
+    <!-- Tableaux de détails -->
+    <div id="detail-section">
+        <!-- Tableau des commandes -->
+        <div id="commandes-table" class="detail-table">
+            <div class="card">
+                <div class="table-header">
+                    <h4 class="mb-0">
+                        <i class="bi bi-bag-check-fill me-2"></i>
+                        Détail des commandes validées
+                    </h4>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table id="commandes-dt" class="table table-striped mb-0 display">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Utilisateur</th>
+                                    <th>Catalogue</th>
+                                    <th>Date de soumission</th>
+                                </tr>
+                            </thead>
+                            <tbody id="commandes-tbody">
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted">
+                                        <i class="bi bi-hourglass-split me-2"></i>Chargement en cours...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tableau des utilisateurs -->
+        <div id="utilisateurs-table" class="detail-table">
+            <div class="card">
+                <div class="table-header">
+                    <h4 class="mb-0">
+                        <i class="bi bi-people-fill me-2"></i>
+                        Détail des utilisateurs inscrits
+                    </h4>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table id="utilisateurs-dt" class="table table-striped mb-0 display">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Nom d'utilisateur</th>
+                                    <th>Email</th>
+                                    <th>Rôle</th>
+                                    <th>Dernière connexion</th>
+                                </tr>
+                            </thead>
+                            <tbody id="utilisateurs-tbody">
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted">
+                                        <i class="bi bi-hourglass-split me-2"></i>Chargement en cours...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- Tableau des commandes par période -->
+        <div id="periodes-table" class="detail-table">
+            <div class="card">
+                <div class="table-header">
+                    <h4 class="mb-0">
+                        <i class="bi bi-calendar-week me-2"></i>
+                        Commandes par semaine et par mois
+                    </h4>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table id="periodes-dt" class="table table-striped mb-0 display">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Type</th>
+                                    <th>Période</th>
+                                    <th>Début</th>
+                                    <th>Fin</th>
+                                    <th>Commandes</th>
+                                </tr>
+                            </thead>
+                            <tbody id="periodes-tbody">
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted">
+                                        <i class="bi bi-hourglass-split me-2"></i>Chargement en cours...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Tableau des catalogues -->
+        <div id="catalogues-table" class="detail-table">
+            <div class="card">
+                <div class="table-header">
+                    <h4 class="mb-0">
+                        <i class="bi bi-book-fill me-2"></i>
+                        Détail des catalogues
+                    </h4>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table id="catalogues-dt" class="table table-striped mb-0 display">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th class="text-center" style="width: 60px;">Action</th>
+                                  
+                                    <th>Nom du catalogue</th>
+                                    <th>Date d'expiration</th>
+                                    <th>Nombre de commandes</th>
+                                    <th>Montant total</th>
+                                </tr>
+                            </thead> 
+                            <tbody id="catalogues-tbody">
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted">
+                                        <i class="bi bi-hourglass-split me-2"></i>Chargement en cours...
+                                    </td>
+                                </tr>
+                            </tbody>
+                            <tfoot class="table-dark">
+                                <tr>
+                                    <th></th>
+                                    <th colspan="3" class="text-end">Total filtré :</th>
+                                    <th class="text-end" id="total-montant"></th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- jQuery (requis pour DataTables) -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<!-- Bootstrap 5 JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<!-- DataTables JS -->
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+<!-- DataTables Responsive JS -->
+<script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
+<script src="https://cdn.datatables.net/responsive/2.5.0/js/responsive.bootstrap5.min.js"></script>
+
+<script>
+// 🔒 Fonction de protection XSS : échappe les caractères HTML dangereux
+function escapeHtml(text) {
+    if (!text) return '';
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;',
+        '/': '&#x2F;'
+    };
+    return String(text).replace(/[&<>"'\/]/g, s => map[s]);
+}
+
+function formatMontant(value) {
+    let numericValue;
+    if (typeof value === 'number') {
+        numericValue = value;
+    } else {
+        const cleaned = String(value ?? '')
+            .replace(/[^0-9,.-]/g, '')
+            .replace(',', '.');
+        numericValue = parseFloat(cleaned);
+    }
+
+    if (!Number.isFinite(numericValue)) {
+        numericValue = 0;
+    }
+
+    const fixed = numericValue.toFixed(2);
+    const [integerPart, decimalPart] = fixed.split('.');
+    const grouped = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    return decimalPart ? `${grouped},${decimalPart}` : grouped;
+}
+
+function formatDateFr(value) {
+    if (!value) {
+        return 'N/A';
+    }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+        return String(value);
+    }
+
+    return parsed.toLocaleDateString('fr-FR');
+}
+
+function formatMonthLabel(label) {
+    if (!label) {
+        return 'N/A';
+    }
+
+    const [yearStr, monthStr] = String(label).split('-');
+    const year = Number(yearStr);
+    const month = Number(monthStr);
+
+    if (!Number.isFinite(year) || !Number.isFinite(month)) {
+        return String(label);
+    }
+
+    const date = new Date(year, month - 1, 1);
+    if (Number.isNaN(date.getTime())) {
+        return String(label);
+    }
+
+    return date.toLocaleDateString('fr-FR', {
+        month: 'long',
+        year: 'numeric'
+    });
+}
+
+function formatWeekLabel(label) {
+    if (!label) {
+        return 'N/A';
+    }
+
+    const [yearStr, weekStr] = String(label).split('-');
+    if (!yearStr || !weekStr) {
+        return String(label);
+    }
+
+    return `Semaine ${weekStr.padStart(2, '0')} · ${yearStr}`;
+}
+
+// Configuration DataTables commune
+const dataTablesConfig = {
+    responsive: true,
+    language: {
+        url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/fr-FR.json'
+    },
+    pageLength: 25,
+    order: [[0, 'desc']], // Tri par défaut sur la première colonne (ID) décroissant
+    columnDefs: [
+        { targets: '_all', className: 'text-center' }
+    ]
+};
+
+let dataTables = {};
+
+// Masquer tous les tableaux au démarrage
+document.addEventListener('DOMContentLoaded', function() {
+    const tables = document.querySelectorAll('.detail-table');
+    tables.forEach(table => {
+        table.style.display = 'none';
+    });
+});
+
+// Variables pour gérer l'état de chargement
+let dataLoaded = {
+    commandes: false,
+    utilisateurs: false,
+    catalogues: false,
+    periodes: false
+};
+
+// Fonctions de chargement des données via API
+function loadCommandes() {
+    console.log('loadCommandes() appelée, dataLoaded.commandes:', dataLoaded.commandes);
+    if (dataLoaded.commandes) return Promise.resolve();
+    
+    return fetch('/admin/stats/commandes')
+        .then(response => {
+            if (!response.ok) throw new Error('Erreur de chargement des commandes');
+            return response.json();
+        })
+        .then(commandes => {
+            const tbody = document.getElementById('commandes-tbody');
+            if (commandes.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Aucune commande disponible</td></tr>';
+            } else {
+                // ✅ SÉCURISÉ : Échappement des données utilisateur avec escapeHtml()
+                tbody.innerHTML = commandes.map(commande => `
+                    <tr>
+                        <td>
+                            <a href="/commandes/${escapeHtml(commande.commande_id)}" class="btn btn-outline-primary btn-sm">
+                                <i class="bi bi-eye me-1"></i>${escapeHtml(commande.commande_id)}
+                            </a>
+                        </td>
+                        <td>${escapeHtml(commande.username || 'N/A')} <span class="text-muted">${escapeHtml(commande.organization_name || 'N/A')})</span></td>
+                        <td>${escapeHtml(commande.catalogue || 'N/A')}</td>
+                        <td>${commande.created_at ? escapeHtml(new Date(commande.created_at).toLocaleDateString('fr-FR')) : 'N/A'}</td>
+                    </tr>
+                `).join('');
+                // Forcer un reflow du navigateur pour s'assurer que le DOM est mis à jour
+                tbody.offsetHeight;
+            }
+            dataLoaded.commandes = true;
+        })
+        .catch(error => {
+            console.error('Erreur lors du chargement des commandes:', error);
+            document.getElementById('commandes-tbody').innerHTML = 
+                '<tr><td colspan="4" class="text-center text-danger">Erreur de chargement</td></tr>';
+        });
+}
+
+function loadUtilisateurs() {
+    if (dataLoaded.utilisateurs) return Promise.resolve();
+    
+    return fetch('/admin/stats/utilisateurs')
+        .then(response => {
+            if (!response.ok) throw new Error('Erreur de chargement des utilisateurs');
+            return response.json();
+        })
+        .then(utilisateurs => {
+            const tbody = document.getElementById('utilisateurs-tbody');
+            if (utilisateurs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Aucun utilisateur disponible</td></tr>';
+            } else {
+                // ✅ SÉCURISÉ : Échappement des données utilisateur
+                tbody.innerHTML = utilisateurs.map(user => {
+                    let roleBadge = '';
+                    if (user.role === 'SuperAdmin') {
+                        roleBadge = '<span class="badge bg-dark">SuperAdmin</span>';
+                    } else if (user.role === 'admin') {
+                        roleBadge = '<span class="badge bg-danger">Admin</span>';
+                    } else if (user.role === 'referent') {
+                        roleBadge = '<span class="badge bg-warning">Référent</span>';
+                    } else {
+                        roleBadge = '<span class="badge bg-primary">Utilisateur</span>';
+                    }
+
+                    let lastLogin = '<span class="text-muted">Jamais</span>';
+                    if (user.last_login) {
+                        lastLogin = escapeHtml(new Date(user.last_login).toLocaleString('fr-FR', { 
+                            year: 'numeric', 
+                            month: '2-digit', 
+                            day: '2-digit', 
+                            hour: '2-digit', 
+                            minute: '2-digit' 
+                        }));
+                    }
+
+                    const userIdValue = user.id != null ? String(user.id) : '';
+                    const editUrl = userIdValue ? `/admin/users/${encodeURIComponent(userIdValue)}/edit` : '#';
+                    const userIdDisplay = escapeHtml(userIdValue || '');
+
+                    return `
+                        <tr>
+                            <td class="text-center">
+                                <a href="${editUrl}" class="btn btn-outline-primary btn-sm" title="Modifier l'utilisateur">
+                                    <i class="bi bi-pencil-square me-1"></i>${userIdDisplay || '—'}
+                                </a>
+                            </td>
+                            <td>${escapeHtml(user.username)} <span class="text-muted">(${escapeHtml(user.organization_name || 'N/A')})</span></td>
+                            <td><a href="mailto:${escapeHtml(user.email)}">${escapeHtml(user.email)}</a></td>
+                            <td>${roleBadge}</td>
+                            <td>${lastLogin}</td>
+                        </tr>
+                    `;
+                }).join('');
+                // Forcer un reflow du navigateur pour s'assurer que le DOM est mis à jour
+                tbody.offsetHeight;
+            }
+            dataLoaded.utilisateurs = true;
+        })
+        .catch(error => {
+            console.error('Erreur lors du chargement des utilisateurs:', error);
+            document.getElementById('utilisateurs-tbody').innerHTML = 
+                '<tr><td colspan="5" class="text-center text-danger">Erreur de chargement</td></tr>';
+        });
+}
+
+function loadCatalogues() {
+    if (dataLoaded.catalogues) return Promise.resolve();
+    
+    return fetch('/admin/stats/catalogues')
+        .then(response => {
+            if (!response.ok) throw new Error('Erreur de chargement des catalogues');
+            return response.json();
+        })
+        .then(catalogues => {
+            const tbody = document.getElementById('catalogues-tbody');
+            if (catalogues.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Aucun catalogue disponible</td></tr>';
+            } else {
+                // ✅ SÉCURISÉ : Échappement des données utilisateur
+                tbody.innerHTML = catalogues.map(catalogue => `
+                    <tr>
+                        <td class="text-center" data-order="${escapeHtml(catalogue.catalogue_id)}">
+                            <a href="/admin/catalogues/${escapeHtml(catalogue.catalogue_id)}/synthese-detaillee" class="btn btn-outline-primary btn-sm">
+                                <i class="bi bi-eye me-1"></i>${escapeHtml(catalogue.catalogue_id)}
+                            </a>
+                        </td>
+                        <td>${escapeHtml(catalogue.originalname_id || 'N/A')} <span class="text-muted">(${escapeHtml(catalogue.organization_name || 'N/A')})</span></td>
+                        <td>${catalogue.expiration_date ? escapeHtml(new Date(catalogue.expiration_date).toLocaleDateString('fr-FR')) : 'N/A'}</td>
+                        <td>
+                            <span class="badge bg-primary">
+                                ${escapeHtml(catalogue.nombre_commandes || 0)}
+                            </span>
+                        </td>
+                        <td>
+                            <strong>${escapeHtml(formatMontant(catalogue.montant_total))} €</strong>
+                        </td>
+                    </tr>
+                `).join('');
+                // Forcer un reflow du navigateur pour s'assurer que le DOM est mis à jour
+                tbody.offsetHeight;
+            }
+            dataLoaded.catalogues = true;
+        })
+        .catch(error => {
+            console.error('Erreur lors du chargement des catalogues:', error);
+            document.getElementById('catalogues-tbody').innerHTML = 
+                '<tr><td colspan="5" class="text-center text-danger">Erreur de chargement</td></tr>';
+        });
+}
+
+function loadCommandesPeriode() {
+    if (dataLoaded.periodes) return Promise.resolve();
+
+    return fetch('/admin/stats/commandes-periode')
+        .then(response => {
+            if (!response.ok) throw new Error('Erreur de chargement des commandes par période');
+            return response.json();
+        })
+        .then(aggregats => {
+            const tbody = document.getElementById('periodes-tbody');
+
+            if (!aggregats || aggregats.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Aucune donnée disponible</td></tr>';
+            } else {
+                const groups = new Map();
+
+                aggregats.forEach(periode => {
+                    if (periode.periode_type === 'mois') {
+                        const key = periode.periode_label || (periode.date_debut ? String(periode.date_debut).slice(0, 7) : null);
+                        if (!key) {
+                            return;
+                        }
+                        if (!groups.has(key)) {
+                            groups.set(key, { month: null, weeks: [] });
+                        }
+                        groups.get(key).month = periode;
+                    }
+                });
+
+                aggregats.forEach(periode => {
+                    if (periode.periode_type === 'semaine') {
+                        let key = null;
+
+                        if (periode.date_debut) {
+                            const parsed = new Date(periode.date_debut);
+                            if (!Number.isNaN(parsed.getTime())) {
+                                key = `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}`;
+                            }
+                        }
+
+                        if (!key && periode.date_fin) {
+                            const parsedFin = new Date(periode.date_fin);
+                            if (!Number.isNaN(parsedFin.getTime())) {
+                                key = `${parsedFin.getFullYear()}-${String(parsedFin.getMonth() + 1).padStart(2, '0')}`;
+                            }
+                        }
+
+                        if (!key && periode.periode_label) {
+                            const [yearStr, weekStr] = String(periode.periode_label).split('-');
+                            if (yearStr && weekStr) {
+                                key = `${yearStr}-${weekStr}`;
+                            }
+                        }
+
+                        if (!key) {
+                            key = 'Autres';
+                        }
+
+                        if (!groups.has(key)) {
+                            groups.set(key, { month: null, weeks: [] });
+                        }
+                        groups.get(key).weeks.push(periode);
+                    }
+                });
+
+                const orderedGroups = Array.from(groups.entries())
+                    .map(([key, value]) => {
+                        const referenceSource = value.month?.date_debut || value.weeks[0]?.date_debut || null;
+                        const referenceDate = referenceSource ? new Date(referenceSource) : null;
+                        return {
+                            key,
+                            month: value.month,
+                            weeks: value.weeks
+                                .slice()
+                                .sort((a, b) => {
+                                    const aDate = new Date(a.date_debut || 0).getTime();
+                                    const bDate = new Date(b.date_debut || 0).getTime();
+                                    return bDate - aDate;
+                                }),
+                            order: referenceDate ? referenceDate.getTime() : 0
+                        };
+                    })
+                    .sort((a, b) => b.order - a.order);
+
+                const rows = [];
+
+                orderedGroups.forEach(group => {
+                    const monthData = group.month;
+                    const monthLabelSource = monthData?.periode_label || group.key;
+                    let monthLabel = formatMonthLabel(monthLabelSource);
+                    if (monthLabel !== 'N/A') {
+                        monthLabel = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
+                    }
+
+                    const totalMonthCommandes = monthData?.nombre_commandes ?? group.weeks.reduce((sum, week) => sum + (week.nombre_commandes || 0), 0);
+                    const monthBadge = '<span class="badge bg-secondary">Mois</span>';
+
+                    if (monthData || group.weeks.length > 0) {
+                        rows.push(`
+                            <tr class="periode-mois" data-month="${escapeHtml(group.key)}">
+                                <td>${monthBadge}</td>
+                                <td>${escapeHtml(monthLabel)}</td>
+                                <td>${escapeHtml(formatDateFr(monthData?.date_debut || group.weeks[0]?.date_debut || ''))}</td>
+                                <td>${escapeHtml(formatDateFr(monthData?.date_fin || group.weeks[group.weeks.length - 1]?.date_fin || ''))}</td>
+                                <td><span class="badge bg-primary">${escapeHtml(String(totalMonthCommandes))}</span></td>
+                            </tr>
+                        `);
+                    }
+
+                    group.weeks.forEach(week => {
+                        const weekBadge = '<span class="badge bg-info">Semaine</span>';
+                        const weekLabel = formatWeekLabel(week.periode_label);
+
+                        rows.push(`
+                            <tr class="periode-semaine" data-month="${escapeHtml(group.key)}">
+                                <td>${weekBadge}</td>
+                                <td>${escapeHtml(weekLabel)}</td>
+                                <td>${escapeHtml(formatDateFr(week.date_debut))}</td>
+                                <td>${escapeHtml(formatDateFr(week.date_fin))}</td>
+                                <td><span class="badge bg-light text-dark">${escapeHtml(String(week.nombre_commandes ?? 0))}</span></td>
+                            </tr>
+                        `);
+                    });
+                });
+
+                tbody.innerHTML = rows.join('');
+            }
+
+            dataLoaded.periodes = true;
+        })
+        .catch(error => {
+            console.error('Erreur lors du chargement des commandes par période:', error);
+            document.getElementById('periodes-tbody').innerHTML = 
+                '<tr><td colspan="5" class="text-center text-danger">Erreur de chargement</td></tr>';
+        });
+}
+
+function showCommandes() {
+    console.log('showCommandes() appelée');
+    hideAllTables();
+    const table = document.getElementById('commandes-table');
+    table.style.display = 'block';
+    table.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    
+    // Charger les données si pas encore fait
+    loadCommandes().then(() => {
+        // Vérifier si DataTable est déjà initialisé
+        if ($.fn.DataTable.isDataTable('#commandes-dt')) {
+            // Si déjà initialisé, juste redessiner
+            dataTables.commandes.draw();
+            return;
+        }
+        
+        // Initialiser DataTable seulement si pas encore fait
+        dataTables.commandes = $('#commandes-dt').DataTable({
+                ...dataTablesConfig,
+                columnDefs: [
+                    { 
+                        targets: [0], 
+                        className: 'text-center', 
+                        type: 'num',
+                        render: function(data, type, row) {
+                            if (type === 'sort' || type === 'type') {
+                                // Pour le tri, extraire juste le numéro de l'ID depuis le HTML
+                                if (typeof data === 'string' && data.includes('btn')) {
+                                    const match = data.match(/(\d+)/);
+                                    return match ? parseInt(match[1]) : 0;
+                                }
+                                return parseInt(data) || 0;
+                            }
+                            return data;
+                        }
+                    }, // ID
+                    { 
+                        targets: [1], 
+                        className: 'text-start',
+                        type: 'string',
+                        render: function(data, type, row) {
+                            if (type === 'sort' || type === 'type') {
+                                // Normaliser le texte pour le tri (utilisateur)
+                                if (data) {
+                                    let text = data.toString().trim();
+                                    text = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                                    return text.toLowerCase();
+                                }
+                                return '';
+                            }
+                            return data;
+                        }
+                    },
+                    { 
+                        targets: [2], 
+                        className: 'text-start',
+                        type: 'string',
+                        render: function(data, type, row) {
+                            if (type === 'sort' || type === 'type') {
+                                // Pour le tri des catalogues, extraire le numéro de fin pour un tri numérique
+                                if (data) {
+                                    let text = data.toString().trim();
+                                    // Chercher un pattern comme "TEXTE (XX)" pour extraire le numéro
+                                    const match = text.match(/\((\d+)\)$/);
+                                    if (match) {
+                                        // Retourner le texte + numéro padé pour tri correct
+                                        const baseName = text.replace(/\(\d+\)$/, '').trim();
+                                        const number = match[1].padStart(3, '0');
+                                        return baseName + ' (' + number + ')';
+                                    }
+                                    // Si pas de numéro, normaliser juste le texte
+                                    text = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                                    return text.toLowerCase();
+                                }
+                                return '';
+                            }
+                            return data;
+                        }
+                    },
+                    { 
+                        targets: [3], 
+                        className: 'text-center',
+                        type: 'date',
+                        render: function(data, type, row) {
+                            if (type === 'sort' || type === 'type') {
+                                // Pour le tri des dates au format DD/MM/YYYY
+                                if (data && data !== 'N/A') {
+                                    const parts = data.split('/');
+                                    if (parts.length === 3) {
+                                        // Convertir DD/MM/YYYY en YYYY-MM-DD pour tri correct
+                                        return parts[2] + '-' + parts[1].padStart(2, '0') + '-' + parts[0].padStart(2, '0');
+                                    }
+                                }
+                                return '';
+                            }
+                            return data;
+                        }
+                    }
+                ]
+        });
+    });
+}
+
+function showUtilisateurs() {
+    console.log('showUtilisateurs() appelée');
+    hideAllTables();
+    const table = document.getElementById('utilisateurs-table');
+    table.style.display = 'block';
+    table.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    
+    // Charger les données si pas encore fait
+    loadUtilisateurs().then(() => {
+        // Vérifier si DataTable est déjà initialisé
+        if ($.fn.DataTable.isDataTable('#utilisateurs-dt')) {
+            // Si déjà initialisé, juste redessiner
+            dataTables.utilisateurs.draw();
+            return;
+        }
+        
+        // Initialiser DataTable seulement si pas encore fait
+        dataTables.utilisateurs = $('#utilisateurs-dt').DataTable({
+                ...dataTablesConfig,
+                columnDefs: [
+                    { 
+                        targets: [0], 
+                        className: 'text-center', 
+                        type: 'num',
+                        render: function(data, type) {
+                            if (type === 'sort' || type === 'type') {
+                                if (!data) {
+                                    return 0;
+                                }
+                                const numeric = parseInt(data.toString().replace(/<[^>]*>/g, '').trim(), 10);
+                                return Number.isNaN(numeric) ? 0 : numeric;
+                            }
+                            return data;
+                        }
+                    }, // ID
+                    { 
+                        targets: [1], 
+                        className: 'text-start',
+                        type: 'string',
+                        render: function(data, type, row) {
+                            if (type === 'sort' || type === 'type') {
+                                // Normaliser le nom d'utilisateur pour le tri
+                                if (data) {
+                                    let text = data.toString().trim();
+                                    text = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                                    return text.toLowerCase();
+                                }
+                                return '';
+                            }
+                            return data;
+                        }
+                    },
+                    { 
+                        targets: [2], 
+                        className: 'text-start',
+                        type: 'string',
+                        render: function(data, type, row) {
+                            if (type === 'sort' || type === 'type') {
+                                // Pour le tri des emails, extraire juste le texte de l'email
+                                if (data) {
+                                    // Si c'est un lien mailto, extraire juste l'email
+                                    const match = data.match(/mailto:([^"]+)/);
+                                    if (match) {
+                                        return match[1].toLowerCase();
+                                    }
+                                    return data.toString().toLowerCase();
+                                }
+                                return '';
+                            }
+                            return data;
+                        }
+                    },
+                    { 
+                        targets: [3], 
+                        className: 'text-center',
+                        type: 'string',
+                        render: function(data, type, row) {
+                            if (type === 'sort' || type === 'type') {
+                                // Pour le tri des rôles avec badges, extraire le texte du rôle
+                                if (data) {
+                                    if (data.includes('Admin')) return '1_admin';
+                                    if (data.includes('Référent')) return '2_referent';
+                                    if (data.includes('Utilisateur')) return '3_utilisateur';
+                                    return data.toString().toLowerCase();
+                                }
+                                return '';
+                            }
+                            return data;
+                        }
+                    },
+                    {
+                        targets: [4],
+                        className: 'text-center',
+                        type: 'date',
+                        render: function(data, type, row) {
+                            if (type === 'sort' || type === 'type' || type === 'filter' || type === 'search') {
+                                if (!data) {
+                                    return '';
+                                }
+
+                                // Supprimer les balises HTML éventuelles
+                                var text = data.toString().replace(/<[^>]*>/g, '').trim();
+
+                                if (!text || text.toLowerCase() === 'jamais') {
+                                    return '';
+                                }
+
+                                // Chercher un format DD/MM/YYYY HH:MM
+                                var match = text.match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
+                                if (match) {
+                                    return match[3] + '-' + match[2] + '-' + match[1] + ' ' + match[4] + ':' + match[5];
+                                }
+
+                                // Tenter une conversion Date standard en fallback
+                                var parsed = new Date(text);
+                                if (!isNaN(parsed)) {
+                                    return parsed.toISOString();
+                                }
+
+                                return text;
+                            }
+                            return data;
+                        }
+                    }
+                ]
+        });
+    });
+}
+
+function showCatalogues() {
+    console.log('showCatalogues() appelée');
+    hideAllTables();
+    const table = document.getElementById('catalogues-table');
+    table.style.display = 'block';
+    table.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    
+    // Charger les données si pas encore fait
+    loadCatalogues().then(() => {
+        // Vérifier si DataTable est déjà initialisé
+        if ($.fn.DataTable.isDataTable('#catalogues-dt')) {
+            // Si déjà initialisé, juste redessiner
+            dataTables.catalogues.draw();
+            return;
+        }
+        
+        // Initialiser DataTable seulement si pas encore fait
+        dataTables.catalogues = $('#catalogues-dt').DataTable({
+                ...dataTablesConfig,
+                // Désactiver la détection automatique des types pour éviter les erreurs de tri
+                ordering: true,
+                // Remplacer l'ordre par défaut pour un tri alphabétique sur le nom du catalogue (maintenant colonne 1)
+                order: [[1, 'asc']],
+                columnDefs: [
+                    {
+                        targets: [0],
+                        className: 'text-center',
+                        orderable: true,
+                        searchable: true,
+                        render: function(data, type, row) {
+                            if (type === 'sort' || type === 'type') {
+                                if (!data) {
+                                    return 0;
+                                }
+                                const match = data.toString().match(/>([^<]+)<\/a>\s*$/);
+                                if (match) {
+                                    const label = match[1].trim();
+                                    const numeric = parseInt(label, 10);
+                                    return Number.isNaN(numeric) ? label : numeric;
+                                }
+                                const cleaned = data.toString().replace(/<[^>]*>/g, '').trim();
+                                const numeric = parseInt(cleaned, 10);
+                                return Number.isNaN(numeric) ? cleaned : numeric;
+                            }
+                            return data;
+                        }
+                    },
+                    { 
+                        targets: [1], // Nom du catalogue (maintenant colonne 1)
+                        className: 'text-start',
+                        type: 'string',
+                        render: function(data, type, row) {
+                            if (type === 'sort' || type === 'type') {
+                                // Pour le tri, normaliser le texte (supprimer HTML, espaces, accents)
+                                if (data) {
+                                    let text = data.toString().trim();
+                                    // Supprimer les balises HTML si présentes
+                                    text = text.replace(/<[^>]*>/g, '');
+                                    // Chercher un pattern comme "TEXTE (XX)" pour extraire le numéro
+                                    const match = text.match(/^(.+?)\s*\((\d+)\)$/);
+                                    if (match) {
+                                        // Retourner le texte + numéro padé pour tri correct
+                                        const baseName = match[1].trim();
+                                        const number = match[2].padStart(3, '0');
+                                        return baseName + ' (' + number + ')';
+                                    }
+                                    // Si pas de numéro, normaliser juste le texte
+                                    text = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                                    return text.toLowerCase();
+                                }
+                                return '';
+                            }
+                            return data;
+                        }
+                    },
+                    { 
+                        targets: [2], // Date d'expiration (maintenant colonne 2)
+                        className: 'text-center',
+                        type: 'date',
+                        render: function(data, type, row) {
+                            if (type === 'sort' || type === 'type') {
+                                // Pour le tri des dates au format DD/MM/YYYY
+                                if (data && data !== 'N/A' && data.trim() !== '') {
+                                    // Extraire la date du HTML si nécessaire
+                                    let dateText = data.toString().replace(/<[^>]*>/g, '').trim();
+                                    const parts = dateText.split('/');
+                                    if (parts.length === 3) {
+                                        // Convertir DD/MM/YYYY en YYYY-MM-DD pour tri correct
+                                        return parts[2] + '-' + parts[1].padStart(2, '0') + '-' + parts[0].padStart(2, '0');
+                                    }
+                                }
+                                return '';
+                            }
+                            return data;
+                        }
+                    },
+                    { 
+                        targets: [3], // Nombre de commandes (maintenant colonne 3)
+                        className: 'text-center',
+                        type: 'num',
+                        render: function(data, type, row) {
+                            if (type === 'sort' || type === 'type') {
+                                // Extraire le nombre du badge HTML
+                                if (typeof data === 'string' && data.includes('badge')) {
+                                    const match = data.match(/(\d+)/);
+                                    return match ? parseInt(match[1]) : 0;
+                                }
+                                return parseInt(data) || 0;
+                            }
+                            return data;
+                        }
+                    },
+                    { 
+                        targets: [4], // Montant total (maintenant colonne 4)
+                        className: 'text-end',
+                        type: 'num',
+                        render: function(data, type, row) {
+                            if (type === 'sort' || type === 'type') {
+                                // Extraire le nombre du HTML avec €
+                                if (typeof data === 'string') {
+                                    const normalized = data.replace(/\s/g, '');
+                                    const match = normalized.match(/[\d,\.]+/);
+                                    if (match) {
+                                        return parseFloat(match[0].replace(',', '.'));
+                                    }
+                                }
+                                return parseFloat(data) || 0;
+                            }
+                            return data;
+                        }
+                    }
+                ],
+                footerCallback: function(row, data, start, end, display) {
+                    const api = this.api();
+                    
+                    // Fonction pour convertir le montant en nombre
+                    const intVal = function(i) {
+                        if (typeof i === 'string') {
+                            // Extraire les nombres de la chaîne (ex: "123,45 €" -> 123.45)
+                            const normalized = i.replace(/\s/g, '');
+                            const match = normalized.match(/[\d,\.]+/);
+                            if (match) {
+                                return parseFloat(match[0].replace(',', '.'));
+                            }
+                        }
+                        return parseFloat(i) || 0;
+                    };
+                    
+                    // Calculer le total de toutes les lignes filtrées (pas seulement la page courante)
+                    let totalFiltered = api
+                        .column(4, { search: 'applied' }) // Maintenant colonne 4 (Montant total)
+                        .data()
+                        .reduce(function(a, b) {
+                            return intVal(a) + intVal(b);
+                        }, 0);
+                    
+                    // Mettre à jour le footer (colonne 4 maintenant car on a ajouté la colonne Action)
+                    $('#total-montant').html(
+                        totalFiltered.toFixed(2) + ' €'
+                    );
+                }
+        });
+    });
+}
+
+function showCommandesPeriode() {
+    console.log('showCommandesPeriode() appelée');
+    hideAllTables();
+    const table = document.getElementById('periodes-table');
+    table.style.display = 'block';
+    table.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    loadCommandesPeriode().then(() => {
+        if ($.fn.DataTable.isDataTable('#periodes-dt')) {
+            dataTables.periodes.draw();
+            return;
+        }
+
+        dataTables.periodes = $('#periodes-dt').DataTable({
+            ...dataTablesConfig,
+            ordering: false,
+            columnDefs: [
+                {
+                    targets: [0],
+                    className: 'text-center',
+                    orderable: false,
+                    searchable: false
+                },
+                {
+                    targets: [1],
+                    className: 'text-start',
+                    type: 'string',
+                    render: function(data, type) {
+                        if (type === 'sort' || type === 'type') {
+                            if (data) {
+                                let text = data.toString().replace(/<[^>]*>/g, '').trim();
+                                text = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                                return text.toLowerCase();
+                            }
+                            return '';
+                        }
+                        return data;
+                    }
+                },
+                {
+                    targets: [2, 3],
+                    className: 'text-center',
+                    type: 'date',
+                    render: function(data, type) {
+                        if (type === 'sort' || type === 'type') {
+                            if (data && data !== 'N/A') {
+                                const text = data.toString().replace(/<[^>]*>/g, '').trim();
+                                const parts = text.split('/');
+                                if (parts.length === 3) {
+                                    return parts[2] + '-' + parts[1].padStart(2, '0') + '-' + parts[0].padStart(2, '0');
+                                }
+                            }
+                            return '';
+                        }
+                        return data;
+                    }
+                },
+                {
+                    targets: [4],
+                    className: 'text-center',
+                    type: 'num',
+                    render: function(data, type) {
+                        if (type === 'sort' || type === 'type') {
+                            if (typeof data === 'string') {
+                                const match = data.match(/(\d+)/);
+                                return match ? parseInt(match[1], 10) : 0;
+                            }
+                            return parseInt(data, 10) || 0;
+                        }
+                        return data;
+                    }
+                }
+            ]
+        });
+    });
+}
+
+function hideAllTables() {
+    const tables = document.querySelectorAll('.detail-table');
+    tables.forEach(table => {
+        table.style.display = 'none';
+    });
+}
+</script></div>
+<%- include('partials/footer') %>

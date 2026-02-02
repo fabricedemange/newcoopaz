@@ -1,0 +1,55 @@
+# Variables d'environnement
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+
+# Dépendances
+node_modules/
+
+# Fichiers de configuration sensibles
+credentials.json
+*.key
+*.pem
+*.p12
+*.pfx
+config/secrets.js
+
+# Fichiers de backup
+*.backup
+*.bak
+*.old
+*.tmp
+*.swp
+*~
+app.js.txt
+
+# Fichiers uploadés
+uploads/*
+!uploads/.gitkeep
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+error.log
+
+# Fichiers système
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Base de données locale
+*.db
+*.sqlite
+*.sqlite3
+coopaz.db
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln

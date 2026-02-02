@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <title><%= typeof title !== 'undefined' ? title : 'COOPAZ' %> | Accueil</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <!-- Bootstrap CSS CDN -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- Styles personnalisés pour les tableaux Vue -->
+  <link href="/css/vue-tables.css" rel="stylesheet">
+
+  <!-- Fix responsive menu mobile -->
+  <link href="/css/responsive-fix.css" rel="stylesheet">
+
+  <!-- Fix Safari iOS -->
+  <link href="/css/safari-ios-fix.css" rel="stylesheet">
+
+  <!-- Fix tableaux mobiles -->
+  <link href="/css/mobile-tables.css" rel="stylesheet">
+
+  <!-- Styles personnalisés pour les bandeaux -->
+  <style>
+    .alert-danger.bandeau-important {
+      border-left: 5px solid #dc3545 !important;
+      box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3) !important;
+      animation: pulseImportant 2s infinite;
+    }
+    
+    .icone-importante {
+      font-size: 1.5em;
+      margin-right: 8px;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+    }
+    
+    .icone-info {
+      font-size: 1.2em;
+      margin-right: 5px;
+    }
+    
+    @keyframes pulseImportant {
+      0% { box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3); }
+      50% { box-shadow: 0 6px 12px rgba(220, 53, 69, 0.5); }
+      100% { box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3); }
+    }
+    
+    .alert-info.bandeau-info {
+      border-left: 3px solid #0dcaf0;
+    }
+  </style>
+  
+<script>
+window.addEventListener('pageshow', function(event) {
+  if (event.persisted) {
+    window.location.reload();
+  }
+});
+
+
+</script>
+<% function capitalizeWords(str) { 
+  
+  if (!str || typeof str !=='string' || str.trim()==='' )
+   { return '' ; } return str.split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+} %>
+<body>
+
+
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+
+  <% if (typeof isImpersonating !== 'undefined' && isImpersonating && typeof impersonationContext !== 'undefined' && impersonationContext && impersonationContext.target) { %>
+    <% const showSidebarForImpersonation = typeof hideSidebar !== 'undefined' ? !hideSidebar : true; %>
+    <div class="alert alert-warning alert-dismissible fade show <%= (user && role && showSidebarForImpersonation) ? 'ms-280' : 'mx-3' %> me-3 d-flex flex-column flex-md-row align-items-md-center justify-content-md-between" role="alert">
+      <div>
+        <strong>Mode impersonation actif :</strong>
+        Vous agissez en tant que <span class="fw-bold"><%= impersonationContext.target.username %></span>
+        (<%= impersonationContext.target.role %>).<br class="d-md-none">
+        <span class="small text-muted">Utilisateur initial : <%= impersonationContext.original ? impersonationContext.original.username : 'SuperAdmin' %></span>
+      </div>
+      <form method="POST" action="/admin/impersonate/stop" class="mt-3 mt-md-0 ms-md-3 d-flex align-items-center gap-2">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button type="submit" class="btn btn-sm btn-outline-dark">Quitter l'impersonation</button>
+      </form>
+    </div>
+  <% } %>
+
+  <!-- Affichage des bandeaux d'information -->
+  <% if (typeof bandeaux !== 'undefined' && bandeaux && bandeaux.length > 0) { %>
+    <% bandeaux.forEach(function(bandeau) { %>
+      <% 
+        const typeBandeau = (bandeau.type || 'info').toString().toLowerCase();
+        let alertClass = 'alert-info bandeau-info';
+        let icone = '<span class="icone-info">ℹ️</span>';
+        let titre = 'Information';
+        
+        if (typeBandeau === 'important') {
+          alertClass = 'alert-danger bandeau-important';
+          icone = '<span class="icone-importante">⚠️</span>';
+          titre = 'IMPORTANT';
+        }
+      %>
+      <div class="alert <%= alertClass %> alert-dismissible fade show <%= user && role ? 'ms-280' : 'mx-3' %> me-3" role="alert">
+        <strong><%- icone %><%= titre %> :</strong> <%= bandeau.message %>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+    <% }); %>
+  <% } %>
+
+  <!-- DataTables CSS/JS -->
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+  <script src="/js/datatables-init.js"></script>
+
+  <!-- Debug menu mobile (temporaire) -->
+  <script src="/js/mobile-menu-debug.js"></script>
+  <script src="/js/mobile-table-fix.js"></script>
+
+  <!-- Helper responsive pour Vue -->
+  <script src="/vue/responsive-helper.js"></script>
+
+  <!-- Include sidebar for logged-in users (except on home page) -->
+  <% const showSidebar = typeof hideSidebar !== 'undefined' ? !hideSidebar : true; %>
+  <% const skipSidebarInHeader = typeof hideSidebarInHeader !== 'undefined' && hideSidebarInHeader; %>
+  <% if (user && role && showSidebar && !skipSidebarInHeader) { %>
+    <%- include('admin_sidebar', {
+      user,
+      role,
+      userPermissions: typeof userPermissions !== 'undefined' ? userPermissions : [],
+      userRoles: typeof userRoles !== 'undefined' ? userRoles : []
+    }) %>
+  <% } %>

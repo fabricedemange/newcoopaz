@@ -1,0 +1,108 @@
+<%- include('partials/header', { title: 'Gestion des aides', user, role }) %>
+
+<div class="admin-content-wrapper">
+<div class="container-fluid px-3 mt-4">
+  <div class="row">
+    <div class="col-12">
+      <h1 class="mb-4">Gestion des textes d'aide</h1>
+
+      <div class="card mb-4">
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table table-striped">
+              <thead>
+                <tr>
+                  <th>Page</th>
+                  <th>Texte d'aide</th>
+                  <th class="text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% helpList.forEach(function(help) { %>
+                  <% if (editId === help.id) { %>
+                    <!-- Mode édition -->
+                    <tr>
+                      <td colspan="3">
+                        <form method="POST" action="/admin/help/<%= help.id %>/edit">
+                          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                          <div class="row g-3">
+                            <div class="col-md-3">
+                              <label class="form-label">Nom de la page</label>
+                              <input type="text" class="form-control" name="page" value="<%= help.page %>" required>
+                            </div>
+                            <div class="col-md-7">
+                              <label class="form-label">Texte d'aide</label>
+                              <textarea name="content" class="form-control" rows="3"><%= help.content %></textarea>
+                            </div>
+                            <div class="col-md-2 d-flex align-items-end">
+                              <button class="btn btn-success me-2" type="submit">Enregistrer</button>
+                              <a href="/admin/help" class="btn btn-secondary">Annuler</a>
+                            </div>
+                          </div>
+                        </form>
+                      </td>
+                    </tr>
+                  <% } else { %>
+                    <tr>
+                      <td><%= help.page %></td>
+                      <td><%- help.content ? help.content.replace(/\n/g, '<br>') : '<em class="text-muted">(Pas de texte)</em>' %></td>
+                      <td class="text-center">
+                        <a href="/admin/help?edit=<%= help.id %>" class="btn btn-sm btn-outline-primary me-1">
+                          <i class="bi bi-pencil"></i> Modifier
+                        </a>
+                        <form method="POST" action="/admin/help/<%= help.id %>/delete" style="display:inline;">
+                          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                          <button class="btn btn-sm btn-outline-danger" type="submit"
+                                  onclick="return confirm('Supprimer ce texte d\'aide ?')">
+                            <i class="bi bi-trash"></i> Supprimer
+                          </button>
+                        </form>
+                      </td>
+                    </tr>
+                  <% } %>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Formulaire d'ajout -->
+      <div class="card">
+        <div class="card-header">
+          <h5 class="mb-0">Ajouter un texte d'aide pour une nouvelle page</h5>
+        </div>
+        <div class="card-body">
+          <form method="POST" action="/admin/help/add">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <div class="row g-3">
+              <div class="col-md-3">
+                <label class="form-label">Nom de la page</label>
+                <input type="text" class="form-control" name="page" required placeholder="Ex: /admin/users">
+              </div>
+              <div class="col-md-7">
+                <label class="form-label">Texte d'aide</label>
+                <textarea name="content" class="form-control" rows="3" required
+                          placeholder="Entrez le texte d'aide qui sera affiché sur cette page"></textarea>
+              </div>
+              <div class="col-md-2 d-flex align-items-end">
+                <button class="btn btn-success" type="submit">
+                  <i class="bi bi-plus-circle"></i> Ajouter
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="mt-3">
+        <a href="/admin/menu" class="btn btn-outline-secondary">
+          <i class="bi bi-arrow-left"></i> Retour au menu admin
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<%- include('partials/footer') %>

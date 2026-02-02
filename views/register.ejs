@@ -1,0 +1,36 @@
+<%- include('partials/header', { title: 'Inscription', user, role }) %>
+
+<div class="container mt-5">
+  <div class="row justify-content-center">
+    <div class="col-md-6">
+      <h2>Inscription</h2>
+      <div class="alert alert-warning">
+        <strong>⚠️ ATTENTION :</strong> Votre inscription ne sera définitive qu'une fois validée par un administrateur !
+      </div>
+      <% if (error) { %>
+        <div class="alert alert-danger"><%= error %></div>
+      <% } %>
+      <form action="/register" method="POST">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <div class="mb-3">
+          <label for="username" class="form-label">Nom d'utilisateur :</label>
+          <input type="text" id="username" name="username" class="form-control" required autofocus>
+        </div>
+        <div class="mb-3">
+          <label for="email" class="form-label">Email :</label>
+          <input type="email" id="email" name="email" class="form-control" required>
+        </div>
+        <div class="mb-3">
+          <label for="password" class="form-label">Mot de passe :</label>
+          <input type="password" id="password" name="password" class="form-control" required>
+        </div>
+        <div class="d-grid gap-2">
+          <button type="submit" class="btn btn-success">S'inscrire</button>
+          <a href="/login" class="btn btn-link">Déjà inscrit ? Se connecter</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<%- include('partials/footer') %>

@@ -1,0 +1,14 @@
+/* Bouton retour mobile global */
+.mobile-back-button {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 1000;
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .mobile-back-button {
+    display: block;
+  }
+}

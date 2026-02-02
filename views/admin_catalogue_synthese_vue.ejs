@@ -1,0 +1,24 @@
+<%- include('partials/header', { title: 'Synthèse du catalogue', user, role }) %>
+
+<style>
+/* Fix modal z-index to appear above sidebar */
+.modal, .modal.show, .modal.d-block {
+  z-index: 9999 !important; position: fixed !important;
+  top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
+  display: flex !important; align-items: center !important; justify-content: center !important;
+}
+.modal-backdrop, .modal-backdrop.show { z-index: 9998 !important; position: fixed !important; }
+.modal-dialog { z-index: 10000 !important; position: relative !important; margin: auto !important; }
+</style>
+
+<div class="admin-content-wrapper">
+  <div id="admin-catalogue-synthese-app"></div>
+</div>
+
+<script>
+window.CSRF_TOKEN = '<%= typeof csrfToken !== "undefined" ? csrfToken : "" %>';
+window.CATALOGUE_ID = '<%= typeof catalogueId !== "undefined" ? catalogueId : "" %>';
+</script>
+<script type="module" src="/dist/admin-catalogue-synthese.js?v=<%= typeof APP_VERSION !== 'undefined' ? APP_VERSION : Date.now() %>"></script>
+
+<%- include('partials/footer') %>

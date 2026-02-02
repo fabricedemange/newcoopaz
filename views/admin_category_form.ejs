@@ -1,0 +1,362 @@
+<%- include('partials/header', { title: category ? 'Modifier une catégorie' : 'Nouvelle catégorie', user, role }) %>
+
+<div class="admin-content-wrapper">
+
+<div class="container-fluid px-3 mt-4">
+  <% if (typeof errorMessage !== 'undefined' && errorMessage) { %>
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+      <i class="bi bi-exclamation-triangle me-2"></i><%= errorMessage %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+
+  <% if (typeof successMessage !== 'undefined' && successMessage) { %>
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+      <i class="bi bi-check-circle me-2"></i><%= successMessage %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+
+  <div class="row">
+    <div class="col-12">
+      <h2 class="mb-4">
+        <% if (category) { %>
+          Modifier une catégorie
+        <% } else { %>
+          Créer une nouvelle catégorie
+        <% } %>
+      </h2>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-12 col-lg-8">
+      <div class="card">
+        <div class="card-body">
+          <form method="POST" action="<%= action %>">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+            <div class="mb-3">
+              <label for="nom" class="form-label">Nom de la catégorie <span class="text-danger">*</span></label>
+              <input
+                type="text"
+                class="form-control"
+                id="nom"
+                name="nom"
+                value="<%= category ? category.nom : '' %>"
+                required>
+            </div>
+
+            <div class="mb-3">
+              <label for="parent_id" class="form-label">Catégorie parente</label>
+              <select class="form-select" id="parent_id" name="parent_id">
+                <option value="">Aucune (catégorie principale)</option>
+                <% allCategories.forEach(cat => { %>
+                  <% if (!category || cat.id !== category.id) { %>
+                    <option
+                      value="<%= cat.id %>"
+                      <%= category && category.parent_id === cat.id ? 'selected' : '' %>>
+                      <%= cat.nom %>
+                    </option>
+                  <% } %>
+                <% }); %>
+              </select>
+              <small class="form-text text-muted">
+                Laissez vide pour créer une catégorie principale
+              </small>
+            </div>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label for="couleur" class="form-label">Couleur</label>
+                <input
+                  type="color"
+                  class="form-control form-control-color"
+                  id="couleur"
+                  name="couleur"
+                  value="<%= category ? (category.couleur || '#6c757d') : '#6c757d' %>">
+                <small class="form-text text-muted">
+                  Couleur d'affichage du badge
+                </small>
+              </div>
+
+              <div class="col-md-6 mb-3">
+                <label for="ordre" class="form-label">Ordre d'affichage</label>
+                <input
+                  type="number"
+                  class="form-control"
+                  id="ordre"
+                  name="ordre"
+                  value="<%= category ? category.ordre : 0 %>"
+                  min="0">
+                <small class="form-text text-muted">
+                  Plus le nombre est petit, plus la catégorie apparaît en haut
+                </small>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label for="icon" class="form-label">Icône Bootstrap</label>
+              <input type="hidden" id="icon" name="icon" value="<%= category ? (category.icon || '') : '' %>">
+
+              <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle w-100 text-start d-flex align-items-center justify-content-between" type="button" id="iconDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                  <span id="selectedIconDisplay">
+                    <% if (category && category.icon) { %>
+                      <i class="<%= category.icon %> me-2" style="font-size: 1.2rem;"></i>
+                      <span class="text-muted small"><%= category.icon %></span>
+                    <% } else { %>
+                      <span class="text-muted">Choisir une icône...</span>
+                    <% } %>
+                  </span>
+                </button>
+                <ul class="dropdown-menu w-100" aria-labelledby="iconDropdown" style="max-height: 400px; overflow-y: auto;">
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="">
+                    <span class="text-muted">Aucune icône</span>
+                  </a></li>
+                  <li><hr class="dropdown-divider"></li>
+
+                  <!-- Aliments et Nature -->
+                  <li class="dropdown-header">Aliments et Nature</li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-basket">
+                    <i class="bi bi-basket me-2" style="font-size: 1.2rem;"></i> Panier (fruits/légumes)
+                  </a></li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-apple">
+                    <i class="bi bi-apple me-2" style="font-size: 1.2rem;"></i> Pomme (fruits)
+                  </a></li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-egg">
+                    <i class="bi bi-egg me-2" style="font-size: 1.2rem;"></i> Œuf (œufs/produits laitiers)
+                  </a></li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-egg-fried">
+                    <i class="bi bi-egg-fried me-2" style="font-size: 1.2rem;"></i> Œuf au plat (petit-déjeuner)
+                  </a></li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-cup-hot">
+                    <i class="bi bi-cup-hot me-2" style="font-size: 1.2rem;"></i> Tasse chaude (boissons chaudes)
+                  </a></li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-cup-straw">
+                    <i class="bi bi-cup-straw me-2" style="font-size: 1.2rem;"></i> Boisson (boissons froides)
+                  </a></li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-droplet">
+                    <i class="bi bi-droplet me-2" style="font-size: 1.2rem;"></i> Goutte (liquides/huiles)
+                  </a></li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-droplet-fill">
+                    <i class="bi bi-droplet-fill me-2" style="font-size: 1.2rem;"></i> Goutte pleine (sauces/condiments)
+                  </a></li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-flower1">
+                    <i class="bi bi-flower1 me-2" style="font-size: 1.2rem;"></i> Fleur (aromates/herbes)
+                  </a></li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-flower2">
+                    <i class="bi bi-flower2 me-2" style="font-size: 1.2rem;"></i> Fleur 2 (épices)
+                  </a></li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-tree">
+                    <i class="bi bi-tree me-2" style="font-size: 1.2rem;"></i> Arbre (fruits à coque)
+                  </a></li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-snow">
+                    <i class="bi bi-snow me-2" style="font-size: 1.2rem;"></i> Flocon (surgelés)
+                  </a></li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-fire">
+                    <i class="bi bi-fire me-2" style="font-size: 1.2rem;"></i> Feu (plats chauds/épicé)
+                  </a></li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-moisture">
+                    <i class="bi bi-moisture me-2" style="font-size: 1.2rem;"></i> Humidité (conserves)
+                  </a></li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-grid-3x3">
+                    <i class="bi bi-grid-3x3 me-2" style="font-size: 1.2rem;"></i> Grille (légumineuses/graines)
+                  </a></li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-nut">
+                    <i class="bi bi-nut me-2" style="font-size: 1.2rem;"></i> Écrou (oléagineux/noix)
+                  </a></li>
+
+                  <li><hr class="dropdown-divider"></li>
+                  <li class="dropdown-header">Produits et Emballages</li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-box-seam">
+                    <i class="bi bi-box-seam me-2" style="font-size: 1.2rem;"></i> Boîte (produits en boîte)
+                  </a></li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-box">
+                    <i class="bi bi-box me-2" style="font-size: 1.2rem;"></i> Boîte simple (emballages)
+                  </a></li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-bag">
+                    <i class="bi bi-bag me-2" style="font-size: 1.2rem;"></i> Sac (vrac/sachet)
+                  </a></li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-basket2">
+                    <i class="bi bi-basket2 me-2" style="font-size: 1.2rem;"></i> Corbeille (paniers garnis)
+                  </a></li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-cart">
+                    <i class="bi bi-cart me-2" style="font-size: 1.2rem;"></i> Caddie (tout produit)
+                  </a></li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-gift">
+                    <i class="bi bi-gift me-2" style="font-size: 1.2rem;"></i> Cadeau (coffrets)
+                  </a></li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-archive">
+                    <i class="bi bi-archive me-2" style="font-size: 1.2rem;"></i> Archive (stockage)
+                  </a></li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-bucket">
+                    <i class="bi bi-bucket me-2" style="font-size: 1.2rem;"></i> Seau (produits en vrac)
+                  </a></li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-pie-chart">
+                    <i class="bi bi-pie-chart me-2" style="font-size: 1.2rem;"></i> Camembert (fromage/portions)
+                  </a></li>
+
+                  <li><hr class="dropdown-divider"></li>
+                  <li class="dropdown-header">Utilitaires</li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-star">
+                    <i class="bi bi-star me-2" style="font-size: 1.2rem;"></i> Étoile
+                  </a></li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-heart">
+                    <i class="bi bi-heart me-2" style="font-size: 1.2rem;"></i> Cœur
+                  </a></li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-bookmark">
+                    <i class="bi bi-bookmark me-2" style="font-size: 1.2rem;"></i> Signet
+                  </a></li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-flag">
+                    <i class="bi bi-flag me-2" style="font-size: 1.2rem;"></i> Drapeau
+                  </a></li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-tag">
+                    <i class="bi bi-tag me-2" style="font-size: 1.2rem;"></i> Étiquette
+                  </a></li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-tags">
+                    <i class="bi bi-tags me-2" style="font-size: 1.2rem;"></i> Étiquettes
+                  </a></li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-circle">
+                    <i class="bi bi-circle me-2" style="font-size: 1.2rem;"></i> Cercle
+                  </a></li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-square">
+                    <i class="bi bi-square me-2" style="font-size: 1.2rem;"></i> Carré
+                  </a></li>
+
+                  <li><hr class="dropdown-divider"></li>
+                  <li class="dropdown-header">Commerce</li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-shop">
+                    <i class="bi bi-shop me-2" style="font-size: 1.2rem;"></i> Boutique
+                  </a></li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-truck">
+                    <i class="bi bi-truck me-2" style="font-size: 1.2rem;"></i> Camion
+                  </a></li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-receipt">
+                    <i class="bi bi-receipt me-2" style="font-size: 1.2rem;"></i> Reçu
+                  </a></li>
+                  <li><a class="dropdown-item icon-option" href="#" data-icon="bi bi-cash">
+                    <i class="bi bi-cash me-2" style="font-size: 1.2rem;"></i> Argent
+                  </a></li>
+                </ul>
+              </div>
+
+              <small class="form-text text-muted d-block mt-2">
+                Choisissez une icône dans la liste ou
+                <a href="https://icons.getbootstrap.com/" target="_blank">consultez toutes les icônes Bootstrap</a>
+              </small>
+            </div>
+
+            <script>
+            document.addEventListener('DOMContentLoaded', function() {
+              const iconInput = document.getElementById('icon');
+              const iconDisplay = document.getElementById('selectedIconDisplay');
+              const iconOptions = document.querySelectorAll('.icon-option');
+
+              iconOptions.forEach(option => {
+                option.addEventListener('click', function(e) {
+                  e.preventDefault();
+                  const iconClass = this.getAttribute('data-icon');
+                  iconInput.value = iconClass;
+
+                  if (iconClass) {
+                    iconDisplay.innerHTML = `
+                      <i class="${iconClass} me-2" style="font-size: 1.2rem;"></i>
+                      <span class="text-muted small">${iconClass}</span>
+                    `;
+                  } else {
+                    iconDisplay.innerHTML = '<span class="text-muted">Aucune icône</span>';
+                  }
+                });
+              });
+            });
+            </script>
+
+            <div class="mb-3">
+              <label for="description" class="form-label">Description</label>
+              <textarea
+                class="form-control"
+                id="description"
+                name="description"
+                rows="3"><%= category ? (category.description || '') : '' %></textarea>
+            </div>
+
+            <div class="mb-3">
+              <div class="form-check">
+                <input
+                  type="checkbox"
+                  class="form-check-input"
+                  id="is_active"
+                  name="is_active"
+                  value="1"
+                  <%= category && category.is_active ? 'checked' : (!category ? 'checked' : '') %>>
+                <label class="form-check-label" for="is_active">
+                  Catégorie active
+                </label>
+              </div>
+            </div>
+
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-primary">
+                <i class="bi bi-check-lg me-2"></i>
+                <%= category ? 'Enregistrer les modifications' : 'Créer la catégorie' %>
+              </button>
+              <a href="/admin/categories" class="btn btn-outline-secondary">
+                <i class="bi bi-x-lg me-2"></i>Annuler
+              </a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <% if (category) { %>
+      <div class="col-12 col-lg-4 mt-3 mt-lg-0">
+        <div class="card mb-3">
+          <div class="card-header">
+            <h5 class="card-title mb-0">Aperçu</h5>
+          </div>
+          <div class="card-body">
+            <p>Badge:</p>
+            <span class="badge" style="background-color: <%= category.couleur || '#6c757d' %>; font-size: 1rem;">
+              <% if (category.icon) { %>
+                <i class="<%= category.icon %> me-1"></i>
+              <% } %>
+              <%= category.nom %>
+            </span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header bg-danger text-white">
+            <h5 class="card-title mb-0">Zone de danger</h5>
+          </div>
+          <div class="card-body">
+            <p class="text-muted">
+              <strong>Attention :</strong> La suppression d'une catégorie est irréversible.
+            </p>
+            <p class="text-muted small">
+              La suppression sera refusée si :
+            </p>
+            <ul class="text-muted small">
+              <li>Des produits sont associés à cette catégorie</li>
+              <li>Des sous-catégories dépendent de cette catégorie</li>
+            </ul>
+            <p class="text-muted small">
+              Pour simplement désactiver la catégorie, utilisez la case à cocher "Catégorie active" ci-dessus.
+            </p>
+            <form method="POST" action="/admin/categories/<%= category.id %>/delete" onsubmit="return confirm('⚠️ ATTENTION : Êtes-vous sûr de vouloir SUPPRIMER définitivement cette catégorie ?\n\nCette action est IRRÉVERSIBLE.\n\nPour désactiver temporairement la catégorie, utilisez plutôt la case à cocher \'Catégorie active\'.');">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button type="submit" class="btn btn-danger w-100">
+                <i class="bi bi-trash me-2"></i>Supprimer la catégorie
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    <% } %>
+  </div>
+</div>
+
+</div>
+<%- include('partials/footer') %>

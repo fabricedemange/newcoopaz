@@ -1,0 +1,172 @@
+<%- include('partials/header', { title: 'Import catalogue Excel', user, role }) %>
+
+<div class="admin-content-wrapper">
+
+<div class="container-fluid px-3 mt-4">
+  <div class="row">
+    <div class="col-12">
+      <h2 class="mb-4"><i class="bi bi-file-earmark-excel me-2"></i>Importer un catalogue depuis Excel</h2>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-12 col-md-8 offset-md-2">
+      <% if (error) { %>
+        <div class="alert alert-danger" role="alert">
+          <i class="bi bi-exclamation-triangle-fill me-2"></i>
+          <%= error %>
+        </div>
+      <% } %>
+
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title mb-0">Informations du catalogue</h5>
+        </div>
+        <div class="card-body">
+          <form action="/admin/catalogues/upload" method="post" enctype="multipart/form-data">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <div class="mb-3">
+              <label for="excel" class="form-label">Fichier Excel du catalogue <span class="text-danger">*</span></label>
+              <input id="excel" type="file" name="excel" accept=".xls,.xlsx" class="form-control" required>
+              <div class="form-text">Formats acceptés : .xls, .xlsx (Maximum 10 Mo)</div>
+            </div>
+
+            <div class="mb-3">
+              <label for="expiration_date" class="form-label">Date d'expiration</label>
+              <input id="expiration_date" type="date" name="expiration_date" class="form-control">
+              <div class="form-text">Laissez vide pour un catalogue sans date d'expiration</div>
+            </div>
+
+            <div class="mb-3">
+              <label for="description" class="form-label">Description</label>
+              <textarea id="description" name="description" class="form-control" rows="3"
+                        placeholder="Description du catalogue (optionnel)"></textarea>
+              <div class="form-text">Description visible par les utilisateurs</div>
+            </div>
+
+            <div class="d-flex flex-column flex-md-row gap-2">
+              <button type="submit" class="btn btn-success">
+                <i class="bi bi-upload me-2"></i>Importer le catalogue
+              </button>
+              <a href="/admin/catalogues/new" class="btn btn-secondary">
+                <i class="bi bi-arrow-left me-2"></i>Retour au choix
+              </a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section d'aide -->
+  <div class="row mt-4">
+    <div class="col-12 col-md-8 offset-md-2">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-question-circle me-2"></i>Aide - Format du fichier Excel
+          </h5>
+        </div>
+        <div class="card-body">
+          <h6>Format du fichier Excel</h6>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered">
+              <thead class="table-dark">
+                <tr>
+                  <th>Colonne A</th>
+                  <th>Colonne B</th>
+                  <th>Colonne C</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Produit</td>
+                  <td>Description</td>
+                  <td>Prix</td>
+                </tr>
+                <tr class="table-light">
+                  <td>Pommes</td>
+                  <td>Pommes bio du verger</td>
+                  <td>3.50</td>
+                </tr>
+                <tr class="table-light">
+                  <td>Poires</td>
+                  <td>Poires Williams</td>
+                  <td>4.20</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="mt-3">
+            <h6>Instructions importantes :</h6>
+            <ul>
+              <li>La première ligne doit contenir les en-têtes (Produit, Description, Prix)</li>
+              <li>Les données commencent à partir de la ligne 2</li>
+              <li>La colonne "Produit" est obligatoire</li>
+              <li>Les prix doivent être au format numérique (ex: 3.50)</li>
+              <li>Les lignes vides sont ignorées</li>
+              <li>Taille maximum du fichier : 10 Mo</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Boutons de navigation -->
+  <div class="row mt-4">
+    <div class="col-12">
+      <div class="d-flex flex-column flex-sm-row gap-2">
+        <a href="/admin/catalogues/vue" class="btn btn-outline-secondary">
+          <i class="bi bi-arrow-left me-2"></i>Retour à la liste des catalogues
+        </a>
+        <a href="/admin/menu" class="btn btn-outline-secondary">
+          Retour au menu admin
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Validation du fichier côté client
+document.getElementById('excel').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (file) {
+    const fileSize = file.size / 1024 / 1024; // en MB
+    const allowedTypes = ['application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+
+    if (fileSize > 10) {
+      alert('Le fichier est trop volumineux. Taille maximum : 10 Mo');
+      e.target.value = '';
+      return;
+    }
+
+    if (!allowedTypes.includes(file.type)) {
+      alert('Format de fichier non supporté. Utilisez .xls ou .xlsx');
+      e.target.value = '';
+      return;
+    }
+
+    // Afficher le nom du fichier
+    const fileName = file.name;
+    const fileInfo = document.createElement('div');
+    fileInfo.className = 'alert alert-info mt-2';
+    // ✅ SÉCURISÉ : Utilisation de textContent pour le nom de fichier
+    fileInfo.innerHTML = '<i class="bi bi-file-earmark-excel me-2"></i>Fichier sélectionné : <span class="filename"></span>';
+    fileInfo.querySelector('.filename').textContent = fileName;
+
+    // Supprimer l'ancienne info si elle existe
+    const existingInfo = document.querySelector('.alert-info');
+    if (existingInfo) {
+      existingInfo.remove();
+    }
+
+    e.target.parentNode.appendChild(fileInfo);
+  }
+});
+</script>
+
+</div>
+<%- include('partials/footer') %>

@@ -1,0 +1,1005 @@
+<%- include('partials/header', { title: 'Éditer le catalogue', user, role }) %>
+
+<div class="admin-content-wrapper">
+
+<div class="container-fluid px-3 mt-4">
+  <div class="row">
+    <div class="col-12">
+      <h2 class="mb-4">Éditer le catalogue</h2>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-12">
+      <% if (error) { %>
+        <div class="alert alert-danger" role="alert">
+          <i class="bi bi-exclamation-triangle-fill me-2"></i>
+          <%= error %>
+        </div>
+      <% } %>
+
+      <!-- Formulaire d'édition du catalogue -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <div class="d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">Informations du catalogue</h5>
+            <small id="autoSaveStatus" class="text-muted"></small>
+          </div>
+        </div>
+        <div class="card-body">
+          <form action="/admin/catalogues/<%= catalogue.id %>/edit" method="post" id="catalogueInfoForm">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <div class="mb-3">
+              <label for="originalname" class="form-label">Nom du catalogue <span class="text-danger">*</span></label>
+              <input id="originalname" class="form-control catalogue-auto-save" name="originalname" type="text"
+                     value="<%= catalogue.originalname %>" required placeholder="Nom du catalogue">
+              <div class="form-text">Le nom du catalogue tel qu'il apparaîtra aux utilisateurs</div>
+            </div>
+
+            <div class="mb-3">
+              <label for="description" class="form-label">Description</label>
+              <textarea id="description" class="form-control catalogue-auto-save" name="description" rows="3"
+                        placeholder="Description du catalogue"><%= catalogue.description %></textarea>
+              <div class="form-text">Description visible par les utilisateurs</div>
+            </div>
+
+            <div class="row mb-3">
+              <div class="col-md-6">
+                <label for="expiration_date" class="form-label">Date d'expiration</label>
+                <input id="expiration_date" class="form-control catalogue-auto-save" type="date" name="expiration_date"
+                       value="<%= catalogue.expiration_date ? (catalogue.expiration_date.getFullYear() + '-' +
+                       String(catalogue.expiration_date.getMonth() + 1).padStart(2, '0') + '-' +
+                       String(catalogue.expiration_date.getDate()).padStart(2, '0')) : '' %>">
+                <div class="form-text">Date limite pour passer commande</div>
+              </div>
+              <div class="col-md-6">
+                <label for="date_livraison" class="form-label">Date de livraison</label>
+                <input id="date_livraison" class="form-control catalogue-auto-save" type="date" name="date_livraison"
+                       value="<%= catalogue.date_livraison ? (catalogue.date_livraison.getFullYear() + '-' +
+                       String(catalogue.date_livraison.getMonth() + 1).padStart(2, '0') + '-' +
+                       String(catalogue.date_livraison.getDate()).padStart(2, '0')) : '' %>">
+                <div class="form-text">Date prévue de livraison</div>
+              </div>
+            </div>
+
+            <!-- Informations du catalogue (anciennement dans la sidebar) -->
+            <div class="mb-3">
+              <div class="border rounded p-3 bg-light">
+                <div class="row g-2">
+                  <div class="col-md-3">
+                    <small class="text-muted d-block">ID</small>
+                    <strong>#<%= catalogue.id %></strong>
+                  </div>
+                  <div class="col-md-3">
+                    <small class="text-muted d-block">Créé le</small>
+                    <strong><%= catalogue.upload_date ? formatDateTime(catalogue.upload_date) : 'Non défini' %></strong>
+                  </div>
+                  <div class="col-md-3">
+                    <small class="text-muted d-block">Produits</small>
+                    <strong><%= articles.length %></strong>
+                  </div>
+                  <div class="col-md-3">
+                    <small class="text-muted d-block">Statut</small>
+                    <% if (catalogue.expiration_date) { %>
+                      <% if (new Date(catalogue.expiration_date).getTime() + 24 * 60 * 60 * 1000 < Date.now()) { %>
+                        <span class="badge bg-danger">Expiré</span>
+                      <% } else { %>
+                        <span class="badge bg-success">Actif</span>
+                      <% } %>
+                    <% } else { %>
+                      <span class="badge bg-primary">Permanent</span>
+                    <% } %>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <div class="form-check">
+                <input class="form-check-input catalogue-auto-save" type="checkbox" id="referent_order_reminder_enabled" name="referent_order_reminder_enabled"
+                  <%= (catalogue.referent_order_reminder_enabled === 0 || catalogue.referent_order_reminder_enabled === '0') ? '' : 'checked' %>>
+                <label class="form-check-label" for="referent_order_reminder_enabled">
+                  Envoyer automatiquement un mail au référent pour prévoir la commande (dès Expiration + 8h)
+                </label>
+              </div>
+                <div class="form-text">Coché par défaut. L'email est envoyé une seule fois.</div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">Visibilité du catalogue <span class="text-danger">*</span></label>
+              <div class="form-check">
+                <input class="form-check-input catalogue-auto-save" type="radio" name="is_archived" value="0" id="visibility0"
+                       <%= catalogue.is_archived == 0 ? 'checked' : '' %>>
+                <label class="form-check-label" for="visibility0">
+                  <strong>Visible de tous</strong> - Le catalogue est accessible à tous les utilisateurs
+                </label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input catalogue-auto-save" type="radio" name="is_archived" value="2" id="visibility2" <%=catalogue.is_archived==2
+                  ? 'checked' : '' %>>
+                <label class="form-check-label" for="visibility2">
+                  <strong>Invisible des utilisateurs</strong> - Caché des utilisateurs mais visible dans tous les menus
+                  d'administration. Ce catalogue reste pris en compte dans la partie "Paniers et Commandes".
+                </label>
+              </div>
+
+              <div class="form-check">
+                <input class="form-check-input catalogue-auto-save" type="radio" name="is_archived" value="3" id="visibility3"
+                       <%= catalogue.is_archived == 3 ? 'checked' : '' %>>
+                <label class="form-check-label" for="visibility3">
+                  <strong>Invisible de tous, partout</strong> - Complètement masqué, archivé dans le tableau en bas de page de la gestion des catalogues, ce statut permet de conserver l'historique des commandes clientes
+                </label>
+              </div>
+              <div class="form-text">Définit qui peut voir et accéder à ce catalogue</div>
+            </div>
+          </form>
+
+          <!-- Bouton de suppression séparé -->
+          <div class="mt-3">
+            <form action="/admin/catalogues/<%= catalogue.id %>/delete" method="post" style="display:inline;">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button type="submit" class="btn btn-danger"
+                onclick="return confirm('Supprimer ce catalogue (cela supprimera tous les paniers, commandes et articles associés)?')">
+                <i class="bi bi-trash me-2"></i>Supprimer le catalogue
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- Image du catalogue -->
+      <div class="accordion mb-4" id="accordionCatalogueImage">
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="headingCatalogueImage">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseCatalogueImage" aria-expanded="false" aria-controls="collapseCatalogueImage">
+              <i class="bi bi-plus-circle me-2"></i>Image du catalogue
+            </button>
+          </h2>
+          <div id="collapseCatalogueImage" class="accordion-collapse collapse" aria-labelledby="headingCatalogueImage" data-bs-parent="#accordionCatalogueImage">
+            <div class="accordion-body">
+              <div class="d-flex align-items-start gap-3">
+                <div style="flex: 0 0 auto;">
+                  <% if (catalogue.image_filename) { %>
+                    <img
+                      src="/uploads/catalogue-images/<%= catalogue.image_filename %>"
+                      alt="Image catalogue"
+                      class="img-thumbnail"
+                      style="width: 120px; height: 120px; object-fit: cover; cursor: zoom-in;"
+                      data-bs-toggle="modal"
+                      data-bs-target="#articleImageModal"
+                      data-article-imgsrc="/uploads/catalogue-images/<%= catalogue.image_filename %>"
+                    />
+                  <% } else { %>
+                    <div class="border rounded bg-light d-flex align-items-center justify-content-center" style="width: 120px; height: 120px;">
+                      <span class="text-muted small">Aucune image</span>
+                    </div>
+                  <% } %>
+                </div>
+
+                <div class="flex-grow-1">
+                  <form
+                    action="/admin/catalogues/<%= catalogue.id %>/image"
+                    method="post"
+                    enctype="multipart/form-data"
+                    class="article-image-form"
+                  >
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <input
+                      type="file"
+                      name="image"
+                      accept="image/*"
+                      class="visually-hidden article-image-file"
+                      id="catalogue_image_file"
+                    />
+
+                    <div class="d-flex flex-wrap gap-2">
+                      <label class="btn btn-outline-secondary btn-sm js-article-image-pick" data-capture="0" for="catalogue_image_file">Télécharger</label>
+                      <label class="btn btn-outline-secondary btn-sm js-article-image-pick" data-capture="1" for="catalogue_image_file">Photo</label>
+
+                      <button
+                        type="button"
+                        class="btn btn-outline-secondary btn-sm js-open-webcam"
+                        data-upload-url="/admin/catalogues/<%= catalogue.id %>/image"
+                        data-webcam-url="/admin/catalogues/<%= catalogue.id %>/image/webcam"
+                      >
+                        Webcam
+                      </button>
+                    </div>
+
+                    <div class="form-text mt-2">1 image par catalogue. L'image est optimisée en WEBP côté serveur.</div>
+                  </form>
+
+                  <% if (catalogue.image_filename) { %>
+                    <form action="/admin/catalogues/<%= catalogue.id %>/image/delete" method="post" class="mt-2">
+                      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                      <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Supprimer l\'image du catalogue ?')">Supprimer</button>
+                    </form>
+                  <% } %>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Formulaire d'ajout d'articles (sélection multiple) -->
+      <div class="accordion mb-4" id="accordionAddProducts">
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="headingAddProducts">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAddProducts" aria-expanded="false" aria-controls="collapseAddProducts">
+              <i class="bi bi-plus-circle me-2"></i>Ajouter des produits au catalogue
+            </button>
+          </h2>
+          <div id="collapseAddProducts" class="accordion-collapse collapse" aria-labelledby="headingAddProducts" data-bs-parent="#accordionAddProducts">
+            <div class="accordion-body">
+          <!-- Filtres -->
+          <div class="row mb-3">
+            <div class="col-md-4">
+              <label for="filter-supplier" class="form-label">Fournisseur</label>
+              <select id="filter-supplier" class="form-select">
+                <option value="">Tous les fournisseurs</option>
+                <% (suppliers || []).forEach(supplier => { %>
+                  <option value="<%= supplier.id %>"><%= supplier.nom %></option>
+                <% }); %>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label for="filter-category" class="form-label">Catégorie</label>
+              <select id="filter-category" class="form-select">
+                <option value="">Toutes les catégories</option>
+                <% (categories || []).forEach(category => { %>
+                  <option value="<%= category.id %>"><%= category.nom %></option>
+                <% }); %>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label for="filter-search" class="form-label">Recherche</label>
+              <input type="text" id="filter-search" class="form-control" placeholder="Nom du produit...">
+            </div>
+          </div>
+
+          <!-- Actions groupées -->
+          <div class="row mb-3">
+            <div class="col-12">
+              <button type="button" class="btn btn-sm btn-outline-primary" id="select-all">Tout sélectionner</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="select-none">Tout désélectionner</button>
+              <span class="ms-3" id="selection-count">0 produit(s) sélectionné(s)</span>
+            </div>
+          </div>
+
+          <!-- Liste des produits avec checkboxes -->
+          <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+            <table class="table table-sm table-hover" id="products-table">
+              <thead class="sticky-top bg-white">
+                <tr>
+                  <th style="width: 40px;"></th>
+                  <th>Produit</th>
+                  <th>Fournisseur</th>
+                  <th>Catégorie</th>
+                  <th style="width: 120px;">Prix (€)</th>
+                  <th style="width: 100px;">Qté mini</th>
+                </tr>
+              </thead>
+              <tbody id="products-tbody">
+                <% (allProducts || []).forEach(product => { %>
+                  <tr class="product-row"
+                      data-product-id="<%= product.id %>"
+                      data-supplier-id="<%= product.supplier_id || '' %>"
+                      data-category-id="<%= product.category_id || '' %>"
+                      data-product-name="<%= product.nom.toLowerCase() %>">
+                    <td>
+                      <input type="checkbox" class="form-check-input product-checkbox" value="<%= product.id %>">
+                    </td>
+                    <td>
+                      <strong><%= product.nom %></strong>
+                      <% if (product.description) { %>
+                        <br><small class="text-muted"><%= product.description %></small>
+                      <% } %>
+                    </td>
+                    <td><%= product.supplier_nom || '-' %></td>
+                    <td><%= product.category_nom || '-' %></td>
+                    <td>
+                      <input type="number" step="0.01" min="0" class="form-control form-control-sm product-prix"
+                             placeholder="<%= product.dernier_prix ? product.dernier_prix : '0.00' %>"
+                             value="<%= product.dernier_prix || '' %>"
+                             data-product-id="<%= product.id %>">
+                    </td>
+                    <td>
+                      <input type="number" step="0.1" min="0.1" max="1"
+                             value="<%= product.derniere_unite || 1 %>"
+                             class="form-control form-control-sm product-unite"
+                             data-product-id="<%= product.id %>">
+                    </td>
+                  </tr>
+                <% }); %>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Bouton d'ajout -->
+          <div class="row mt-3">
+            <div class="col-12">
+              <button type="button" class="btn btn-success" id="add-selected-products">
+                <i class="bi bi-plus-circle me-2"></i>Ajouter les produits sélectionnés
+              </button>
+            </div>
+          </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Liste des articles -->
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title mb-0">Articles du catalogue (<%= articles.length %>)</h5>
+        </div>
+        <div class="card-body">
+          <% if (articles.length === 0) { %>
+            <div class="alert alert-info text-center">
+              <h6>Aucun article dans ce catalogue</h6>
+              <p>Utilisez le formulaire ci-dessus pour ajouter des articles.</p>
+            </div>
+          <% } else { %>
+            <div class="table-responsive">
+              <table class="table table-striped table-hover" id="tbarticles">
+                <thead class="table-dark">
+                  <tr>
+                    <th>Produit</th>
+                    <th class="d-none d-md-table-cell">Description</th>
+                    <th class="d-none d-sm-table-cell">Prix</th>
+                    <th class="d-none d-sm-table-cell">Qté mini</th>
+                    <th>Actions</th>
+                  </tr>
+                  <tr>
+                    <th><input type="text" placeholder="Rechercher produit..." class="form-control form-control-sm" /></th>
+                    <th class="d-none d-md-table-cell"><input type="text" placeholder="Rechercher description..." class="form-control form-control-sm" /></th>
+                    <th class="d-none d-sm-table-cell"></th>
+                    <th class="d-none d-sm-table-cell"></th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% articles.forEach(function(article) { %>
+                    <tr>
+                      <td>
+                        <div class="d-flex align-items-start gap-2">
+                          <% if (article.image_filename) { %>
+                            <img
+                              src="/uploads/article-images/<%= article.image_filename %>"
+                              alt="Image produit"
+                              class="img-thumbnail article-thumb"
+                              style="width: 56px; height: 56px; object-fit: cover; cursor: zoom-in; flex: 0 0 auto;"
+                              data-bs-toggle="modal"
+                              data-bs-target="#articleImageModal"
+                              data-article-imgsrc="/uploads/article-images/<%= article.image_filename %>"
+                            />
+                          <% } %>
+
+                          <div class="flex-grow-1">
+                            <div class="fw-bold"><%= article.produit %></div>
+                            <!-- Informations supplémentaires sur mobile -->
+                            <div class="d-md-none small text-muted">
+                              <%= article.description %>
+                            </div>
+                            <div class="d-sm-none small text-muted">
+                              Prix: <%= article.prix %> €
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td class="d-none d-md-table-cell">
+                        <%= article.description %>
+                      </td>
+                      <td class="d-none d-sm-table-cell">
+                        <span class="fw-bold"><%= article.prix %> €</span>
+                      </td>
+                      <td class="d-none d-sm-table-cell">
+                        <span class="fw-bold">
+                          <%= article.unite%>
+                        </span>
+                      </td>
+                      <td>
+                        <div class="border rounded p-2 bg-light mb-2" style="min-width: 220px;">
+                          <form
+                            action="/admin/catalogues/<%= catalogue.id %>/articles/<%= article.id %>/image"
+                            method="post"
+                            enctype="multipart/form-data"
+                            class="article-image-form"
+                          >
+                            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                            <input
+                              type="file"
+                              name="image"
+                              accept="image/*"
+                              class="visually-hidden article-image-file"
+                              id="article_image_<%= article.id %>"
+                            />
+                            <div class="d-flex flex-wrap gap-1">
+                              <label class="btn btn-sm btn-outline-secondary py-0 px-2 js-article-image-pick" data-capture="0" for="article_image_<%= article.id %>">Télécharger</label>
+                              <label class="btn btn-sm btn-outline-secondary py-0 px-2 js-article-image-pick" data-capture="1" for="article_image_<%= article.id %>">Photo</label>
+
+                              <button
+                                type="button"
+                                class="btn btn-sm btn-outline-secondary py-0 px-2 js-open-webcam"
+                                data-upload-url="/admin/catalogues/<%= catalogue.id %>/articles/<%= article.id %>/image"
+                                data-webcam-url="/admin/catalogues/<%= catalogue.id %>/articles/<%= article.id %>/image/webcam"
+                              >
+                                Webcam
+                              </button>
+                            </div>
+                          </form>
+
+                          <% if (article.image_filename) { %>
+                            <form
+                              action="/admin/catalogues/<%= catalogue.id %>/articles/<%= article.id %>/image/delete"
+                              method="post"
+                              class="mt-2"
+                            >
+                              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                              <button
+                                type="submit"
+                                class="btn btn-sm btn-outline-danger py-0 px-2"
+                                onclick="return confirm('Supprimer l\'image de ce produit ?')"
+                              >
+                                Supprimer image
+                              </button>
+                            </form>
+                          <% } %>
+                        </div>
+
+                        <div class="pt-2 mt-2 border-top">
+
+                        <!-- Actions sur mobile : menu déroulant -->
+                        <div class="d-md-none">
+                          <div class="dropdown">
+                            <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                              Actions
+                            </button>
+                            <ul class="dropdown-menu">
+                              <li>
+                                <a class="dropdown-item" href="/admin/catalogues/<%= catalogue.id %>/articles/<%= article.id %>/edit">
+                                  Modifier
+                                </a>
+                              </li>
+                              <li><hr class="dropdown-divider"></li>
+                              <li>
+                                <form action="/admin/catalogues/<%= catalogue.id %>/articles/<%= article.id %>/delete" method="post">
+                                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                  <button class="dropdown-item text-danger" type="submit" onclick="return confirm('Supprimer ce produit ?')">
+                                    Supprimer
+                                  </button>
+                                </form>
+                              </li>
+                            </ul>
+                          </div>
+                        </div>
+
+                        <!-- Actions sur desktop : boutons horizontaux -->
+                        <div class="d-none d-md-block">
+                          <div class="d-flex gap-1">
+                            <a href="/admin/catalogues/<%= catalogue.id %>/articles/<%= article.id %>/edit" class="btn btn-sm btn-primary">
+                              Modifier
+                            </a>
+                            <form action="/admin/catalogues/<%= catalogue.id %>/articles/<%= article.id %>/delete" method="post" style="display:inline;">
+                              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                              <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Supprimer ce produit ?')">
+                                Supprimer
+                              </button>
+                            </form>
+                          </div>
+                        </div>
+
+                        </div>
+                      </td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          <% } %>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal d'agrandissement d'image -->
+<div class="modal fade" id="articleImageModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-body p-0">
+        <img id="articleImageModalImg" src="" alt="Image produit" style="width: 100%; height: auto; display: block;" />
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Webcam (ordinateur) -->
+<div class="modal fade" id="articleWebcamModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-dialog-centered" style="max-width: 560px;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Prendre une photo</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-warning d-none" id="webcamError"></div>
+        <video id="webcamVideo" autoplay playsinline style="width: 100%; height: auto; max-height: 55vh; background: #000; object-fit: cover; border-radius: 6px;"></video>
+        <canvas id="webcamCanvas" class="d-none"></canvas>
+        <div class="small text-muted mt-2">
+          Si la webcam ne s’ouvre pas : vérifiez les permissions du navigateur (et HTTPS en production).
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+        <button type="button" class="btn btn-primary" id="webcamCaptureBtn">Capturer & envoyer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DataTables CSS et JS -->
+<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+
+<!-- Auto-save pour les informations du catalogue -->
+<script src="/js/catalogue-edit-autosave.js"></script>
+
+<script>
+$(document).ready(function() {
+  // Configuration DataTables pour le tableau des articles
+  var table = $('#tbarticles').DataTable({
+    "language": {
+      "url": "https://cdn.datatables.net/plug-ins/1.13.6/i18n/fr-FR.json"
+    },
+    "order": [], // Respecter l'ordre SQL au chargement (ORDER BY produit)
+    "pageLength": 25,
+    "responsive": true,
+    "dom": '<"row mb-3"<"col-sm-6"l><"col-sm-6"f>>rtip',
+    "orderCellsTop": true,
+    "fixedHeader": true,
+    "columnDefs": [
+      { 
+        "targets": [0], // Produit
+        "className": "text-start",
+        "type": "string",
+        "render": function(data, type, row) {
+          if (type === 'sort' || type === 'type') {
+            // Pour le tri, extraire le texte du produit et normaliser
+            if (data) {
+              let text = data.toString().trim();
+              // Supprimer les balises HTML si présentes
+              text = text.replace(/<[^>]*>/g, '');
+              // Normaliser les accents pour le tri
+              text = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+              return text.toLowerCase();
+            }
+            return '';
+          }
+          return data;
+        }
+      },
+      { 
+        "targets": [1], // Description
+        "className": "text-start",
+        "type": "string",
+        "render": function(data, type, row) {
+          if (type === 'sort' || type === 'type') {
+            // Pour le tri de la description, normaliser le texte
+            if (data) {
+              let text = data.toString().trim();
+              // Supprimer les balises HTML si présentes
+              text = text.replace(/<[^>]*>/g, '');
+              // Normaliser les accents pour le tri
+              text = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+              return text.toLowerCase();
+            }
+            return '';
+          }
+          return data;
+        }
+      },
+      { 
+        "targets": [2], // Prix
+        "className": "text-end",
+        "type": "num",
+        "render": function(data, type, row) {
+          if (type === 'sort' || type === 'type') {
+            // Pour le tri, extraire le nombre de la chaîne de prix
+            if (data) {
+              const match = data.toString().match(/[\d,\.]+/);
+              if (match) {
+                return parseFloat(match[0].replace(',', '.'));
+              }
+            }
+            return 0;
+          }
+          return data;
+        }
+      },
+      { 
+        "targets": [3], // Catégorie
+        "className": "text-center",
+        "type": "string",
+        "render": function(data, type, row) {
+          if (type === 'sort' || type === 'type') {
+            // Pour le tri de la catégorie, normaliser le texte
+            if (data) {
+              let text = data.toString().trim();
+              // Supprimer les balises HTML si présentes
+              text = text.replace(/<[^>]*>/g, '');
+              // Normaliser les accents pour le tri
+              text = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+              return text.toLowerCase();
+            }
+            return '';
+          }
+          return data;
+        }
+      },
+      { 
+        "targets": [4], // Actions - désactiver le tri car contient des formulaires
+        "orderable": false,
+        "searchable": false,
+        "className": "text-center"
+      }
+    ]
+  });
+
+  // Filtre par colonne pour Produit et Description
+  $('#tbarticles thead tr:eq(1) th').each(function(i) {
+    var title = $(this).text();
+    if (i === 0 || i === 1) { // Colonnes Produit et Description
+      $('input', this).on('keyup change', function() {
+        if (table.column(i).search() !== this.value) {
+          table
+            .column(i)
+            .search(this.value)
+            .draw();
+        }
+      });
+    }
+  });
+});
+</script>
+
+<script>
+// Auto-submit quand un fichier est choisi (Télécharger / Photo)
+document.addEventListener('change', function(e) {
+  const input = e.target;
+  if (!input || !input.classList || !input.classList.contains('article-image-file')) return;
+  if (!input.files || input.files.length === 0) return;
+  const form = input.closest('form');
+  if (form) form.submit();
+});
+
+// Un seul input file: on active/désactive capture avant ouverture (Photo vs Télécharger)
+document.addEventListener('pointerdown', function(e) {
+  const btn = e.target.closest('.js-article-image-pick');
+  if (!btn) return;
+  const inputId = btn.getAttribute('for');
+  if (!inputId) return;
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const capture = btn.getAttribute('data-capture');
+  if (capture === '1') {
+    input.setAttribute('capture', 'environment');
+  } else {
+    input.removeAttribute('capture');
+  }
+});
+
+// Alimentation du modal d'agrandissement
+document.addEventListener('click', function(e) {
+  const thumb = e.target.closest('[data-article-imgsrc]');
+  if (!thumb) return;
+  const img = document.getElementById('articleImageModalImg');
+  if (img) img.src = thumb.getAttribute('data-article-imgsrc');
+});
+
+// Webcam (ordinateur) : capture via getUserMedia + upload
+(function() {
+  const modalEl = document.getElementById('articleWebcamModal');
+  if (!modalEl) return;
+
+  const errorEl = document.getElementById('webcamError');
+  const videoEl = document.getElementById('webcamVideo');
+  const canvasEl = document.getElementById('webcamCanvas');
+  const captureBtn = document.getElementById('webcamCaptureBtn');
+  let currentUploadUrl = null;
+  let currentWebcamUrl = null;
+  let stream = null;
+
+  function submitWebcamDataUrlForm(webcamUrl, csrfToken, dataUrl) {
+    try {
+      if (!webcamUrl) {
+        showError("URL webcam manquante.");
+        return;
+      }
+      const form = document.createElement('form');
+      form.method = 'post';
+      form.action = webcamUrl;
+
+      const csrf = document.createElement('input');
+      csrf.type = 'hidden';
+      csrf.name = '_csrf';
+      csrf.value = csrfToken || '';
+      form.appendChild(csrf);
+
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'image_data_url';
+      input.value = dataUrl;
+      form.appendChild(input);
+
+      document.body.appendChild(form);
+      form.submit();
+    } catch (e) {
+      showError(
+        "Upload impossible via formulaire: " +
+          (e && e.message ? e.message : String(e))
+      );
+    }
+  }
+
+  function captureCurrentFrameDataUrl() {
+    if (!videoEl || !canvasEl) {
+      return null;
+    }
+    const srcW = videoEl.videoWidth || 1280;
+    const srcH = videoEl.videoHeight || 720;
+    const maxW = 1280;
+    const scale = srcW > maxW ? (maxW / srcW) : 1;
+    const w = Math.round(srcW * scale);
+    const h = Math.round(srcH * scale);
+    canvasEl.width = w;
+    canvasEl.height = h;
+    const ctx = canvasEl.getContext('2d');
+    ctx.drawImage(videoEl, 0, 0, w, h);
+    return canvasEl.toDataURL('image/jpeg', 0.8);
+  }
+
+  function showError(message) {
+    if (!errorEl) return;
+    errorEl.textContent = message;
+    errorEl.classList.remove('d-none');
+  }
+
+  function clearError() {
+    if (!errorEl) return;
+    errorEl.textContent = '';
+    errorEl.classList.add('d-none');
+  }
+
+  async function startWebcam() {
+    clearError();
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      showError("Webcam non supportée par ce navigateur. Utilisez le bouton Photo (mobile) ou Télécharger.");
+      return;
+    }
+
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+      videoEl.srcObject = stream;
+    } catch (err) {
+      showError("Accès webcam refusé ou indisponible. Vérifiez les permissions du navigateur.");
+    }
+  }
+
+  function stopWebcam() {
+    if (stream) {
+      stream.getTracks().forEach(t => t.stop());
+      stream = null;
+    }
+    if (videoEl) {
+      videoEl.srcObject = null;
+    }
+  }
+
+  document.addEventListener('click', function(e) {
+    const btn = e.target.closest('.js-open-webcam');
+    if (!btn) return;
+    currentUploadUrl = btn.getAttribute('data-upload-url');
+    currentWebcamUrl = btn.getAttribute('data-webcam-url');
+
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+    startWebcam();
+  });
+
+  modalEl.addEventListener('hidden.bs.modal', function() {
+    stopWebcam();
+    currentUploadUrl = null;
+    currentWebcamUrl = null;
+    clearError();
+  });
+
+  captureBtn.addEventListener('click', function() {
+    if (!currentWebcamUrl) {
+      showError("URL webcam manquante.");
+      return;
+    }
+    if (!videoEl || !canvasEl) return;
+    if (!stream) {
+      showError("Webcam non démarrée.");
+      return;
+    }
+
+    const csrfInput = document.querySelector('input[name="_csrf"]');
+    const csrfToken = csrfInput ? csrfInput.value : '';
+    const webcamUrl = new URL(currentWebcamUrl, window.location.origin).toString();
+    const dataUrl = captureCurrentFrameDataUrl();
+
+    if (!dataUrl) {
+      showError("Impossible de capturer l'image.");
+      return;
+    }
+
+    // On soumet via un POST classique (fiable), ce qui navigue/recharge la page.
+    submitWebcamDataUrlForm(webcamUrl, csrfToken, dataUrl);
+  });
+})();
+
+// ============================================================================
+// Gestion de la sélection multiple de produits
+// ============================================================================
+(function() {
+  const filterSupplier = document.getElementById('filter-supplier');
+  const filterCategory = document.getElementById('filter-category');
+  const filterSearch = document.getElementById('filter-search');
+  const selectAllBtn = document.getElementById('select-all');
+  const selectNoneBtn = document.getElementById('select-none');
+  const addSelectedBtn = document.getElementById('add-selected-products');
+  const selectionCount = document.getElementById('selection-count');
+  const productRows = document.querySelectorAll('.product-row');
+  const productCheckboxes = document.querySelectorAll('.product-checkbox');
+
+  // Fonction pour filtrer les produits
+  function filterProducts() {
+    const supplierFilter = filterSupplier.value;
+    const categoryFilter = filterCategory.value;
+    const searchFilter = filterSearch.value.toLowerCase().trim();
+
+    let visibleCount = 0;
+    productRows.forEach(row => {
+      const supplierId = row.dataset.supplierId;
+      const categoryId = row.dataset.categoryId;
+      const productName = row.dataset.productName;
+
+      const matchSupplier = !supplierFilter || supplierId === supplierFilter;
+      const matchCategory = !categoryFilter || categoryId === categoryFilter;
+      const matchSearch = !searchFilter || productName.includes(searchFilter);
+
+      if (matchSupplier && matchCategory && matchSearch) {
+        row.style.display = '';
+        visibleCount++;
+      } else {
+        row.style.display = 'none';
+        // Décocher si filtré
+        const checkbox = row.querySelector('.product-checkbox');
+        if (checkbox) checkbox.checked = false;
+      }
+    });
+
+    updateSelectionCount();
+  }
+
+  // Fonction pour mettre à jour le compteur de sélection
+  function updateSelectionCount() {
+    const count = document.querySelectorAll('.product-checkbox:checked').length;
+    selectionCount.textContent = count + ' produit(s) sélectionné(s)';
+  }
+
+  // Événements de filtrage
+  if (filterSupplier) filterSupplier.addEventListener('change', filterProducts);
+  if (filterCategory) filterCategory.addEventListener('change', filterProducts);
+  if (filterSearch) filterSearch.addEventListener('input', filterProducts);
+
+  // Sélection tout/rien
+  if (selectAllBtn) {
+    selectAllBtn.addEventListener('click', () => {
+      productRows.forEach(row => {
+        if (row.style.display !== 'none') {
+          const checkbox = row.querySelector('.product-checkbox');
+          if (checkbox) checkbox.checked = true;
+        }
+      });
+      updateSelectionCount();
+    });
+  }
+
+  if (selectNoneBtn) {
+    selectNoneBtn.addEventListener('click', () => {
+      productCheckboxes.forEach(cb => cb.checked = false);
+      updateSelectionCount();
+    });
+  }
+
+  // Mise à jour du compteur quand on coche/décoche
+  productCheckboxes.forEach(cb => {
+    cb.addEventListener('change', updateSelectionCount);
+  });
+
+  // Ajout des produits sélectionnés
+  if (addSelectedBtn) {
+    addSelectedBtn.addEventListener('click', async () => {
+      const selected = [];
+
+      productCheckboxes.forEach(checkbox => {
+        if (checkbox.checked) {
+          const productId = checkbox.value;
+          const prixInput = document.querySelector(`.product-prix[data-product-id="${productId}"]`);
+          const uniteInput = document.querySelector(`.product-unite[data-product-id="${productId}"]`);
+
+          const prix = prixInput ? parseFloat(prixInput.value) : null;
+          const unite = uniteInput ? parseFloat(uniteInput.value) : 1;
+
+          if (!prix || prix <= 0) {
+            alert(`Veuillez saisir un prix valide pour tous les produits sélectionnés.`);
+            prixInput.focus();
+            return;
+          }
+
+          selected.push({
+            product_id: productId,
+            prix: prix,
+            unite: unite
+          });
+        }
+      });
+
+      if (selected.length === 0) {
+        alert('Veuillez sélectionner au moins un produit.');
+        return;
+      }
+
+      // Vérifier que tous les prix sont remplis
+      const invalidPrix = selected.some(p => !p.prix || p.prix <= 0);
+      if (invalidPrix) {
+        return; // Le message a déjà été affiché dans la boucle
+      }
+
+      addSelectedBtn.disabled = true;
+      addSelectedBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Ajout en cours...';
+
+      try {
+        const response = await fetch('/admin/catalogues/<%= catalogue.id %>/articles/add-multiple', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': '<%= csrfToken %>'
+          },
+          body: JSON.stringify({ products: selected })
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+          alert(`${result.added} produit(s) ajouté(s) avec succès!` +
+                (result.skipped > 0 ? ` (${result.skipped} déjà présent(s))` : ''));
+          window.location.reload();
+        } else {
+          alert('Erreur: ' + (result.error || 'Erreur inconnue'));
+          addSelectedBtn.disabled = false;
+          addSelectedBtn.innerHTML = '<i class="bi bi-plus-circle me-2"></i>Ajouter les produits sélectionnés';
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        alert('Erreur lors de l\'ajout des produits.');
+        addSelectedBtn.disabled = false;
+        addSelectedBtn.innerHTML = '<i class="bi bi-plus-circle me-2"></i>Ajouter les produits sélectionnés';
+      }
+    });
+  }
+})();
+</script>
+
+</div>
+<%- include('partials/footer') %>

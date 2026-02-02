@@ -1,0 +1,58 @@
+
+<%- include('partials/header', { title: 'Gestion des organisations', user, role }) %>
+
+<div class="admin-content-wrapper">
+<div class="container mt-4">
+  <h2 class="mb-4">Gestion des organisations</h2>
+  <% if (error) { %>
+    <div class="alert alert-danger"><%= error %></div>
+  <% } %>
+  <% if (success) { %>
+    <div class="alert alert-success"><%= success %></div>
+  <% } %>
+  <form method="POST" action="/admin/organizations/add" class="mb-4">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <div class="input-group">
+      <input type="text" name="name" class="form-control" placeholder="Nom de l'organisation" required>
+      <button type="submit" class="btn btn-primary">Ajouter</button>
+    </div>
+  </form>
+  <table class="table table-bordered">
+    <thead>
+      <tr>
+        <th>Nom</th>
+        <th>Email</th>
+        <th>Date de création</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% organizations.forEach(function(org) { %>
+        <tr>
+          <form method="POST" action="/admin/organizations/edit/<%= org.id %>" class="d-inline">
+            <td>
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <input type="text" name="name" value="<%= org.name %>" class="form-control d-inline w-auto" style="max-width:180px;">
+            </td>
+            <td>
+              <input type="text" name="email" value="<%= org.email || '' %>" class="form-control d-inline w-auto" style="max-width:220px;">
+            </td>
+            <td><%= new Date(org.created_at).toLocaleString() %></td>
+            <td>
+              <button type="submit" class="btn btn-sm btn-warning me-1">Modifier</button>
+            </td>
+          </form>
+          <td>
+            <form method="POST" action="/admin/organizations/delete/<%= org.id %>" onsubmit="return confirm('Supprimer cette organisation ?');" class="d-inline">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button type="submit" class="btn btn-sm btn-danger">Supprimer</button>
+            </form>
+          </td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+  <a href="/admin/menu" class="btn btn-outline-secondary mt-3">Retour au menu admin</a>
+</div>
+</div>
+<%- include('partials/footer') %>

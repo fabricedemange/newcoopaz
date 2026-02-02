@@ -1,0 +1,484 @@
+<%- include('partials/header', { title: 'Nouveau catalogue', user, role }) %>
+
+<div class="admin-content-wrapper">
+
+<div class="container-fluid px-3 mt-4">
+  <div class="row">
+    <div class="col-12">
+      <h2 class="mb-4">Ajouter un nouveau catalogue</h2>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-12 col-md-10 offset-md-1">
+      <% if (error) { %>
+        <div class="alert alert-danger" role="alert">
+          <i class="bi bi-exclamation-triangle-fill me-2"></i>
+          <%= error %>
+        </div>
+      <% } %>
+
+      <!-- Choix du type de catalogue -->
+      <div id="choixCartes" class="row g-3 mb-4">
+        <!-- Option 1: Excel -->
+        <div class="col-12 col-md-6">
+          <div class="card h-100 border-primary" style="cursor: pointer;" onclick="showExcelForm()">
+            <div class="card-body text-center">
+              <i class="bi bi-file-earmark-excel text-success" style="font-size: 3rem;"></i>
+              <h5 class="card-title mt-3">Importer depuis Excel</h5>
+              <p class="card-text text-muted">Chargez un fichier Excel existant (.xls, .xlsx)</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Option 2: Nouveau catalogue -->
+        <div class="col-12 col-md-6">
+          <div class="card h-100 border-primary" style="cursor: pointer;" onclick="showNouveauCatalogueForm()">
+            <div class="card-body text-center">
+              <i class="bi bi-file-earmark-plus text-primary" style="font-size: 3rem;"></i>
+              <h5 class="card-title mt-3">Créer un nouveau catalogue</h5>
+              <p class="card-text text-muted">Depuis un ancien catalogue ou la base produits</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Formulaire Import Excel (masqué par défaut) -->
+      <div id="excelForm" style="display: none;">
+        <div class="card mb-4">
+          <div class="card-header bg-success text-white">
+            <div class="d-flex justify-content-between align-items-center">
+              <h5 class="card-title mb-0">
+                <i class="bi bi-file-earmark-excel me-2"></i>Importer un catalogue depuis Excel
+              </h5>
+              <button type="button" class="btn btn-light btn-sm" onclick="resetToChoix()">
+                <i class="bi bi-arrow-left me-1"></i>Retour au choix
+              </button>
+            </div>
+          </div>
+          <div class="card-body">
+            <form action="/admin/catalogues/upload" method="post" enctype="multipart/form-data">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+              <div class="mb-3">
+                <label for="excel" class="form-label">Fichier Excel du catalogue <span class="text-danger">*</span></label>
+                <input id="excel" type="file" name="excel" accept=".xls,.xlsx" class="form-control" required>
+                <div class="form-text">Formats acceptés : .xls, .xlsx (Maximum 10 Mo)</div>
+              </div>
+
+              <div class="mb-3">
+                <label for="excel_expiration_date" class="form-label">Date d'expiration</label>
+                <input id="excel_expiration_date" type="date" name="expiration_date" class="form-control">
+                <div class="form-text">Date limite pour passer commande</div>
+              </div>
+
+              <div class="mb-3">
+                <label for="excel_description" class="form-label">Description</label>
+                <textarea id="excel_description" name="description" class="form-control" rows="3"
+                          placeholder="Description du catalogue (optionnel)"></textarea>
+                <div class="form-text">Description visible par les utilisateurs</div>
+              </div>
+
+              <button type="submit" class="btn btn-success">
+                <i class="bi bi-upload me-2"></i>Importer le catalogue
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- Formulaire Nouveau Catalogue (masqué par défaut) -->
+      <div id="nouveauCatalogueForm" style="display: none;">
+        <!-- Étape 1: Informations générales -->
+        <div class="card mb-4">
+          <div class="card-header bg-primary text-white">
+            <div class="d-flex justify-content-between align-items-center">
+              <h5 class="card-title mb-0">
+                <i class="bi bi-1-circle me-2"></i>Informations générales du catalogue
+              </h5>
+              <button type="button" class="btn btn-light btn-sm" onclick="resetToChoix()">
+                <i class="bi bi-arrow-left me-1"></i>Retour au choix
+              </button>
+            </div>
+          </div>
+          <div class="card-body">
+            <form id="catalogueInfos">
+              <div class="mb-3">
+                <label for="catalogue_name" class="form-label">Nom du catalogue <span class="text-danger">*</span></label>
+                <input id="catalogue_name" type="text" class="form-control" required placeholder="Ex: Catalogue Bio Janvier 2026">
+                <div class="form-text">Le nom du catalogue tel qu'il apparaîtra aux utilisateurs</div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-6 mb-3">
+                  <label for="catalogue_expiration" class="form-label">Date d'expiration</label>
+                  <input id="catalogue_expiration" type="date" class="form-control">
+                  <div class="form-text">Date limite pour passer commande</div>
+                </div>
+
+                <div class="col-md-6 mb-3">
+                  <label for="catalogue_livraison" class="form-label">Date de livraison</label>
+                  <input id="catalogue_livraison" type="date" class="form-control">
+                  <div class="form-text">Date prévue de livraison</div>
+                </div>
+              </div>
+
+              <div class="mb-3">
+                <label for="catalogue_description" class="form-label">Description</label>
+                <textarea id="catalogue_description" class="form-control" rows="3"
+                          placeholder="Description du catalogue (optionnel)"></textarea>
+                <div class="form-text">Description visible par les utilisateurs</div>
+              </div>
+
+              <button type="button" class="btn btn-primary" onclick="showSourceSelection()">
+                <i class="bi bi-arrow-right me-2"></i>Étape suivante : Choisir la source des produits
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Étape 2: Choix de la source (masqué par défaut) -->
+        <div id="sourceSelection" style="display: none;">
+          <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+              <h5 class="card-title mb-0">
+                <i class="bi bi-2-circle me-2"></i>Choisir la source des produits
+              </h5>
+            </div>
+            <div class="card-body">
+              <div class="row g-3">
+                <!-- Carte 1: Depuis un catalogue existant -->
+                <div class="col-12 col-md-6">
+                  <div class="card h-100 border-success" style="cursor: pointer;" onclick="showImportFromCatalog()">
+                    <div class="card-body text-center">
+                      <i class="bi bi-files text-success" style="font-size: 2.5rem;"></i>
+                      <h5 class="card-title mt-3">Reprendre un ancien catalogue</h5>
+                      <p class="card-text text-muted">Importez tous les produits (avec prix) depuis un catalogue existant</p>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Carte 2: Depuis la base produits -->
+                <div class="col-12 col-md-6">
+                  <div class="card h-100 border-success" style="cursor: pointer;" onclick="showImportFromProducts()">
+                    <div class="card-body text-center">
+                      <i class="bi bi-basket text-success" style="font-size: 2.5rem;"></i>
+                      <h5 class="card-title mt-3">Base de produits</h5>
+                      <p class="card-text text-muted">Sélectionnez des produits depuis la base de données complète</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section Import depuis catalogue (masquée par défaut) -->
+          <div id="importFromCatalog" style="display: none;">
+            <div class="card mb-4">
+              <div class="card-header bg-success text-white">
+                <h5 class="card-title mb-0">
+                  <i class="bi bi-files me-2"></i>Sélectionner le catalogue source
+                </h5>
+              </div>
+              <div class="card-body">
+                <p class="text-muted">Tous les produits du catalogue sélectionné seront importés avec leurs prix.</p>
+                <div class="mb-3">
+                  <label for="source_catalog_id" class="form-label">Catalogue source <span class="text-danger">*</span></label>
+                  <select id="source_catalog_id" class="form-select">
+                    <option value="">Chargement...</option>
+                  </select>
+                </div>
+
+                <button type="button" class="btn btn-success" onclick="createCatalogFromCatalog()">
+                  <i class="bi bi-plus-circle me-2"></i>Créer le catalogue
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section Import depuis base produits (masquée par défaut) -->
+          <div id="importFromProducts" style="display: none;">
+            <div class="card mb-4">
+              <div class="card-header bg-success text-white">
+                <h5 class="card-title mb-0">
+                  <i class="bi bi-basket me-2"></i>Créer un catalogue vierge
+                </h5>
+              </div>
+              <div class="card-body">
+                <p class="text-muted">Un catalogue vierge sera créé. Vous pourrez ensuite ajouter des produits depuis la base de données dans la page d'édition.</p>
+
+                <button type="button" class="btn btn-success" onclick="createEmptyCatalog()">
+                  <i class="bi bi-plus-circle me-2"></i>Créer le catalogue vierge
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Boutons de navigation - DÉSACTIVÉS -->
+  <!-- <div class="row mt-4">
+    <div class="col-12">
+      <div class="d-flex flex-column flex-sm-row gap-2">
+        <a href="/admin/catalogues/vue" class="btn btn-outline-secondary">
+          Retour à la liste des catalogues
+        </a>
+        <a href="/admin/menu" class="btn btn-outline-secondary">
+          Retour au menu admin
+        </a>
+      </div>
+    </div>
+  </div> -->
+</div>
+
+<script>
+// Token CSRF global - DOIT être déclaré en premier
+const CSRF_TOKEN = '<%= csrfToken %>';
+console.log('🔐 CSRF Token chargé:', CSRF_TOKEN ? 'OK' : 'MANQUANT');
+
+// ========== Fonctions pour afficher/masquer les formulaires ==========
+
+// Afficher le formulaire Excel
+function showExcelForm() {
+  document.getElementById('choixCartes').style.display = 'none';
+  document.getElementById('excelForm').style.display = 'block';
+  document.getElementById('nouveauCatalogueForm').style.display = 'none';
+  document.getElementById('excelForm').scrollIntoView({ behavior: 'smooth' });
+}
+
+// Afficher le formulaire nouveau catalogue
+function showNouveauCatalogueForm() {
+  document.getElementById('choixCartes').style.display = 'none';
+  document.getElementById('excelForm').style.display = 'none';
+  document.getElementById('nouveauCatalogueForm').style.display = 'block';
+  document.getElementById('nouveauCatalogueForm').scrollIntoView({ behavior: 'smooth' });
+}
+
+// Retour au choix initial (masquer tous les formulaires)
+function resetToChoix() {
+  document.getElementById('choixCartes').style.display = 'flex';
+  document.getElementById('excelForm').style.display = 'none';
+  document.getElementById('nouveauCatalogueForm').style.display = 'none';
+  document.getElementById('sourceSelection').style.display = 'none';
+  document.getElementById('importFromCatalog').style.display = 'none';
+  document.getElementById('importFromProducts').style.display = 'none';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// Afficher la sélection de source (étape 2)
+function showSourceSelection() {
+  // Validation des champs obligatoires
+  const catalogueName = document.getElementById('catalogue_name').value.trim();
+  if (!catalogueName) {
+    alert('Veuillez renseigner le nom du catalogue');
+    document.getElementById('catalogue_name').focus();
+    return;
+  }
+
+  // Afficher la section choix de source
+  document.getElementById('sourceSelection').style.display = 'block';
+  document.getElementById('sourceSelection').scrollIntoView({ behavior: 'smooth' });
+}
+
+// Retour aux informations générales
+function backToInfos() {
+  document.getElementById('sourceSelection').style.display = 'none';
+  document.getElementById('importFromCatalog').style.display = 'none';
+  document.getElementById('importFromProducts').style.display = 'none';
+  document.getElementById('catalogueInfos').scrollIntoView({ behavior: 'smooth' });
+}
+
+// Afficher la section "Import depuis catalogue"
+function showImportFromCatalog() {
+  document.getElementById('importFromCatalog').style.display = 'block';
+  document.getElementById('importFromProducts').style.display = 'none';
+
+  // Charger la liste des catalogues disponibles
+  loadAvailableCatalogs();
+
+  document.getElementById('importFromCatalog').scrollIntoView({ behavior: 'smooth' });
+}
+
+// Afficher la section "Import depuis base produits"
+function showImportFromProducts() {
+  document.getElementById('importFromProducts').style.display = 'block';
+  document.getElementById('importFromCatalog').style.display = 'none';
+  document.getElementById('importFromProducts').scrollIntoView({ behavior: 'smooth' });
+}
+
+// Retour au choix de source
+function backToSourceSelection() {
+  document.getElementById('importFromCatalog').style.display = 'none';
+  document.getElementById('importFromProducts').style.display = 'none';
+  document.getElementById('sourceSelection').scrollIntoView({ behavior: 'smooth' });
+}
+
+// Charger la liste des catalogues disponibles
+async function loadAvailableCatalogs() {
+  const selectEl = document.getElementById('source_catalog_id');
+  selectEl.innerHTML = '<option value="">Chargement...</option>';
+
+  try {
+    const response = await fetch('/api/admin/catalogues');
+    const data = await response.json();
+
+    if (data.success && data.catalogues) {
+      selectEl.innerHTML = '<option value="">-- Sélectionner un catalogue --</option>';
+
+      data.catalogues.forEach(cat => {
+        const expirationDate = cat.expiration_formatted || 'Pas d\'expiration';
+        const option = document.createElement('option');
+        option.value = cat.id;
+        option.textContent = `#${cat.id} - ${cat.originalname} - Exp: ${expirationDate}`;
+        selectEl.appendChild(option);
+      });
+    } else {
+      selectEl.innerHTML = '<option value="">Erreur de chargement</option>';
+    }
+  } catch (error) {
+    console.error('Erreur lors du chargement des catalogues:', error);
+    selectEl.innerHTML = '<option value="">Erreur de chargement</option>';
+  }
+}
+
+// Créer un catalogue depuis un catalogue existant
+async function createCatalogFromCatalog() {
+  const catalogueName = document.getElementById('catalogue_name').value.trim();
+  const catalogueExpiration = document.getElementById('catalogue_expiration').value;
+  const catalogueLivraison = document.getElementById('catalogue_livraison').value;
+  const catalogueDescription = document.getElementById('catalogue_description').value;
+  const sourceCatalogId = document.getElementById('source_catalog_id').value;
+
+  // Validation
+  if (!catalogueName) {
+    alert('Veuillez renseigner le nom du catalogue');
+    document.getElementById('catalogue_name').focus();
+    return;
+  }
+
+  if (!sourceCatalogId) {
+    alert('Veuillez sélectionner un catalogue source');
+    document.getElementById('source_catalog_id').focus();
+    return;
+  }
+
+  // Confirmation
+  if (!confirm(`Créer le catalogue "${catalogueName}" en important tous les produits du catalogue #${sourceCatalogId} ?`)) {
+    return;
+  }
+
+  try {
+    const params = new URLSearchParams();
+    params.append('_csrf', CSRF_TOKEN);
+    params.append('name', catalogueName);
+    params.append('expiration_date', catalogueExpiration);
+    params.append('date_livraison', catalogueLivraison);
+    params.append('description', catalogueDescription);
+    params.append('source_catalog_id', sourceCatalogId);
+
+    // DEBUG: Log what we're sending
+    console.log('🔐 DEBUG Client - createCatalogFromCatalog:');
+    console.log('  - CSRF Token:', CSRF_TOKEN);
+    console.log('  - Body params:', params.toString());
+    console.log('  - Cookies:', document.cookie);
+
+    const response = await fetch('/admin/catalogues/create-from-catalog', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: params
+    });
+
+    const result = await response.json();
+
+    if (result.success && result.catalogId) {
+      alert('Catalogue créé avec succès !');
+      window.location.href = `/admin/catalogues/${result.catalogId}/edit`;
+    } else {
+      alert('Erreur lors de la création du catalogue: ' + (result.error || 'Erreur inconnue'));
+    }
+  } catch (error) {
+    console.error('Erreur lors de la création du catalogue:', error);
+    alert('Erreur lors de la création du catalogue');
+  }
+}
+
+// Créer un catalogue vierge
+async function createEmptyCatalog() {
+  const catalogueName = document.getElementById('catalogue_name').value.trim();
+  const catalogueExpiration = document.getElementById('catalogue_expiration').value;
+  const catalogueLivraison = document.getElementById('catalogue_livraison').value;
+  const catalogueDescription = document.getElementById('catalogue_description').value;
+
+  // Validation
+  if (!catalogueName) {
+    alert('Veuillez renseigner le nom du catalogue');
+    document.getElementById('catalogue_name').focus();
+    return;
+  }
+
+  // Confirmation
+  if (!confirm(`Créer le catalogue vierge "${catalogueName}" ?\n\nVous pourrez ensuite ajouter des produits depuis la base de données.`)) {
+    return;
+  }
+
+  try {
+    const params = new URLSearchParams();
+    params.append('_csrf', CSRF_TOKEN);
+    params.append('name', catalogueName);
+    params.append('expiration_date', catalogueExpiration);
+    params.append('date_livraison', catalogueLivraison);
+    params.append('description', catalogueDescription);
+
+    // DEBUG: Log what we're sending
+    console.log('🔐 DEBUG Client - createEmptyCatalog:');
+    console.log('  - CSRF Token:', CSRF_TOKEN);
+    console.log('  - Body params:', params.toString());
+    console.log('  - Cookies:', document.cookie);
+
+    const response = await fetch('/admin/catalogues/create-empty', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: params
+    });
+
+    const result = await response.json();
+
+    if (result.success && result.catalogId) {
+      alert('Catalogue vierge créé avec succès !');
+      window.location.href = `/admin/catalogues/${result.catalogId}/edit`;
+    } else {
+      alert('Erreur lors de la création du catalogue: ' + (result.error || 'Erreur inconnue'));
+    }
+  } catch (error) {
+    console.error('Erreur lors de la création du catalogue:', error);
+    alert('Erreur lors de la création du catalogue');
+  }
+}
+
+// Ajouter effet hover sur les cartes de choix
+document.addEventListener('DOMContentLoaded', function() {
+  const cards = document.querySelectorAll('.card[style*="cursor: pointer"]');
+  cards.forEach(card => {
+    card.addEventListener('mouseenter', function() {
+      this.style.transform = 'translateY(-5px)';
+      this.style.transition = 'transform 0.3s ease';
+      this.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
+    });
+    card.addEventListener('mouseleave', function() {
+      this.style.transform = 'translateY(0)';
+      this.style.boxShadow = '';
+    });
+  });
+});
+</script>
+
+</div>
+<%- include('partials/footer') %>

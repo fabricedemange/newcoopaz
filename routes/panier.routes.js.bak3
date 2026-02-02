@@ -1,0 +1,967 @@
+const express = require("express");
+const router = express.Router();
+const crypto = require("crypto");
+const { db } = require("../config/config");
+const { requireRole, requireUtilisateur } = require("../middleware/middleware");
+const emailService = require("../services/email.service");
+const { logger } = require("../config/logger");
+const { queryWithUser } = require("../config/db-trace-wrapper");
+const { insertPanier, insertPanierArticle } = require("../utils/db-helpers");
+const {
+  getCurrentUserId,
+  getCurrentUserRole,
+} = require("../utils/session-helpers");
+const { handleDatabaseError } = require("../utils/error-helpers");
+const { debugLog } = require("../utils/logger-helpers");
+
+// Helper function pour envoyer des emails
+function envoimail(
+  to,
+  subject,
+  htmlContent,
+  { sendNow = false, initiatedBy = null } = {}
+) {
+  // Détecter si c'est du HTML ou du texte simple
+  const isHtml = htmlContent.includes("<") && htmlContent.includes(">");
+
+  if (isHtml) {
+    // C'est du HTML, créer un email HTML complet
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+      </head>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        ${htmlContent}
+        <p>Retrouvez vos informations en ligne sur <a href="https://cde.coopaz.fr" style="color: #007bff; text-decoration: none;">Coopaz.fr</a>.</p>
+      </body>
+      </html>
+    `;
+    return emailService.sendEmail({
+      to,
+      subject,
+      html,
+      sendNow,
+      initiatedBy,
+    });
+  } else {
+    // C'est du texte simple
+    return emailService.sendEmail({
+      to,
+      subject,
+      text: htmlContent,
+      sendNow,
+      initiatedBy,
+    });
+  }
+}
+
+// Fonction utilitaire pour convertir une date JS en format SQL DATETIME
+function convertToSQLDate(dateString) {
+  if (!dateString) return null;
+  const [datePart, timePart = "00:00"] = dateString.split(" ");
+  const [day, month, year] = datePart.split("/");
+  const timeSQL = timePart.length === 5 ? timePart + ":00" : timePart;
+  return `${year}-${month}-${day} ${timeSQL}`;
+}
+
+// Fonction pour générer le HTML du panier
+function generateCartHtml(cart) {
+  let rows = cart
+    .map(
+      (item) => `
+    <tr>
+      <td style="padding: 8px; border: 1px solid #ddd;">${item.produit} ${
+        item.description
+      }</td>
+      <td style="padding: 8px; border: 1px solid #ddd; text-align:center;">${
+        item.quantity
+      }</td>
+      <td style="padding: 8px; border: 1px solid #ddd; text-align:right;">${
+        item.prix
+      } €</td>
+      <td style="padding: 8px; border: 1px solid #ddd; text-align:right;">${(
+        item.prix * item.quantity
+      ).toFixed(2)} €</td>
+    </tr>
+  `
+    )
+    .join("");
+  const total = cart.reduce((sum, item) => sum + item.prix * item.quantity, 0);
+  return `
+    <h2></h2>
+    <table style="border-collapse: collapse; width: 100%; font-family: Arial, sans-serif;">
+      <thead>
+        <tr>
+          <th style="padding: 8px; border: 1px solid #ddd;">Produit</th>
+          <th style="padding: 8px; border: 1px solid #ddd;">Quantité</th>
+          <th style="padding: 8px; border: 1px solid #ddd;">Prix Unitaire</th>
+          <th style="padding: 8px; border: 1px solid #ddd;">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows}
+        <tr>
+          <td colspan="3" style="padding: 8px; border: 1px solid #ddd; text-align:right;"><strong>Total :</strong></td>
+          <td style="padding: 8px; border: 1px solid #ddd; text-align:right;"><strong>${total.toFixed(
+            2
+          )} €</strong></td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="font-family: Arial, sans-serif;">Merci à vous !</p>
+  `;
+}
+
+// Génération d'un lien unique (token)
+function lienunique(newUserId, chemin, baseUrl) {
+  const token = crypto.randomBytes(24).toString("hex");
+  const expiresAt = new Date(Date.now() + 3600 * 1000); // 1h de validité
+  const lienU = baseUrl + `/access-carts/${token}`;
+  db.query(
+    "INSERT INTO access_tokens (token, user_id, expires_at, chemin) VALUES (?, ?, ?, ?)",
+    [token, newUserId, expiresAt, chemin]
+  );
+  return lienU;
+}
+
+// GET /panier - Afficher les paniers non soumis
+router.get("/", requireUtilisateur, (req, res) => {
+  res.set({
+    "Cache-Control": "no-cache, no-store, must-revalidate",
+    Pragma: "no-cache",
+    Expires: "0",
+  });
+
+  db.query("DELETE FROM panier_articles WHERE quantity <= 0", (err) => {
+    if (err) {
+      debugLog("Erreur lors de la purge des articles", { error: err });
+      handleDatabaseError(res, err, "Erreur lors de la purge des articles");
+      return;
+    }
+
+    db.query(
+      "DELETE FROM paniers WHERE id NOT IN (SELECT DISTINCT panier_id FROM panier_articles)",
+      (err) => {
+        if (err) {
+          debugLog("Erreur lors de la purge des paniers", { error: err });
+          handleDatabaseError(res, err, "Erreur lors de la purge des paniers");
+          return;
+        }
+
+        db.query(
+          `SELECT 
+             paniers.note,
+             paniers.id AS panier_id,
+             paniers.user_id,
+             paniers.catalog_file_id,
+             catalog_files.originalname,
+             catalog_files.description AS catalog_desc,
+             catalog_files.expiration_date,
+             catalog_files.is_archived,
+             catalog_files.id AS catalog_files_id
+           FROM paniers
+           JOIN catalog_files ON paniers.catalog_file_id = catalog_files.id
+           WHERE paniers.user_id = ? AND paniers.is_submitted = 0`,
+          [getCurrentUserId(req)],
+          (err, paniers) => {
+            if (err) {
+              debugLog("Erreur lors de la récupération des paniers", {
+                error: err,
+              });
+              handleDatabaseError(
+                res,
+                err,
+                "Erreur lors de la récupération des paniers"
+              );
+              return;
+            }
+
+            if (!paniers || paniers.length === 0) {
+              return res.render("paniers_grouped", { paniers: [] });
+            }
+
+            const panierIds = paniers.map((p) => p.panier_id);
+
+            db.query(
+              "SELECT * FROM users ORDER BY username",
+              (err, utilisateurs) => {
+                if (err) {
+                  debugLog("Erreur lors de la récupération des utilisateurs", {
+                    error: err,
+                  });
+                  handleDatabaseError(
+                    res,
+                    err,
+                    "Erreur lors de la récupération des utilisateurs"
+                  );
+                  return;
+                }
+
+                db.query(
+                  `SELECT 
+                   pa.*,
+                   a.produit,
+                   a.description,
+                   a.prix,
+                   pa.panier_id
+                 FROM panier_articles pa
+                 JOIN catalog_products cp ON pa.catalog_product_id = cp.id JOIN products p ON cp.product_id = p.id
+                 WHERE pa.panier_id IN (${panierIds.map(() => "?").join(",")})
+                 ORDER BY a.produit ASC`,
+                  panierIds,
+                  (err, articles) => {
+                    if (err) {
+                      debugLog("Erreur lors de la récupération des articles", {
+                        error: err,
+                      });
+                      handleDatabaseError(
+                        res,
+                        err,
+                        "Erreur lors de la récupération des articles"
+                      );
+                      return;
+                    }
+
+                    const hier = new Date();
+                    hier.setDate(hier.getDate() - 1);
+
+                    paniers.forEach((panier) => {
+                      panier.articles = articles
+                        .filter((a) => a.panier_id === panier.panier_id)
+                        .sort((a, b) => {
+                          const qtyA = parseInt(a.quantite, 10) || 0;
+                          const qtyB = parseInt(b.quantite, 10) || 0;
+
+                          if (
+                            (qtyA > 0 && qtyB > 0) ||
+                            (qtyA === 0 && qtyB === 0)
+                          ) {
+                            return (a.produit || "").localeCompare(
+                              b.produit || ""
+                            );
+                          }
+
+                          return qtyA > 0 ? -1 : 1;
+                        });
+
+                      panier.modifiable =
+                        (!panier.expiration_date ||
+                          new Date(panier.expiration_date) > hier) &&
+                        !panier.is_archived;
+                    });
+
+                    res.render("paniers_grouped", { paniers, utilisateurs });
+                  }
+                );
+              }
+            );
+          }
+        );
+      }
+    );
+  });
+});
+
+// GET /panier/new/:id - Créer un nouveau panier pour un catalogue
+router.get("/new/:id", requireUtilisateur, (req, res) => {
+  const catalogFileId = req.params.id;
+  const userId = getCurrentUserId(req);
+
+  db.query(
+    "SELECT * FROM catalog_files WHERE id = ? AND is_archived = 0",
+    [catalogFileId],
+    (err, catalogues) => {
+      if (err || !catalogues || catalogues.length === 0) {
+        return res.status(403).send("Catalogue introuvable ou archivé.");
+      }
+      logger.debug("Catalogue trouvé", { catalogues });
+      insertPanier(userId, catalogFileId, req, function (err, result) {
+        if (err) return res.status(500).send("Erreur création panier.");
+        db.query(
+          "SELECT max(id) as nvxID FROM paniers WHERE catalog_file_id=? and user_id=? and is_submitted=0",
+          [catalogFileId, userId],
+          (err, nvxID) => {
+            logger.debug("Nouveau panier créé", {
+              nvxID,
+              catalogFileId,
+              userId,
+            });
+            if (err)
+              return res.status(500).send("Erreur récupération du panier.");
+
+            db.query(
+              "SELECT * FROM paniers WHERE user_id=? AND is_submitted=0",
+              [userId],
+              (err, paniers) => {
+                if (err)
+                  return res.status(500).send("Erreur récupération paniers.");
+                db.query("SELECT * FROM users", [], (err, utilisateurs) => {
+                  if (err)
+                    return res
+                      .status(500)
+                      .send("Erreur récupération utilisateurs.");
+                  res.redirect(`/panier/${nvxID[0].nvxID}/modifier`);
+                });
+              }
+            );
+          }
+        );
+      });
+    }
+  );
+});
+
+// GET /panier/:id/modifier - Modifier un panier existant
+router.get(
+  "/:id/modifier",
+  requireRole(["admin", "epicier", "referent", "utilisateur", "SuperAdmin"]),
+  (req, res) => {
+    res.set({
+      "Cache-Control": "no-cache, no-store, must-revalidate",
+      Pragma: "no-cache",
+      Expires: "0",
+    });
+
+    const panierId = req.params.id;
+    debugLog("Modification panier", {
+      panierId,
+      userId: getCurrentUserId(req),
+    });
+
+    db.query(
+      "SELECT * FROM paniers WHERE id = ? AND (user_id = ? OR ? IN (SELECT id FROM users WHERE role <> 'utilisateur'))",
+      [panierId, getCurrentUserId(req), getCurrentUserId(req)],
+      (err, results) => {
+        if (err) {
+          debugLog("Erreur lors de la vérification du panier", {
+            error: err,
+          });
+          handleDatabaseError(
+            res,
+            err,
+            "Erreur lors de la vérification du panier"
+          );
+          return;
+        }
+        if (!results || results.length === 0) {
+          return res.status(403).send("Accès interdit à ce panier");
+        }
+
+        db.query(
+          "SELECT * FROM paniers WHERE id = ? AND is_submitted = 0",
+          [panierId],
+          (err, results) => {
+            if (err || !results || results.length === 0)
+              return res.redirect("/catalogues");
+            const panier = results[0];
+            const today = new Date();
+            const hier = new Date(today);
+            hier.setDate(today.getDate() - 1);
+
+            const isExpired =
+              panier.expiration_date && new Date(panier.expiration_date) < hier;
+            let catalogueId = panier.catalog_file_id;
+
+            db.query(
+              "SELECT * FROM articles WHERE catalog_file_id = ? order by produit",
+              [catalogueId],
+              (err, articles) => {
+                db.query(
+                  "SELECT * FROM catalog_files WHERE id = ? AND is_archived = 0",
+                  [catalogueId],
+                  (err, results) => {
+                    const catalogue =
+                      results && results.length > 0 ? results[0] : null;
+                    db.query(
+                      "SELECT * FROM paniers WHERE id = ?  AND is_submitted = 0",
+                      [panierId],
+                      (err, paniers) => {
+                        logger.debug("Paniers récupérés", { paniers });
+                        const panier =
+                          paniers && paniers.length > 0 ? paniers[0] : null;
+
+                        if (!panier) {
+                          return res.render("catalogue_articles", {
+                            catalogue,
+                            articles,
+                            quantitesDansPanier: {},
+                            modifiable: !isExpired,
+                            NoteParArticle: {},
+                            panier: {},
+                            idParArticle: {},
+                          });
+                        }
+
+                        db.query(
+                          "SELECT id, catalog_product_id, quantity,note FROM panier_articles WHERE panier_id = ? ",
+                          [panier.id],
+                          (err, rows) => {
+                            const quantitesDansPanier = {};
+                            const NoteParArticle = {};
+                            const idParArticle = {};
+
+                            if (rows && rows.length > 0) {
+                              rows.forEach((r) => {
+                                quantitesDansPanier[r.catalog_product_id] = r.quantity;
+                                NoteParArticle[r.catalog_product_id] = r.note;
+                                idParArticle[r.catalog_product_id] = r.id;
+                              });
+                            }
+
+                            const articlesTries = articles.sort((a, b) => {
+                              const qtyA = quantitesDansPanier[a.id] || 0;
+                              const qtyB = quantitesDansPanier[b.id] || 0;
+
+                              if (qtyA > 0 && qtyB === 0) return -1;
+                              if (qtyA === 0 && qtyB > 0) return 1;
+
+                              return (a.produit || "").localeCompare(
+                                b.produit || ""
+                              );
+                            });
+
+                            logger.debug("Panier récupéré", { panier });
+                            res.render("catalogue_articles", {
+                              catalogue,
+                              articles: articlesTries,
+                              quantitesDansPanier,
+                              NoteParArticle,
+                              modifiable: !isExpired,
+                              panier: panier,
+                              idParArticle,
+                            });
+                          }
+                        );
+                      }
+                    );
+                  }
+                );
+              }
+            );
+          }
+        );
+      }
+    );
+  }
+);
+
+// POST /panier/add - Ajouter/modifier un article dans un panier
+router.post(
+  "/add",
+  requireRole(["admin", "epicier", "referent", "utilisateur", "SuperAdmin"]),
+  (req, res) => {
+    const catalog_product_id = req.body.catalog_product_id;
+    const panier = req.body.panier_id;
+    const delta = parseFloat(req.body.quantity || "0");
+    const catalog_file_id = req.body.catalog_file_id;
+
+    const wantsJson =
+      req.xhr ||
+      req.headers["x-requested-with"] === "XMLHttpRequest" ||
+      (req.headers.accept && req.headers.accept.includes("application/json"));
+
+    const respondError = (status, message) => {
+      if (wantsJson) {
+        return res.status(status).json({ success: false, error: message });
+      }
+      return res.status(status).send(message);
+    };
+
+    const respondSuccess = (quantity, panierArticleId = null) => {
+      if (wantsJson) {
+        return res.json({
+          success: true,
+          quantity,
+          articleId: Number(catalog_product_id),
+          panierId: Number(panier),
+          panierArticleId,
+        });
+      }
+      return res.redirect(
+        `/catalogues/${catalog_file_id}?panier=${panier}&article=${catalog_product_id}`
+      );
+    };
+
+    logger.debug("DEBUG POST /panier/add", {
+      catalog_product_id,
+      panier,
+      delta,
+      catalog_file_id,
+      referer: req.get("Referer"),
+    });
+
+    db.query("SELECT * FROM paniers WHERE id = ?", [panier], (err, results) => {
+      if (err) {
+        debugLog("Erreur lors de la vérification du panier", {
+          error: err,
+        });
+        if (wantsJson) {
+          return res.status(500).json({
+            success: false,
+            error: "Erreur lors de la vérification du panier",
+          });
+        }
+        return handleDatabaseError(
+          res,
+          err,
+          "Erreur lors de la vérification du panier"
+        );
+      }
+      if (!results || results.length === 0) {
+        return respondError(404, "Panier non trouvé");
+      }
+
+      const panierData = results[0];
+
+      if (
+        panierData.user_id !== getCurrentUserId(req) &&
+        !["admin", "epicier", "referent", "SuperAdmin"].includes(
+          getCurrentUserRole(req)
+        )
+      ) {
+        debugLog("Accès refusé à un panier", {
+          panierUserId: panierData.user_id,
+          sessionUserId: getCurrentUserId(req),
+          role: getCurrentUserRole(req),
+        });
+        return respondError(403, "Accès interdit à ce panier");
+      }
+
+      if (!catalog_product_id || !catalog_file_id) {
+        return respondError(400, "Article ou catalogue manquant");
+      }
+
+      db.query(
+        "SELECT * FROM panier_articles WHERE panier_id = ? AND catalog_product_id = ?",
+        [panier, catalog_product_id],
+        (err, paResults) => {
+          if (err) {
+            const { debugLog } = require("../utils/logger-helpers");
+            debugLog("Erreur lors de la recherche dans panier_articles:", err);
+            return respondError(500, "Erreur serveur");
+          }
+
+          if (paResults && paResults.length > 0) {
+            const pa = paResults[0];
+            let newQuantity = pa.quantity + delta;
+            newQuantity = Math.max(0, newQuantity);
+
+            queryWithUser(
+              "UPDATE panier_articles SET quantity = GREATEST(0, ?) WHERE id = ?",
+              [newQuantity, pa.id],
+              (err) => {
+                if (err) {
+                  console.error(
+                    "Erreur lors de la mise à jour panier_articles :",
+                    err
+                  );
+                  return respondError(500, "Erreur serveur");
+                }
+                return respondSuccess(newQuantity, pa.id);
+              },
+              req
+            );
+          } else {
+            const newQuantity = Math.max(0, delta);
+
+            insertPanierArticle(
+              panier,
+              catalog_product_id,
+              delta,
+              req,
+              (err, result) => {
+                if (err) {
+                  console.error(
+                    "Erreur lors de l'insertion dans panier_articles :",
+                    err
+                  );
+                  return respondError(500, "Erreur serveur");
+                }
+                const insertedId = result?.insertId || null;
+                return respondSuccess(newQuantity, insertedId);
+              },
+              req
+            );
+          }
+        }
+      );
+    });
+  }
+);
+
+// POST /panier/remove - Supprimer un article du panier
+router.post(
+  "/remove",
+  requireRole(["admin", "epicier", "referent", "utilisateur", "SuperAdmin"]),
+  (req, res) => {
+    const { panier_catalog_product_id } = req.body;
+    queryWithUser(
+      "DELETE FROM panier_articles WHERE id = ?",
+      [panier_catalog_product_id],
+      () => {
+        res.redirect("/panier");
+      },
+      req
+    );
+  }
+);
+
+// POST /panier/:id/note - Modifier la note d'un panier (AJAX)
+router.post(
+  "/:id/note",
+  requireRole(["admin", "epicier", "referent", "utilisateur", "SuperAdmin"]),
+  (req, res) => {
+    const panierId = req.params.id;
+    const { note } = req.body;
+
+    console.log(`Sauvegarde note panier ${panierId}:`, note);
+
+    db.query(
+      "SELECT * FROM paniers WHERE id = ?",
+      [panierId],
+      (err, results) => {
+        if (err) {
+          console.error("Erreur lors de la récupération du panier:", err);
+          if (req.xhr || req.headers["x-requested-with"] === "XMLHttpRequest") {
+            return res.status(500).json({ error: "Erreur serveur" });
+          }
+          return res.status(500).send("Erreur serveur");
+        }
+
+        if (!results || results.length === 0) {
+          if (req.xhr || req.headers["x-requested-with"] === "XMLHttpRequest") {
+            return res.status(404).json({ error: "Panier non trouvé" });
+          }
+          return res.status(404).send("Panier non trouvé");
+        }
+
+        const panier = results[0];
+
+        if (
+          panier.user_id !== getCurrentUserId(req) &&
+          !["admin", "epicier", "referent", "SuperAdmin"].includes(
+            getCurrentUserRole(req)
+          )
+        ) {
+          if (req.xhr || req.headers["x-requested-with"] === "XMLHttpRequest") {
+            return res.status(403).json({ error: "Non autorisé" });
+          }
+          return res.status(403).send("Non autorisé");
+        }
+
+        queryWithUser(
+          "UPDATE paniers SET note = ? WHERE id = ?",
+          [note, panierId],
+          (err) => {
+            if (err) {
+              console.error("Erreur lors de la mise à jour de la note:", err);
+              if (
+                req.xhr ||
+                req.headers["x-requested-with"] === "XMLHttpRequest"
+              ) {
+                return res
+                  .status(500)
+                  .json({ error: "Erreur lors de la sauvegarde" });
+              }
+              return res.status(500).send("Erreur serveur");
+            }
+
+            console.log(`Note panier ${panierId} sauvegardée avec succès`);
+
+            if (
+              req.xhr ||
+              req.headers["x-requested-with"] === "XMLHttpRequest"
+            ) {
+              return res.json({
+                success: true,
+                message: "Note sauvegardée avec succès",
+              });
+            }
+
+            const referer = req.get("Referer") || req.headers.referer;
+            if (referer) {
+              return res.redirect(referer);
+            }
+            return res.redirect("/panier");
+          },
+          req
+        );
+      }
+    );
+  }
+);
+
+// POST /panier/:id/:source/change-owner - Changer le propriétaire d'un panier
+router.post(
+  "/:id/:source/change-owner",
+  requireRole(["admin", "epicier", "referent", "utilisateur", "SuperAdmin"]),
+  (req, res) => {
+    const cartId = req.params.id;
+    const source = req.params.source;
+    const newUserId = req.body.user_id;
+    const baseUrl = `${req.protocol}://${req.get("host")}`;
+
+    queryWithUser(
+      "UPDATE paniers SET user_id = ? WHERE id = ?",
+      [newUserId, cartId],
+      (err) => {
+        if (err) return res.status(500).send("Erreur changement propriétaire");
+
+        if (source === "U") {
+          db.query(
+            "SELECT email FROM users WHERE id = ?",
+            [newUserId],
+            (err, rows) => {
+              if (err || !rows || rows.length === 0) return;
+              const email = rows[0].email;
+              db.query(
+                `SELECT pa.quantity, a.produit, a.description, a.prix
+           FROM panier_articles pa
+           JOIN catalog_products cp ON pa.catalog_product_id = cp.id JOIN products p ON cp.product_id = p.id
+           WHERE pa.panier_id = ?`,
+                [cartId],
+                (err, cart) => {
+                  if (err) return;
+                  const lien = lienunique(newUserId, cartId, baseUrl);
+
+                  const html =
+                    `<p style="font-family: Arial, sans-serif;">N'oubliez pas de la valider en allant sur le site ou en cliquant sur ce lien (valable 60 minutes) :  ${lien}  </p> <p style="font-family: Arial, sans-serif;"> N'oubliez pas de valider ce panier : ${cartId} </p> ` +
+                    generateCartHtml(cart);
+                  envoimail(
+                    email,
+                    "Un nouveau panier (N°" + cartId + ") vous attend",
+                    html,
+                    {
+                      initiatedBy: req.session?.username || null,
+                    }
+                  );
+                }
+              );
+            }
+          );
+        }
+
+        if (source === "A") res.redirect("/admin/dashboard");
+        if (source === "U") res.redirect("/panier");
+      },
+      req
+    );
+  }
+);
+
+// POST /panier/submit - Soumettre un panier (transformer en commande)
+router.post(
+  "/submit",
+  requireRole(["admin", "epicier", "referent", "utilisateur", "SuperAdmin"]),
+  (req, res) => {
+    const panierId = req.body.panier_id;
+    const note = req.body.note;
+    const source = req.body.source;
+    console.log(source);
+
+    const client_datetime1 = convertToSQLDate(
+      new Date().toLocaleString("fr-FR", { timeZone: "Europe/Paris" })
+    );
+
+    queryWithUser(
+      "UPDATE paniers SET is_submitted = 1 WHERE id = ?",
+      [panierId],
+      () => {
+        const userId = getCurrentUserId(req);
+        db.query(
+          "SELECT email, username FROM users WHERE id = ?",
+          [userId],
+          (err, users) => {
+            if (err || !users || users.length === 0) return;
+            const userEmail = users[0].email;
+            const sujet = "Votre commande N°" + panierId + " a été validée";
+            db.query(
+              `SELECT pa.quantity, a.produit, a.description, a.prix
+         FROM panier_articles pa
+         JOIN catalog_products cp ON pa.catalog_product_id = cp.id JOIN products p ON cp.product_id = p.id
+         WHERE pa.panier_id = ?`,
+              [panierId],
+              (err, cart) => {
+                if (err) return;
+                const html =
+                  `<p style="font-family: Arial, sans-serif;">Merci pour cette commande N°${panierId}</p>` +
+                  generateCartHtml(cart);
+                if (source !== "A") {
+                  envoimail(userEmail, sujet, html, {
+                    sendNow: true,
+                    initiatedBy: req.session?.username || null,
+                  });
+                }
+              }
+            );
+          }
+        );
+      },
+      req
+    );
+
+    if (source === "A") {
+      res.redirect("/admin/dashboard");
+    } else {
+      res.redirect("/commandes");
+    }
+  }
+);
+
+// POST /panier/:id/supprimer - Supprimer un panier
+router.post(
+  "/:id/supprimer",
+  requireRole(["admin", "epicier", "referent", "utilisateur", "SuperAdmin"]),
+  (req, res) => {
+    const panierId = req.params.id;
+    const userId = getCurrentUserId(req);
+
+    db.query(
+      `SELECT p.*, cf.expiration_date FROM paniers p JOIN catalog_files cf ON p.catalog_file_id = cf.id WHERE p.id = ?`,
+      [panierId],
+      (err, paniers) => {
+        if (err)
+          return res
+            .status(500)
+            .send("Erreur lors de la récupération du panier");
+        if (!paniers || paniers.length === 0)
+          return res.status(404).send("Panier introuvable");
+
+        const panier = paniers[0];
+        if (panier.user_id !== userId)
+          return res.status(403).send("Non autorisé");
+
+        const today = new Date();
+        const hier = new Date(today);
+        hier.setDate(today.getDate() - 1);
+        const dateExpiration = panier.expiration_date
+          ? new Date(panier.expiration_date)
+          : null;
+
+        if (dateExpiration && dateExpiration < hier) {
+          return res
+            .status(403)
+            .send(
+              "Impossible de supprimer ce panier : le catalogue est expiré."
+            );
+        }
+
+        queryWithUser(
+          "DELETE FROM paniers WHERE id = ?",
+          [panierId],
+          function (err) {
+            if (err)
+              return res
+                .status(500)
+                .send("Erreur lors de la suppression du panier");
+            res.redirect("/panier");
+          },
+          req
+        );
+      }
+    );
+  }
+);
+
+// GET /access-carts/:token - Récupération via lien unique
+router.get("/access-carts/:token", (req, res) => {
+  const { token } = req.params;
+
+  db.query(
+    "SELECT * FROM access_tokens WHERE token = ?",
+    [token],
+    (err, results) => {
+      if (
+        err ||
+        !results ||
+        results.length === 0 ||
+        new Date(results[0].expires_at) < new Date()
+      ) {
+        return res.status(403).send("Lien expiré ou invalide.");
+      }
+
+      const access = results[0];
+      const panierId = access.chemin;
+      const note = "validation directe par un lien depuis un mail";
+      const userId = access.user_id;
+
+      const nowParis = new Date().toLocaleString("fr-FR", {
+        timeZone: "Europe/Paris",
+      });
+      const client_datetime1 = convertToSQLDate(nowParis);
+
+      queryWithUser(
+        "UPDATE paniers SET is_submitted = 1 WHERE id = ?",
+        [panierId],
+        (err) => {
+          if (err) {
+            return res
+              .status(500)
+              .send("Erreur lors de la mise à jour du panier.");
+          }
+
+          db.query(
+            "DELETE FROM access_tokens WHERE token = ?",
+            [token],
+            (err, results) => {
+              if (err) {
+                console.error("Erreur lors de la suppression du token :", err);
+              }
+            }
+          );
+
+          res.status(200).send("Le panier a bien été transformé en commande !");
+        },
+        req
+      );
+    }
+  );
+});
+
+// POST /panier/auto-fill - Préremplir le panier avec les commandes passées
+router.post("/auto-fill", requireUtilisateur, (req, res) => {
+  const { panierId, catalogId } = req.body;
+  const userId = getCurrentUserId(req);
+
+  if (!panierId || !catalogId || !userId) {
+    return res.status(400).json({ error: "Paramètres manquants." });
+  }
+
+  const query = `
+    INSERT IGNORE INTO panier_articles (panier_id, catalog_product_id, quantity)
+    SELECT ?, a.id, 1
+    FROM articles a
+    WHERE catalog_file_id = ?
+    AND produit IN (
+      SELECT h.produit
+      FROM histo_cde h
+      WHERE h.user_id = ?
+      AND h.created_at > DATE_SUB(CURDATE(), INTERVAL 60 DAY)
+    );
+  `;
+
+  console.log("Executing query:", query);
+
+  queryWithUser(
+    query,
+    [panierId, catalogId, userId],
+    (err, result) => {
+      if (err) {
+        console.error("Erreur lors du préremplissage du panier:", err);
+
+        return res.status(500).json({ error: "Erreur serveur." });
+      }
+
+      res.json({
+        success: true,
+        message: "Panier prérempli avec succès.",
+        affectedRows: result.affectedRows,
+      });
+    },
+    req
+  );
+});
+
+module.exports = router;

@@ -1,0 +1,113 @@
+/* Styles pour les tableaux Vue.js */
+
+/* Contrôle des largeurs de colonnes par défaut */
+.table th {
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.table td {
+  vertical-align: middle;
+}
+
+/* Colonnes avec largeurs fixes */
+.col-name {
+  width: 30%;
+  max-width: 400px;
+}
+
+.col-date {
+  width: 15%;
+  min-width: 120px;
+}
+
+.col-user {
+  width: 15%;
+  min-width: 120px;
+}
+
+.col-status {
+  width: 10%;
+  min-width: 80px;
+  text-align: center;
+}
+
+.col-actions {
+  width: 15%;
+  min-width: 150px;
+  text-align: right;
+}
+
+.col-quantity {
+  width: 10%;
+  min-width: 80px;
+  text-align: center;
+}
+
+.col-price {
+  width: 12%;
+  min-width: 100px;
+  text-align: right;
+}
+
+/* Responsive: Sur petits écrans, permettre le wrap */
+@media (max-width: 768px) {
+  .table th,
+  .table td {
+    white-space: normal;
+  }
+
+  .col-name,
+  .col-date,
+  .col-user,
+  .col-status,
+  .col-actions,
+  .col-quantity,
+  .col-price {
+    width: auto;
+    min-width: unset;
+  }
+}
+
+/* Sortable headers */
+.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.sortable:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* Badge alignement */
+.table .badge {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+/* Catalogue thumbnail with zoom effect */
+.table-responsive {
+  overflow: visible !important;
+}
+
+.catalogue-thumbnail {
+  position: relative;
+  display: inline-block;
+  cursor: pointer;
+}
+
+.catalogue-thumbnail img {
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  position: relative;
+}
+
+.catalogue-thumbnail:hover img {
+  transform: scale(5);
+  transform-origin: left center;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.4);
+  border-radius: 8px;
+  z-index: 99999;
+  position: relative;
+}

@@ -1,0 +1,139 @@
+<%- include('partials/header', { title: 'Mon panier', user, role }) %>
+
+<div class="admin-content-wrapper">
+<div class="container-fluid px-4 mt-4" style="max-width: 1400px;">
+  <div class="row">
+    <div class="col-12">
+      <h2 class="mb-4">Mon panier</h2>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-12">
+      <% if (items.length === 0) { %>
+        <div class="alert alert-info text-center">
+          <h4>Votre panier est vide</h4>
+          <p>Vous n'avez ajouté aucun article à votre panier.</p>
+          <a href="/catalogues" class="btn btn-primary">Consulter les catalogues</a>
+        </div>
+      <% } else { %>
+        <div class="table-responsive">
+          <table class="table table-striped table-hover">
+            <thead class="table-dark">
+              <tr>
+                <th>Produit</th>
+                <th class="d-none d-md-table-cell">Description</th>
+                <th class="d-none d-sm-table-cell">Prix</th>
+                <th class="d-none d-lg-table-cell">Quantité</th>
+                <th class="text-end">Total</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% let montantTotal = 0; %>
+              <% items.forEach(function(item) { %>
+                <% montantTotal += (item.prix * item.quantity); %>
+                <tr>
+                  <td>
+                    <div class="fw-bold"><%= item.produit %></div>
+                    <!-- Informations supplémentaires sur mobile -->
+                    <div class="d-md-none small text-muted">
+                      <%= item.description %>
+                    </div>
+                    <div class="d-sm-none small text-muted">
+                      Prix: <%= item.prix %> €
+                    </div>
+                    <div class="d-lg-none small text-muted">
+                      Quantité: <%= item.quantity %>
+                    </div>
+                  </td>
+                  <td class="d-none d-md-table-cell">
+                    <%= item.description %>
+                  </td>
+                  <td class="d-none d-sm-table-cell">
+                    <%= item.prix %> €
+                  </td>
+                  <td class="d-none d-lg-table-cell">
+                    <%= item.quantity %>
+                  </td>
+                  <td class="text-end">
+                    <strong><%= (item.prix * item.quantity).toFixed(2) %> €</strong>
+                  </td>
+                  <td>
+                    <form action="/panier/remove" method="POST" class="d-inline">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                      <input type="hidden" name="panier_article_id" value="<%= item.id %>">
+                      <button type="submit" class="btn btn-danger btn-sm">
+                        Retirer
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+            <tfoot>
+              <tr class="table-secondary">
+                <th colspan="4" class="text-end">Total approximatif :</th>
+                <th class="text-end">
+                  <span class="badge bg-success fs-6">
+                    <%= montantTotal.toFixed(2) %> €
+                  </span>
+                </th>
+                <th></th>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <!-- Section validation -->
+        <div class="row mt-4">
+          <div class="col-12">
+            <div class="card">
+              <div class="card-header">
+                <h5 class="card-title mb-0">Validation du panier</h5>
+              </div>
+              <div class="card-body">
+                <form action="/panier/submit" method="POST">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                  <div class="mb-3">
+                    <label for="note" class="form-label">Note pour la commande (optionnel)</label>
+                    <textarea id="note" name="note" class="form-control" rows="3" placeholder="Ajoutez une note pour cette commande..."></textarea>
+                  </div>
+                  
+                  <div class="d-flex flex-column flex-md-row gap-2">
+                    <button type="submit" class="btn btn-success" onclick="return confirm('Confirmer la transformation de ce panier en commande ?')">
+                      Valider le panier
+                    </button>
+                    <a href="/catalogues" class="btn btn-primary">
+                      Continuer mes achats
+                    </a>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      <% } %>
+    </div>
+  </div>
+
+  <!-- Résumé mobile -->
+  <div class="row mt-3 d-md-none">
+    <div class="col-12">
+      <% if (items.length > 0) { %>
+        <div class="card">
+          <div class="card-body">
+            <h6 class="card-title">Résumé</h6>
+            <p class="card-text">
+              <strong>Nombre d'articles :</strong> <%= items.length %><br>
+              <strong>Total approximatif :</strong> <%= montantTotal.toFixed(2) %> €
+            </p>
+          </div>
+        </div>
+      <% } %>
+    </div>
+  </div>
+</div>
+
+</div>
+<%- include('partials/footer') %>

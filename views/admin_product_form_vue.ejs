@@ -1,0 +1,19 @@
+<%- include('partials/header', { title: product ? 'Modifier un produit' : 'Nouveau produit', user, role }) %>
+
+<div class="admin-content-wrapper">
+  <div id="admin-product-form-app"></div>
+</div>
+
+<script>
+window.CSRF_TOKEN = '<%= typeof csrfToken !== "undefined" ? csrfToken : "" %>';
+window.INITIAL_DATA = <%- JSON.stringify({
+  action: product ? 'edit' : 'add',
+  product: product || null,
+  productId: product ? product.id : null,
+  categories: categories || [],
+  suppliers: suppliers || []
+}) %>;
+</script>
+<script type="module" src="/dist/admin-product-form.js?v=<%= typeof APP_VERSION !== 'undefined' ? APP_VERSION : Date.now() %>"></script>
+
+<%- include('partials/footer') %>

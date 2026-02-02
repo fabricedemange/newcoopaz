@@ -1,0 +1,441 @@
+<%- include('partials/header', { title: 'Mon panier' , user, role }) %>
+
+<div class="admin-content-wrapper">
+
+<style>
+    /* Champ de note - positionné sous le bouton dans la colonne produit */
+    .note-field-row {
+        display: none;
+    }
+    
+    .note-field-cell {
+        background-color: #f8f9fa !important;
+        border: 2px solid #0d6efd !important;
+        padding: 1rem !important;
+    }
+    
+    /* Style du champ de note */
+    [id^="note-field-"] textarea {
+        width: 100% !important;
+        min-height: 100px !important;
+        font-size: 16px !important; /* Évite le zoom sur iOS */
+        border: 1px solid #ced4da;
+        border-radius: 0.25rem;
+        padding: 0.5rem;
+    }
+</style>
+
+    <div class="container-fluid px-3 mt-4">
+        <div class="row">
+            <div class="col-12">
+                <h2 class="mb-4">Mes paniers</h2>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-12">
+                <% if (paniers.length===0) { %>
+                    <div class="alert alert-info text-center">
+                        <h4>Votre panier est vide</h4>
+                        <p>Vous n'avez aucun panier en cours.</p>
+                        <a href="/catalogues" class="btn btn-primary">Consulter les catalogues</a>
+                    </div>
+                    <% } else { %>
+                        <% paniers.forEach(function(panier) { %>
+                            <div class="card mb-4">
+                                <div class="card-header">
+                                    <div class="row">
+                                        <div class="col-12 col-md-8">
+                                            <strong>Catalogue N°<%= panier.catalog_files_id %>:</strong>
+                                            <%= panier.originalname %>
+                                                <% if (panier.catalog_desc) { %>
+                                                    <em>(<%= panier.catalog_desc %>)</em>
+                                                    <% } %>
+                                                        <br><em>Panier N°<%= panier.panier_id %></em>
+                                        </div>
+
+                                    </div>
+
+                                    <!-- Changement de propriétaire -->
+                                    <% if (role !=='utilisateur' ) { %>
+                                        <div class="row mt-3">
+                                            <div class="col-12">
+                                                <form action="/panier/<%= panier.panier_id %>/U/change-owner"
+                                                    method="POST">
+                                                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                                    <div
+                                                        class="d-flex flex-column flex-md-row gap-2 align-items-md-center">
+                                                        <label class="form-label mb-0 text-nowrap">Propriétaire
+                                                            :</label>
+                                                        <select name="user_id" class="form-select form-select-sm"
+                                                            required style="width: auto; min-width: 150px;">
+                                                            <% utilisateurs.forEach(u=> { %>
+                                                                <option value="<%= u.id %>" <% if
+                                                                    (u.id===panier.user_id) { %>selected<% } %>>
+                                                                        <%= u.username %>
+                                                                </option>
+                                                                <% }) %>
+                                                        </select>
+                                                        <button type="submit" class="btn btn-warning btn-sm"
+                                                            onclick="return confirm('Merci de confirmer le changement de propriétaire de ce panier !')">
+                                                            Changer le propriétaire
+                                                        </button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </div>
+                                        <% } %>
+                                            <div class="card-body">
+                                                <% if (panier.articles.length===0) { %>
+                                                    <p class="text-muted">Ce panier ne contient aucun article.</p>
+                                                    <% } else { %>
+                                                        <div class="table-responsive">
+                                                            <table class="table table-sm">
+                                                                <thead class="table-dark">
+                                                                    <tr>
+                                                                        <!-- Mobile : Produit 35% + Quantité 25% + Total 40% -->
+                                                                        <th class="d-lg-none" style="width: 35%;">
+                                                                            Produit</th>
+                                                                        <th class="d-none d-lg-table-cell"
+                                                                            style="width: 30%;">Produit</th>
+                                                                        <!-- Tablette SM : Prix 20% -->
+                                                                        <th class="d-none d-sm-table-cell d-lg-none"
+                                                                            style="width: 25%;">Prix</th>
+                                                                        <th class="d-none d-lg-table-cell"
+                                                                            style="width: 15%;">Prix</th>
+                                                                        <th class="d-table-cell d-lg-table-cell"
+                                                                            style="width: 10%;">Quantité</th>
+                                                                        <!-- Mobile : Total 40% -->
+                                                                        <th class="text-end d-lg-none"
+                                                                            style="width: 40%;">Total</th>
+                                                                        <th class="text-end d-none d-lg-table-cell"
+                                                                            style="width: 15%;">Total</th>
+                                                                        <th class="d-none d-xl-table-cell"
+                                                                            style="width: 30%;">Note</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    <% let montant=0; %>
+                                                                        <% panier.articles.forEach(function(a) { %>
+                                                                            <% montant +=(a.prix * a.quantity); %>
+                                                                                <tr>
+                                                                                    <td>
+                                                                                        <div class="fw-bold">
+                                                                                            <%= a.produit %>
+                                                                                        </div>
+                                                                                        <!-- Informations supplémentaires sur mobile -->
+                                                                                        <div
+                                                                                            class="d-sm-none small text-muted">
+                                                                                            Prix: <%= a.prix %> € | Qté: <%= a.quantity %>
+                                                                                        </div>
+                                                                                        <div class="d-xl-none small text-muted">
+                                                                                            <% if (a.note && a.note.trim() !== '') { %>
+                                                                                                Note: <%= a.note %>
+                                                                                            <% } %>
+                                                                                        </div>
+                                                                                    </td>
+                                                                                    <td class="d-none d-sm-table-cell">
+                                                                                        <%= a.prix %> €
+                                                                                    </td>
+                                                                                    <td class="d-table-cell d-lg-table-cell">
+                                                                                        <span class="badge bg-primary"><%= a.quantity %></span>
+                                                                                    </td>
+                                                                                    <td class="text-end">
+                                                                                        <strong>
+                                                                                            <%= (a.prix *
+                                                                                                a.quantity).toFixed(2)
+                                                                                                %> €
+                                                                                        </strong>
+                                                                                    </td>
+                                                                                    <td class="d-none d-xl-table-cell">
+                                                                                        <% if (a.note && a.note.trim() !== '') { %>
+                                                                                            <div class="small text-muted">
+                                                                                                <%= a.note %>
+                                                                                            </div>
+                                                                                        <% } else { %>
+                                                                                            <span class="text-muted">-</span>
+                                                                                        <% } %>
+                                                                                    </td>
+                                                                                </tr>
+                                                                                <% }) %>
+                                                                </tbody>
+                                                                <tfoot>
+                                                                    <tr class="table-secondary">
+                                                                        <!-- Sur XL+ : Produit, Prix, Quantité, Total, Note = 5 colonnes -->
+                                                                        <!-- "Total :" couvre Produit+Prix+Quantité (colonnes 1-3) -->
+                                                                        <th colspan="3"
+                                                                            class="text-end d-none d-xl-table-cell">
+                                                                            Total :</th>
+                                                                        <!-- Sur desktop LG : Produit, Prix, Quantité, Total = 4 colonnes -->
+                                                                        <!-- "Total :" couvre Produit+Prix+Quantité (colonnes 1-3) -->
+                                                                        <th colspan="3"
+                                                                            class="text-end d-none d-lg-table-cell d-xl-none">
+                                                                            Total :</th>
+                                                                        <!-- Sur tablette SM : Produit, Prix, Quantité, Total = 4 colonnes -->
+                                                                        <th colspan="3"
+                                                                            class="text-end d-none d-sm-table-cell d-lg-none">
+                                                                            Total :</th>
+                                                                        <!-- Sur mobile : Produit, Quantité, Total = 3 colonnes -->
+                                                                        <th class="text-end d-sm-none">Total :</th>
+
+                                                                        <th class="text-end" colspan="1">
+                                                                            <span class="badge bg-success fs-6">
+                                                                                <%= montant.toFixed(2) %> €
+                                                                            </span>
+                                                                        </th>
+                                                                    </tr>
+                                                                </tfoot>
+                                                            </table>
+                                                        </div>
+
+                                                        <% if (panier.modifiable) { %>
+                                                            <div class="row mt-3">
+                                                                <div class="col-12">
+                                                                    <!-- Affichage de la note existante (AU-DESSUS des boutons) -->
+                                                                    <% if (panier.note && panier.note.trim() !== '') { %>
+                                                                    <div class="alert alert-warning mb-3" 
+                                                                         id="note-display-command-<%= panier.panier_id %>">
+                                                                        <strong><i class="bi bi-sticky"></i> Note de commande :</strong> <%= panier.note %>
+                                                                    </div>
+                                                                    <% } %>
+                                                                    
+                                                                    <!-- Boutons d'action alignés -->
+                                                                    <div class="d-flex flex-column flex-md-row gap-2 mb-3">
+                                                                        <button type="button" class="btn btn-outline-info" 
+                                                                                onclick="toggleCommandNote('<%= panier.panier_id %>')"
+                                                                                title="<% if (panier.note && panier.note.trim() !== '') { %>Modifier la note de commande<% } else { %>Ajouter une note à la commande<% } %>">
+                                                                            <i class="bi bi-pencil-square"></i>
+                                                                            <% if (panier.note && panier.note.trim() !== '') { %>
+                                                                                <span class="badge bg-warning">!</span> Modifier note
+                                                                            <% } else { %>
+                                                                                Ajouter note
+                                                                            <% } %>
+                                                                        </button>
+                                                                        
+                                                                        <button type="submit" form="submit-form-<%= panier.panier_id %>"
+                                                                                class="btn btn-success"
+                                                                                onclick="return confirm('Merci de confirmer la transformation de ce panier en commande !')">
+                                                                            <i class="bi bi-check-circle"></i> Transformer en commande
+                                                                        </button>
+
+                                                                        <a href="/panier/<%= panier.panier_id %>/modifier/vue" class="btn btn-primary">
+                                                                            <i class="bi bi-pencil"></i> Modifier ce panier
+                                                                        </a>
+                                                                        
+                                                                        <button type="submit" form="delete-form-<%= panier.panier_id %>"
+                                                                                class="btn btn-outline-danger"
+                                                                                onclick="return confirm('Supprimer ce panier ?')">
+                                                                            <i class="bi bi-trash"></i> Supprimer
+                                                                        </button>
+                                                                    </div>
+                                                                    
+                                                                    <!-- Formulaires cachés pour les boutons -->
+                                                                    <form method="POST" action="/panier/submit" id="submit-form-<%= panier.panier_id %>" style="display: none;">
+                                                                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                                                        <input type="hidden" name="panier_id" value="<%= panier.panier_id %>">
+                                                                        <input type="hidden" name="client_datetime" id="client_datetime_<%= panier.panier_id %>">
+                                                                        <script>document.getElementById('client_datetime_<%= panier.panier_id %>').value = new Date().toLocaleString();</script>
+                                                                    </form>
+                                                                    
+                                                                    <!-- Champ de note intégré -->
+                                                                    <div class="note-field-row" id="note-row-<%= panier.panier_id %>" style="display: none;">
+                                                                        <div class="note-field-cell p-3 border rounded bg-light mt-2" id="note-field-<%= panier.panier_id %>">
+                                                                            <label for="note-<%= panier.panier_id %>" class="form-label fw-bold">
+                                                                                📝 Note pour la commande
+                                                                            </label>
+                                                                            <textarea id="note-<%= panier.panier_id %>" name="note"
+                                                                                class="form-control" rows="4"
+                                                                                placeholder="Indiquez ici s'il y a des particularités dans cette commande"><%= panier.note || '' %></textarea>
+                                                                            <div class="mt-3 d-flex flex-column flex-sm-row gap-2">
+                                                                                <button type="button" class="btn btn-success" onclick="saveCommandNote('<%= panier.panier_id %>')">
+                                                                                    <i class="bi bi-check-circle"></i> Enregistrer
+                                                                                </button>
+                                                                                <button type="button" class="btn btn-secondary" onclick="toggleCommandNote('<%= panier.panier_id %>')">
+                                                                                    <i class="bi bi-x-circle"></i> Annuler
+                                                                                </button>
+                                                                            </div>
+                                                                            <span class="save-status-command text-success fw-bold mt-2 d-none" id="save-status-<%= panier.panier_id %>">✅ Note sauvegardée avec succès</span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <% } else { %>
+                                                                <div class="alert alert-warning">
+                                                                    <strong>Attention :</strong> La modification de ce panier est interdite(catalogue expiré, suspendu ou supprimé) Merci de contacter le référent en cas de besoin
+                                                                </div>
+                                                                <% } %>
+                                                                    <% } %>
+                                                                    
+                                                                    <!-- Formulaire caché pour le bouton supprimer -->
+                                                                    <form action="/panier/<%= panier.panier_id %>/supprimer"
+                                                                          method="POST"
+                                                                          id="delete-form-<%= panier.panier_id %>"
+                                                                          style="display: none;">
+                                                                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                                                    </form>
+                                            </div>
+                                </div>
+                                <% }) %>
+                                    <% } %>
+                            </div>
+            </div>
+
+        </div>
+
+        <!-- Bootstrap Icons -->
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+        
+        <script src="/js/reload-on-back.js"></script>
+        
+        <script>
+        // 🔒 Fonction de protection XSS : échappe les caractères HTML dangereux
+        function escapeHtml(text) {
+            if (!text) return '';
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;',
+                '/': '&#x2F;'
+            };
+            return String(text).replace(/[&<>"'\/]/g, s => map[s]);
+        }
+
+        // Fonction pour afficher/masquer le champ de note de commande
+        function toggleCommandNote(panierId) {
+            const noteRow = document.getElementById(`note-row-${panierId}`);
+            const noteDisplay = document.getElementById(`note-display-command-${panierId}`);
+            
+            if (noteRow.style.display === 'block') {
+                // Masquer
+                noteRow.style.display = 'none';
+                
+                if (noteDisplay) {
+                    noteDisplay.style.display = 'block';
+                }
+            } else {
+                // Afficher
+                noteRow.style.display = 'block';
+                
+                if (noteDisplay) {
+                    noteDisplay.style.display = 'none';
+                }
+                
+                // Focus sur le textarea
+                setTimeout(() => {
+                    const textarea = document.getElementById(`note-${panierId}`);
+                    if (textarea) {
+                        textarea.focus();
+                        // Scroll jusqu'au champ de note
+                        noteRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }, 100);
+            }
+        }
+        
+        // Fonction pour sauvegarder la note de commande via AJAX
+        function saveCommandNote(panierId) {
+            console.log('Sauvegarde note pour panier:', panierId);
+            
+            const textarea = document.getElementById(`note-${panierId}`);
+            const note = textarea ? textarea.value : '';
+            const saveStatus = document.getElementById(`save-status-${panierId}`);
+            const csrfToken = document.querySelector('input[name="_csrf"]').value;
+            
+            console.log('Note à sauvegarder:', note);
+            console.log('CSRF Token:', csrfToken);
+            
+            // Préparer les données à envoyer
+            const formData = new URLSearchParams();
+            formData.append('note', note);
+            formData.append('_csrf', csrfToken);
+            
+            console.log('Envoi vers:', `/panier/${panierId}/note`);
+            
+            // Envoyer la requête AJAX
+            fetch(`/panier/${panierId}/note`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: formData
+            })
+            .then(response => {
+                console.log('Réponse reçue:', response.status);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Data reçue:', data);
+                if (data.success) {
+                    // Afficher le message de confirmation
+                    if (saveStatus) {
+                        saveStatus.classList.remove('d-none');
+                        saveStatus.classList.add('d-block');
+                        setTimeout(() => {
+                            saveStatus.classList.remove('d-block');
+                            saveStatus.classList.add('d-none');
+                        }, 2000);
+                    }
+                    
+                    // Mettre à jour l'affichage de la note
+                    const noteDisplay = document.getElementById(`note-display-command-${panierId}`);
+                    
+                    if (note.trim() !== '') {
+                        if (noteDisplay) {
+                            // ✅ SÉCURISÉ : Utilisation de textContent pour le contenu dynamique
+                            noteDisplay.innerHTML = '<strong><i class="bi bi-sticky"></i> Note de commande :</strong> <span class="note-content"></span>';
+                            noteDisplay.querySelector('.note-content').textContent = note;
+                            noteDisplay.style.display = 'block';
+                        } else {
+                            // Créer l'élément d'affichage s'il n'existe pas (AU-DESSUS des boutons)
+                            const buttonContainer = document.querySelector(`button[onclick*="toggleCommandNote('${panierId}')"]`).parentElement;
+                            const newDisplay = document.createElement('div');
+                            newDisplay.id = `note-display-command-${panierId}`;
+                            newDisplay.className = 'alert alert-warning mb-3';
+                            // ✅ SÉCURISÉ : Séparation du HTML fixe et du contenu dynamique
+                            newDisplay.innerHTML = '<strong><i class="bi bi-sticky"></i> Note de commande :</strong> <span class="note-content"></span>';
+                            newDisplay.querySelector('.note-content').textContent = note;
+                            // Insérer AVANT le container de boutons
+                            buttonContainer.parentElement.insertBefore(newDisplay, buttonContainer);
+                        }
+                        
+                        // Mettre à jour le texte du bouton (contenu fixe, pas de risque XSS)
+                        const button = document.querySelector(`button[onclick="toggleCommandNote('${panierId}')"]`);
+                        if (button) {
+                            button.innerHTML = '<i class="bi bi-pencil-square"></i> <span class="badge bg-warning">!</span> Modifier note';
+                        }
+                    } else {
+                        // Si la note est vide, SUPPRIMER l'élément d'affichage
+                        if (noteDisplay) {
+                            noteDisplay.remove();
+                        }
+                        
+                        // Réinitialiser le texte du bouton (contenu fixe, pas de risque XSS)
+                        const button = document.querySelector(`button[onclick="toggleCommandNote('${panierId}')"]`);
+                        if (button) {
+                            button.innerHTML = '<i class="bi bi-pencil-square"></i> Ajouter note';
+                        }
+                    }
+                    
+                    // Fermer le formulaire après sauvegarde
+                    setTimeout(() => {
+                        toggleCommandNote(panierId);
+                    }, 2000);
+                } else {
+                    alert('Erreur lors de la sauvegarde de la note');
+                }
+            })
+            .catch(error => {
+                console.error('Erreur détaillée:', error);
+                alert('Erreur lors de la sauvegarde de la note: ' + error.message);
+            });
+        }
+        </script>
+        
+</div>
+        <%- include('partials/footer') %>

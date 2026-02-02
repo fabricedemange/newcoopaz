@@ -1,0 +1,192 @@
+<%- include('partials/header', { title: supplier ? 'Modifier un fournisseur' : 'Nouveau fournisseur', user, role }) %>
+
+<div class="admin-content-wrapper">
+
+<div class="container-fluid px-3 mt-4">
+  <% if (typeof errorMessage !== 'undefined' && errorMessage) { %>
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+      <i class="bi bi-exclamation-triangle me-2"></i><%= errorMessage %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+
+  <% if (typeof successMessage !== 'undefined' && successMessage) { %>
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+      <i class="bi bi-check-circle me-2"></i><%= successMessage %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+
+  <div class="row">
+    <div class="col-12">
+      <h2 class="mb-4">
+        <% if (supplier) { %>
+          Modifier un fournisseur
+        <% } else { %>
+          Créer un nouveau fournisseur
+        <% } %>
+      </h2>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-12 col-lg-8">
+      <div class="card">
+        <div class="card-body">
+          <form method="POST" action="<%= action %>">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label for="nom" class="form-label">Nom du fournisseur <span class="text-danger">*</span></label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="nom"
+                  name="nom"
+                  value="<%= supplier ? supplier.nom : '' %>"
+                  required>
+              </div>
+
+              <div class="col-md-6 mb-3">
+                <label for="email" class="form-label">Email</label>
+                <input
+                  type="email"
+                  class="form-control"
+                  id="email"
+                  name="email"
+                  value="<%= supplier ? (supplier.email || '') : '' %>">
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label for="telephone" class="form-label">Téléphone</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="telephone"
+                  name="telephone"
+                  value="<%= supplier ? (supplier.telephone || '') : '' %>">
+              </div>
+
+              <div class="col-md-6 mb-3">
+                <label for="site_web" class="form-label">Site web</label>
+                <input
+                  type="url"
+                  class="form-control"
+                  id="site_web"
+                  name="site_web"
+                  value="<%= supplier ? (supplier.site_web || '') : '' %>"
+                  placeholder="https://...">
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label for="adresse" class="form-label">Adresse</label>
+              <input
+                type="text"
+                class="form-control"
+                id="adresse"
+                name="adresse"
+                value="<%= supplier ? (supplier.adresse || '') : '' %>">
+            </div>
+
+            <div class="row">
+              <div class="col-md-4 mb-3">
+                <label for="code_postal" class="form-label">Code postal</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="code_postal"
+                  name="code_postal"
+                  value="<%= supplier ? (supplier.code_postal || '') : '' %>">
+              </div>
+
+              <div class="col-md-8 mb-3">
+                <label for="ville" class="form-label">Ville</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="ville"
+                  name="ville"
+                  value="<%= supplier ? (supplier.ville || '') : '' %>">
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label for="pays" class="form-label">Pays</label>
+              <input
+                type="text"
+                class="form-control"
+                id="pays"
+                name="pays"
+                value="<%= supplier ? (supplier.pays || 'France') : 'France' %>">
+            </div>
+
+            <div class="mb-3">
+              <label for="notes" class="form-label">Notes</label>
+              <textarea
+                class="form-control"
+                id="notes"
+                name="notes"
+                rows="3"><%= supplier ? (supplier.notes || '') : '' %></textarea>
+            </div>
+
+            <div class="mb-3">
+              <div class="form-check">
+                <input
+                  type="checkbox"
+                  class="form-check-input"
+                  id="is_active"
+                  name="is_active"
+                  value="1"
+                  <%= supplier && supplier.is_active ? 'checked' : (!supplier ? 'checked' : '') %>>
+                <label class="form-check-label" for="is_active">
+                  Fournisseur actif
+                </label>
+              </div>
+            </div>
+
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-primary">
+                <i class="bi bi-check-lg me-2"></i>
+                <%= supplier ? 'Enregistrer les modifications' : 'Créer le fournisseur' %>
+              </button>
+              <a href="/admin/suppliers" class="btn btn-outline-secondary">
+                <i class="bi bi-x-lg me-2"></i>Annuler
+              </a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <% if (supplier) { %>
+      <div class="col-12 col-lg-4 mt-3 mt-lg-0">
+        <div class="card">
+          <div class="card-header bg-danger text-white">
+            <h5 class="card-title mb-0">Zone de danger</h5>
+          </div>
+          <div class="card-body">
+            <p class="text-muted">
+              <strong>Attention :</strong> La suppression d'un fournisseur est irréversible. Tous les produits associés seront également affectés.
+            </p>
+            <p class="text-muted small">
+              Pour simplement désactiver le fournisseur, utilisez la case à cocher "Fournisseur actif" ci-dessus.
+            </p>
+            <form method="POST" action="/admin/suppliers/<%= supplier.id %>/delete" onsubmit="return confirm('⚠️ ATTENTION : Êtes-vous sûr de vouloir SUPPRIMER définitivement ce fournisseur ?\n\nCette action est IRRÉVERSIBLE.\n\nPour désactiver temporairement le fournisseur, utilisez plutôt la case à cocher \'Fournisseur actif\'.');">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button type="submit" class="btn btn-danger w-100">
+                <i class="bi bi-trash me-2"></i>Supprimer le fournisseur
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    <% } %>
+  </div>
+</div>
+
+</div>
+<%- include('partials/footer') %>

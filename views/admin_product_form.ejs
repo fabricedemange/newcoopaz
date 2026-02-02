@@ -1,0 +1,284 @@
+<%- include('partials/header', { title: product ? 'Modifier un produit' : 'Nouveau produit', user, role }) %>
+
+<div class="admin-content-wrapper">
+
+<div class="container-fluid px-3 mt-4">
+  <div class="row">
+    <div class="col-12">
+      <h2 class="mb-4">
+        <% if (product) { %>
+          Modifier un produit
+        <% } else { %>
+          Créer un nouveau produit
+        <% } %>
+      </h2>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-12 col-lg-8">
+      <div class="card">
+        <div class="card-body">
+          <form method="POST" action="<%= action %>" enctype="multipart/form-data">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+            <h5 class="mb-3">Informations principales</h5>
+
+            <div class="mb-3">
+              <label for="nom" class="form-label">Nom du produit <span class="text-danger">*</span></label>
+              <input
+                type="text"
+                class="form-control"
+                id="nom"
+                name="nom"
+                value="<%= product ? product.nom : '' %>"
+                required>
+            </div>
+
+            <div class="mb-3">
+              <label for="description" class="form-label">Description</label>
+              <textarea
+                class="form-control"
+                id="description"
+                name="description"
+                rows="3"><%= product ? (product.description || '') : '' %></textarea>
+            </div>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label for="category_id" class="form-label">Catégorie <span class="text-danger">*</span></label>
+                <select class="form-select" id="category_id" name="category_id" required>
+                  <option value="">Sélectionner une catégorie</option>
+                  <% categories.forEach(cat => { %>
+                    <option
+                      value="<%= cat.id %>"
+                      <%= product && product.category_id === cat.id ? 'selected' : '' %>>
+                      <%= cat.nom %>
+                    </option>
+                  <% }); %>
+                </select>
+              </div>
+
+              <div class="col-md-6 mb-3">
+                <label for="supplier_id" class="form-label">Fournisseur</label>
+                <select class="form-select" id="supplier_id" name="supplier_id">
+                  <option value="">Aucun fournisseur</option>
+                  <% suppliers.forEach(sup => { %>
+                    <option
+                      value="<%= sup.id %>"
+                      <%= product && product.supplier_id === sup.id ? 'selected' : '' %>>
+                      <%= sup.nom %>
+                    </option>
+                  <% }); %>
+                </select>
+              </div>
+            </div>
+
+            <hr class="my-4">
+            <h5 class="mb-3">Références et codes</h5>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label for="reference_fournisseur" class="form-label">Référence fournisseur</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="reference_fournisseur"
+                  name="reference_fournisseur"
+                  value="<%= product ? (product.reference_fournisseur || '') : '' %>">
+              </div>
+
+              <div class="col-md-6 mb-3">
+                <label for="code_ean" class="form-label">Code EAN / Code-barres</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="code_ean"
+                  name="code_ean"
+                  value="<%= product ? (product.code_ean || '') : '' %>">
+              </div>
+            </div>
+
+            <hr class="my-4">
+            <h5 class="mb-3">Informations complémentaires</h5>
+
+            <div class="row">
+              <div class="col-md-4 mb-3">
+                <label for="conditionnement" class="form-label">Conditionnement</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="conditionnement"
+                  name="conditionnement"
+                  value="<%= product ? (product.conditionnement || '') : '' %>"
+                  placeholder="Par 6, Au kilo...">
+              </div>
+
+              <div class="col-md-4 mb-3">
+                <label for="unite" class="form-label">Unité de mesure</label>
+                <select class="form-select" id="unite" name="unite" required>
+                  <option value="Pièce" <%= product && product.unite === 'Pièce' ? 'selected' : (!product ? 'selected' : '') %>>Pièce</option>
+                  <option value="Kilo" <%= product && product.unite === 'Kilo' ? 'selected' : '' %>>Kilo</option>
+                  <option value="Litre" <%= product && product.unite === 'Litre' ? 'selected' : '' %>>Litre</option>
+                  <option value="Unite" <%= product && product.unite === 'Unite' ? 'selected' : '' %>>Unité</option>
+                </select>
+              </div>
+
+              <div class="col-md-4 mb-3">
+                <label for="quantite_min" class="form-label">Quantité minimale</label>
+                <input
+                  type="number"
+                  class="form-control"
+                  id="quantite_min"
+                  name="quantite_min"
+                  value="<%= product && product.quantite_min ? product.quantite_min : 1 %>"
+                  min="0.001"
+                  step="0.001"
+                  required>
+                <small class="form-text text-muted">
+                  Pas d'incrément (ex: 1, 0.5, 0.001)
+                </small>
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-md-4 mb-3">
+                <label for="prix" class="form-label">Prix (€)</label>
+                <input
+                  type="number"
+                  class="form-control"
+                  id="prix"
+                  name="prix"
+                  value="<%= product && product.prix ? product.prix : '' %>"
+                  min="0"
+                  step="0.01">
+                <small class="form-text text-muted">
+                  Synchronisé depuis catalogues ou saisi manuellement
+                </small>
+              </div>
+
+              <div class="col-md-4 mb-3">
+                <label for="dlc_jours" class="form-label">DLC (jours)</label>
+                <input
+                  type="number"
+                  class="form-control"
+                  id="dlc_jours"
+                  name="dlc_jours"
+                  value="<%= product ? (product.dlc_jours || '') : '' %>"
+                  min="0">
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label for="origine" class="form-label">Origine</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="origine"
+                  name="origine"
+                  value="<%= product ? (product.origine || '') : '' %>"
+                  placeholder="France, Italie...">
+              </div>
+
+              <div class="col-md-6 mb-3">
+                <label for="label" class="form-label">Labels</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="label"
+                  name="label"
+                  value="<%= product ? (product.label || '') : '' %>"
+                  placeholder="Bio, AOP, IGP...">
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label for="allergenes" class="form-label">Allergènes</label>
+              <input
+                type="text"
+                class="form-control"
+                id="allergenes"
+                name="allergenes"
+                value="<%= product ? (product.allergenes || '') : '' %>"
+                placeholder="Gluten, Lactose, Fruits à coque...">
+            </div>
+
+            <hr class="my-4">
+            <h5 class="mb-3">Image</h5>
+
+            <% if (product && product.image_url) { %>
+              <div class="mb-3">
+                <label class="form-label">Image actuelle</label>
+                <div>
+                  <img src="<%= product.image_url %>" alt="<%= product.nom %>" style="max-width: 200px; max-height: 200px;" class="img-thumbnail">
+                </div>
+              </div>
+            <% } %>
+
+            <div class="mb-3">
+              <label for="image" class="form-label">
+                <%= product && product.image_url ? 'Remplacer l\'image' : 'Ajouter une image' %>
+              </label>
+              <input
+                type="file"
+                class="form-control"
+                id="image"
+                name="image"
+                accept="image/*">
+            </div>
+
+            <div class="mb-3">
+              <div class="form-check">
+                <input
+                  type="checkbox"
+                  class="form-check-input"
+                  id="is_active"
+                  name="is_active"
+                  value="1"
+                  <%= product && product.is_active ? 'checked' : (!product ? 'checked' : '') %>>
+                <label class="form-check-label" for="is_active">
+                  Produit actif
+                </label>
+              </div>
+            </div>
+
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-primary">
+                <i class="bi bi-check-lg me-2"></i>
+                <%= product ? 'Enregistrer les modifications' : 'Créer le produit' %>
+              </button>
+              <a href="<%= product ? '/admin/products/' + product.id : '/admin/products' %>" class="btn btn-outline-secondary">
+                <i class="bi bi-x-lg me-2"></i>Annuler
+              </a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <% if (product) { %>
+      <div class="col-12 col-lg-4 mt-3 mt-lg-0">
+        <div class="card">
+          <div class="card-header bg-danger text-white">
+            <h5 class="card-title mb-0">Zone de danger</h5>
+          </div>
+          <div class="card-body">
+            <p class="text-muted">
+              La désactivation d'un produit le masquera des catalogues.
+            </p>
+            <form method="POST" action="/admin/products/<%= product.id %>/delete" onsubmit="return confirm('Êtes-vous sûr de vouloir désactiver ce produit ?');">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button type="submit" class="btn btn-danger w-100">
+                <i class="bi bi-trash me-2"></i>Désactiver le produit
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    <% } %>
+  </div>
+</div>
+
+</div>
+<%- include('partials/footer') %>

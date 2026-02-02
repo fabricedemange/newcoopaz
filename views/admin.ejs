@@ -1,0 +1,222 @@
+<%- include('partials/header', { title: 'Administration', user, role }) %>
+
+<div class="admin-content-wrapper">
+
+<div class="container-fluid px-3 mt-4">
+  <div class="row">
+    <div class="col-12">
+      <h2 class="mb-4">Administration des utilisateurs</h2>
+      <p class="text-muted mb-4">Gérer les utilisateurs inscrits et leurs permissions</p>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-12">
+      <% if (users.length === 0) { %>
+        <div class="alert alert-info text-center">
+          <h4>Aucun utilisateur trouvé</h4>
+          <p>Il n'y a actuellement aucun utilisateur inscrit.</p>
+        </div>
+      <% } else { %>
+        <div class="card">
+          <div class="card-header">
+            <h5 class="card-title mb-0">
+              <i class="bi bi-people-fill me-2"></i>
+              Liste des utilisateurs (<%= users.length %>)
+            </h5>
+          </div>
+          <div class="card-body">
+            <div class="table-responsive">
+              <table class="table table-striped table-hover">
+                <thead class="table-dark">
+                  <tr>
+                    <th>ID</th>
+                    <th>Utilisateur</th>
+                    <th class="d-none d-md-table-cell">Email</th>
+                    <th class="d-none d-sm-table-cell">Statut</th>
+                    <th class="d-none d-lg-table-cell">Description</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% users.forEach(function(u) { %>
+                    <tr>
+                      <td class="fw-bold">#<%= u.id %></td>
+                      <td>
+                        <div class="fw-bold"><%= u.username %></div>
+                        <!-- Informations supplémentaires sur mobile -->
+                        <div class="d-md-none small text-muted">
+                          <i class="bi bi-envelope me-1"></i><%= u.email %>
+                        </div>
+                        <div class="d-sm-none small mt-1">
+                          <% if (u.is_admin) { %>
+                            <span class="badge bg-danger">Administrateur</span>
+                          <% } else { %>
+                            <span class="badge bg-secondary">Utilisateur</span>
+                          <% } %>
+                        </div>
+                        <div class="d-lg-none small text-muted mt-1">
+                          <%= u.description || "Aucune description" %>
+                        </div>
+                      </td>
+                      <td class="d-none d-md-table-cell">
+                        <small><%= u.email %></small>
+                      </td>
+                      <td class="d-none d-sm-table-cell">
+                        <% if (u.is_admin) { %>
+                          <span class="badge bg-danger">Administrateur</span>
+                        <% } else { %>
+                          <span class="badge bg-secondary">Utilisateur</span>
+                        <% } %>
+                      </td>
+                      <td class="d-none d-lg-table-cell">
+                        <% if (admin) { %>
+                          <form action="/admin/update-description" method="POST" class="d-inline">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                            <input type="hidden" name="userId" value="<%= u.id %>">
+                            <div class="input-group input-group-sm">
+                              <input type="text" name="description" 
+                                     value="<%= u.description ? u.description : '' %>" 
+                                     class="form-control" 
+                                     placeholder="Description...">
+                              <button type="submit" class="btn btn-outline-primary">
+                                <i class="bi bi-check-lg"></i>
+                              </button>
+                            </div>
+                          </form>
+                        <% } else { %>
+                          <%= u.description || "Aucune description" %>
+                        <% } %>
+                      </td>
+                      <td>
+                        <% if (u.id !== userId && admin) { %>
+                          <!-- Actions sur mobile : menu déroulant -->
+                          <div class="d-lg-none">
+                            <div class="dropdown">
+                              <button class="btn btn-outline-secondary btn-sm dropdown-toggle" 
+                                      type="button" data-bs-toggle="dropdown">
+                                Actions
+                              </button>
+                              <ul class="dropdown-menu">
+                                <li>
+                                  <form action="/admin/update-description" method="POST">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                    <input type="hidden" name="userId" value="<%= u.id %>">
+                                    <div class="px-3 py-2">
+                                      <input type="text" name="description" 
+                                             value="<%= u.description ? u.description : '' %>" 
+                                             class="form-control form-control-sm mb-2" 
+                                             placeholder="Description...">
+                                      <button type="submit" class="btn btn-primary btn-sm w-100">
+                                        Mettre à jour la description
+                                      </button>
+                                    </div>
+                                  </form>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                  <form action="/admin/toggle-admin" method="POST">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                    <input type="hidden" name="userId" value="<%= u.id %>">
+                                    <button type="submit" class="dropdown-item <%= u.is_admin ? 'text-warning' : 'text-success' %>">
+                                      <% if (u.is_admin) { %>
+                                        <i class="bi bi-shield-slash me-2"></i>Retirer les droits admin
+                                      <% } else { %>
+                                        <i class="bi bi-shield-check me-2"></i>Promouvoir administrateur
+                                      <% } %>
+                                    </button>
+                                  </form>
+                                </li>
+                              </ul>
+                            </div>
+                          </div>
+
+                          <!-- Actions sur desktop : boutons -->
+                          <div class="d-none d-lg-block">
+                            <div class="d-flex gap-1">
+                              <form action="/admin/toggle-admin" method="POST" style="display:inline;">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                <input type="hidden" name="userId" value="<%= u.id %>">
+                                <button type="submit" class="btn btn-sm <%= u.is_admin ? 'btn-warning' : 'btn-success' %>">
+                                  <% if (u.is_admin) { %>
+                                    <i class="bi bi-shield-slash me-1"></i>Retirer admin
+                                  <% } else { %>
+                                    <i class="bi bi-shield-check me-1"></i>Promouvoir admin
+                                  <% } %>
+                                </button>
+                              </form>
+                            </div>
+                          </div>
+                        <% } else if (u.id === userId) { %>
+                          <span class="badge bg-info">
+                            <i class="bi bi-person-check me-1"></i>Vous
+                          </span>
+                        <% } %>
+                      </td>
+                    </tr>
+                  <% }); %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      <% } %>
+    </div>
+  </div>
+
+  <!-- Statistiques -->
+  <div class="row mt-4">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title mb-0">Statistiques des utilisateurs</h5>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-6 col-md-3">
+              <div class="text-center">
+                <h4 class="text-primary"><%= users.length %></h4>
+                <p class="text-muted">Total utilisateurs</p>
+              </div>
+            </div>
+            <div class="col-6 col-md-3">
+              <div class="text-center">
+                <h4 class="text-danger"><%= users.filter(u => u.is_admin).length %></h4>
+                <p class="text-muted">Administrateurs</p>
+              </div>
+            </div>
+            <div class="col-6 col-md-3">
+              <div class="text-center">
+                <h4 class="text-secondary"><%= users.filter(u => !u.is_admin).length %></h4>
+                <p class="text-muted">Utilisateurs standards</p>
+              </div>
+            </div>
+            <div class="col-6 col-md-3">
+              <div class="text-center">
+                <h4 class="text-success"><%= users.filter(u => u.description).length %></h4>
+                <p class="text-muted">Avec description</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Boutons de navigation -->
+  <div class="row mt-4">
+    <div class="col-12">
+      <div class="d-flex flex-column flex-sm-row gap-2">
+        <a href="/admin/menu" class="btn btn-secondary">
+          <i class="bi bi-arrow-left me-2"></i>Retour au menu admin
+        </a>
+        <a href="/" class="btn btn-outline-secondary">
+          <i class="bi bi-house me-2"></i>Retour à l'accueil
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+<%- include('partials/footer') %>

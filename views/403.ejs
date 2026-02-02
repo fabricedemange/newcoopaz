@@ -1,0 +1,9 @@
+<%- include('partials/header', { title: 'Accès refusé', user, role }) %>
+<div class="container mt-5">
+  <div class="alert alert-danger text-center">
+    <h2>Erreur 403 - Accès refusé</h2>
+    <p>Vous n'avez pas les droits pour accéder à cette page.</p>
+    <a href="/" class="btn btn-primary mt-3">Retour à l'accueil</a>
+  </div>
+</div>
+<%- include('partials/footer') %>

@@ -1,0 +1,274 @@
+<%- include('partials/header', { title: 'Historique des commandes', user, role }) %>
+
+<div class="admin-content-wrapper">
+<div class="container-fluid px-3 mt-4">
+  <div class="row">
+    <div class="col-12">
+      <h2 class="mb-4">Historique de mes commandes</h2>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-12">
+      <% if (commandes.length === 0) { %>
+        <div class="alert alert-info text-center">
+          <h4>Aucune commande passée</h4>
+          <p>Vous n'avez encore passé aucune commande.</p>
+          <a href="/catalogues" class="btn btn-primary">Consulter les catalogues</a>
+        </div>
+      <% } else { %>
+        <div class="table-responsive">
+          <table class="table table-striped table-hover" id="tbcommandes">
+            <thead class="table-dark">
+              <tr>
+                <th class="d-none d-md-table-cell">ID</th>
+                <th>Catalogue(N°)</th>
+                <th class="d-none d-lg-table-cell">Description + Note</th>
+                <th class="d-none d-xl-table-cell" data-orderable="false"><!-- Colonne vide --></th>
+                <th class="d-none d-lg-table-cell">Expiration</th>
+                <th class="d-none d-lg-table-cell">Livraison</th>
+                <th class="d-none d-md-table-cell">Date commande</th>
+                <th data-orderable="false">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% commandes.forEach(function(c) { %>
+                <% 
+                  // Calculer la date hier (même heure que maintenant)
+                  const today = new Date();
+                  const hier = new Date(today);
+                  hier.setDate(today.getDate() - 1);
+                %>
+                <tr>
+                  <td class="d-none d-md-table-cell"><%= c.id %></td>
+                  <td>
+                    <div class="fw-bold"><%= c.originalname %>(N°<%= c.catalog_filesID %>)</div>
+                    <!-- Informations supplémentaires sur mobile -->
+                    <div class="d-lg-none small text-muted">
+                      <%= c.catalog_description || '' %>
+                    </div>
+                    <% if (c.note && c.note.trim() !== '') { %>
+                    <div class="d-lg-none small mt-1">
+                      <span class="badge bg-info">📝 <%= c.note %></span>
+                    </div>
+                    <% } %>
+                    <div class="d-md-none small text-muted">
+                      ID: <%= c.id %> | <%= c.created_at ? formatDateTime(c.created_at) : '' %>
+                    </div>
+                    <div class="d-lg-none small text-muted">
+                      <% if (c.expiration_date) { %>
+                        Expire: <%= formatDate(c.expiration_date) %>
+                        <% if (new Date(c.expiration_date) < hier) { %>
+                          <span class="badge bg-danger ms-1">Expiré</span>
+                        <% } %>
+                      <% } %>
+                    </div>
+                    <div class="d-lg-none small text-muted">
+                      <% if (c.date_livraison) { %>
+                        Livraison estimée: <%= formatDate(c.date_livraison) %>
+                      <% } %>
+                    </div>
+                  </td>
+                  <td class="d-none d-lg-table-cell">
+                    <%= c.catalog_description || '' %>
+                    
+                    <!-- Gestion des notes pour desktop -->
+                    <div class="mt-2">
+                      <!-- Bouton pour ouvrir/fermer la note -->
+                      <button type="button" class="btn btn-outline-info btn-sm w-100"
+                              onclick="toggleCommandeNote('<%= c.id %>')"
+                              title="<% if (c.note && c.note.trim() !== '') { %>Modifier la note<% } else { %>Ajouter une note<% } %>">
+                        <i class="bi bi-pencil-square"></i>
+                        <% if (c.note && c.note.trim() !== '') { %>
+                          <span class="badge bg-warning">!</span> Note
+                        <% } else { %>
+                          Note
+                        <% } %>
+                      </button>
+                      
+                      <!-- Affichage de la note existante -->
+                      <% if (c.note && c.note.trim() !== '') { %>
+                      <div class="small text-muted mt-1 p-2" id="note-display-commande-<%= c.id %>" 
+                           style="background: #fff3cd; border-left: 3px solid #ffc107; border-radius: 0.25rem;">
+                        <strong>Note:</strong> <%= c.note %>
+                      </div>
+                      <% } %>
+                      
+                      <!-- Formulaire note -->
+                      <form class="note-form-commande mt-2" data-commande-id="<%= c.id %>" 
+                            id="note-form-commande-<%= c.id %>" style="display: none;"
+                            action="/commandes/<%= c.id %>/note" method="POST">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                        <input type="hidden" name="source" value="">
+                        <textarea name="note" rows="3" class="form-control form-control-sm mb-2"
+                          placeholder="Votre note personnelle..." style="resize: vertical; font-size: 0.9rem;"><%= c.note || '' %></textarea>
+                        <div class="d-flex gap-2">
+                          <button type="submit" class="btn btn-info btn-sm flex-grow-1">
+                            <i class="bi bi-check-circle"></i> Sauvegarder
+                          </button>
+                          <button type="button" class="btn btn-outline-secondary btn-sm"
+                                 onclick="toggleCommandeNote('<%= c.id %>')">
+                            <i class="bi bi-x-circle"></i> Annuler
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </td>
+                  <td class="d-none d-xl-table-cell">
+                    <!-- Colonne vide pour décaler la note -->
+                  </td>
+                  <td class="d-none d-lg-table-cell" data-order="<%= c.expiration_date ? (Date.parse(c.expiration_date) || '') : '' %>">
+                    <%= c.expiration_date ? formatDate(c.expiration_date) : '' %>
+                    <% if (c.expiration_date && new Date(c.expiration_date) < hier) { %>
+                      <span class="badge bg-danger">Expiré</span>
+                    <% } %>
+                  </td>
+                  <td class="d-none d-lg-table-cell" data-order="<%= c.date_livraison ? (Date.parse(c.date_livraison) || '') : '' %>">
+                    <%= c.date_livraison ? formatDate(c.date_livraison) : '' %>
+                  </td>
+                  <td class="d-none d-md-table-cell" data-order="<%= c.created_at ? (Date.parse(c.created_at) || '') : '' %>">
+                    <%= c.created_at ? formatDateTime(c.created_at) : '' %>
+                  </td>
+                  <td>
+                    <!-- Actions sur mobile : menu déroulant -->
+                    <div class="d-md-none">
+                      <div class="dropdown">
+                        <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                          Actions
+                        </button>
+                        <ul class="dropdown-menu">
+                          <li><a class="dropdown-item" href="/commandes/<%= c.id %>">Voir détails</a></li>
+                          <% if (c.modifiable) { %>
+                            <li>
+                              <form method="POST" action="/commandes/<%= c.id %>/edit" style="display:inline;">
+                                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                <button type="submit" class="dropdown-item">Repasser en panier</button>
+                              </form>
+                            </li>
+                          <% } %>
+                          <li><hr class="dropdown-divider"></li>
+                          <li>
+                            <form action="/commandes/<%= c.id %>/note" method="POST">
+                              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                              <div class="p-2">
+                                <textarea name="note" rows="2" class="form-control form-control-sm mb-2" placeholder="Votre note..."><%= c.note || '' %></textarea>
+                                <button type="submit" class="btn btn-info btn-sm w-100">Enregistrer note</button>
+                              </div>
+                            </form>
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+
+                    <!-- Actions sur desktop : boutons horizontaux -->
+                    <div class="d-none d-md-block">
+                      <div class="d-flex flex-wrap gap-1">
+                        <a href="/commandes/<%= c.id %>" class="btn btn-info btn-sm">Voir détails</a>
+                        <% if (c.modifiable) { %>
+                          <form method="POST" action="/commandes/<%= c.id %>/edit" style="display:inline;">
+                            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                            <button type="submit" class="btn btn-warning btn-sm">Repasser en panier</button>
+                          </form>
+                        <% } else { %>
+                          <span class="badge bg-secondary">Non modifiable(*)</span>
+                        <% } %>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+
+     
+      <% } %>
+    </div>
+  </div>
+  <label class="form-check-label" for="visibility2">
+    <strong>(*)Non modifiable</strong> - Un catalogue associé à une commande peut-être expiré ou le référent a choisi de le rendre non modifiable.
+  </label>
+
+</div>
+
+<script>
+const openCommandeNotes = new Set();
+
+function toggleCommandeNote(commandeId) {
+  const form = document.getElementById('note-form-commande-' + commandeId);
+  const display = document.getElementById('note-display-commande-' + commandeId);
+  if (!form) {
+    return;
+  }
+  const showForm = form.style.display === 'none' || form.style.display === '';
+  if (showForm) {
+    form.style.display = 'block';
+    if (display) {
+      display.style.display = 'none';
+    }
+    const textarea = form.querySelector('textarea[name="note"]');
+    if (textarea) {
+      textarea.focus();
+      textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+    }
+    openCommandeNotes.add(String(commandeId));
+  } else {
+    form.style.display = 'none';
+    if (display) {
+      display.style.display = 'block';
+    }
+    openCommandeNotes.delete(String(commandeId));
+  }
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  const tableEl = $('#tbcommandes');
+  if (!tableEl.length) {
+    return;
+  }
+  const table = tableEl.DataTable({
+    dom: "<'row justify-content-center align-items-center g-3 mb-3'<'col-auto'f><'col-auto'l><'col-auto'p>>" +
+         "rt" +
+         "<'row align-items-center justify-content-between mt-3'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
+    pageLength: 25,
+    order: [[0, 'desc']],
+    autoWidth: false,
+    language: {
+      url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/fr-FR.json'
+    },
+    columnDefs: [
+      { targets: [3, 7], orderable: false },
+      { targets: [1, 2], orderable: true }
+    ],
+    initComplete: function () {
+      const api = this.api();
+      const wrapper = $(api.table().container());
+      const lengthLabel = wrapper.find('.dataTables_length label');
+      const lengthSelect = wrapper.find('.dataTables_length select');
+      lengthLabel.addClass('mb-0 d-flex align-items-center gap-2');
+      lengthSelect.addClass('form-select form-select-sm');
+      const filterLabel = wrapper.find('.dataTables_filter label');
+      const filterInput = wrapper.find('.dataTables_filter input');
+      filterLabel.addClass('mb-0 d-flex align-items-center gap-2');
+      filterInput.addClass('form-control form-control-sm').attr('placeholder', 'Rechercher...');
+      wrapper.find('.dataTables_paginate').addClass('mb-0');
+    }
+  });
+
+  table.on('draw', function () {
+    openCommandeNotes.forEach(function (commandeId) {
+      const form = document.getElementById('note-form-commande-' + commandeId);
+      const display = document.getElementById('note-display-commande-' + commandeId);
+      if (form) {
+        form.style.display = 'block';
+      }
+      if (display) {
+        display.style.display = 'none';
+      }
+    });
+  });
+});
+</script>
+
+</div>
+<%- include('partials/footer') %>
