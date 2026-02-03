@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { fetchAdminCatalogues } from '@/api';
+import { fetchAdminCatalogues, fetchAdminCataloguesAlerteRecipientsCount } from '@/api';
 
 function filterCatalogues(catalogues, searchTerm) {
   if (!searchTerm) return catalogues;
@@ -150,7 +150,22 @@ export const useAdminCataloguesStore = defineStore('adminCatalogues', {
     },
 
     async sendAlerteMail(catalogueId) {
-      if (!confirm('Envoyer une alerte par mail à tous les utilisateurs ?')) return;
+      let count = null; // null = erreur ou non récupéré, 0 = zéro destinataire
+      try {
+        const data = await fetchAdminCataloguesAlerteRecipientsCount(catalogueId);
+        if (data.success && data.count != null) count = Number(data.count);
+      } catch (_) {
+        count = null;
+      }
+      if (count === 0) {
+        alert("Aucun destinataire : aucune personne n'a commandé ce catalogue (avec compte validé et email). L'envoi d'alerte n'est pas possible.");
+        return;
+      }
+      if (count === null) {
+        if (!confirm("Impossible de récupérer le nombre de destinataires. Envoyer l'alerte quand même ?")) return;
+      } else {
+        if (!confirm(`Envoyer une alerte par mail à ${count} personne(s) ayant commandé ce catalogue ?`)) return;
+      }
       const csrf = typeof window !== 'undefined' && window.CSRF_TOKEN ? window.CSRF_TOKEN : '';
       const response = await fetch(`/admin/catalogues/${catalogueId}/alerte`, {
         method: 'POST',

@@ -170,6 +170,27 @@ router.get("/admin/catalogues", requirePermission("catalogues", { json: true }),
   }
 });
 
+// GET /api/admin/catalogues/:id/alerte-recipients-count - Nombre de destinataires (personnes ayant commandé ce catalogue, validées, avec email)
+router.get("/admin/catalogues/:id/alerte-recipients-count", requirePermission("catalogues", { json: true }), async (req, res) => {
+  try {
+    const catalogueId = parseInt(req.params.id, 10);
+    const [row] = await queryPromise(
+      `SELECT COUNT(DISTINCT u.id) AS count
+       FROM paniers p
+       INNER JOIN users u ON u.id = p.user_id
+       WHERE p.catalog_file_id = ? AND p.is_submitted = 1
+         AND u.is_validated = 1 AND u.email IS NOT NULL AND u.email != ''`,
+      [catalogueId],
+      req
+    );
+    const count = row && row.count != null ? Number(row.count) : 0;
+    return res.json({ success: true, count });
+  } catch (error) {
+    console.error("Erreur alerte-recipients-count:", error);
+    return res.status(500).json({ success: false, error: error.message, count: 0 });
+  }
+});
+
 // GET /api/admin/catalogues/:id/synthese - Synthèse simple d'un catalogue
 router.get("/admin/catalogues/:id/synthese", requirePermission("catalogues", { json: true }), async (req, res) => {
   const catalogueId = req.params.id;
