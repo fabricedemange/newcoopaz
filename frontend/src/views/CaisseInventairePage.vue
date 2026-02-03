@@ -55,26 +55,19 @@
               <h5 class="mb-0"><i class="bi bi-camera-video me-2"></i>Scan code-barres</h5>
             </div>
             <div class="card-body">
-              <div class="mb-3 position-relative" style="min-height: 200px;">
+              <div class="mb-3">
                 <video
-                  v-show="!useQuagga"
                   ref="videoEl"
                   class="rounded border w-100"
                   style="max-width: 100%; background: #000; aspect-ratio: 4/3"
                   playsinline
                   muted
                 ></video>
-                <div
-                  v-show="useQuagga"
-                  ref="quaggaContainerRef"
-                  class="rounded border overflow-hidden"
-                  style="max-width: 100%; background: #000; aspect-ratio: 4/3"
-                ></div>
                 <div v-if="cameraError" class="alert alert-warning mt-2 mb-0">{{ cameraError }}</div>
               </div>
               <div class="d-flex gap-2">
                 <button
-                  v-if="!stream && !useQuagga"
+                  v-if="!stream && !zxingControls"
                   type="button"
                   class="btn btn-success"
                   :disabled="!scanSupported || loading"
@@ -263,19 +256,20 @@ const scanned = ref([]);
 const showQuantiteModal = ref(false);
 const produitPourQuantite = ref(null);
 const quantiteSaisie = ref(0);
-const useQuagga = ref(false);
-const quaggaContainerRef = ref(null);
-const quaggaModule = ref(null);
-const quaggaOnDetectedHandler = ref(null);
+const zxingControls = ref(null);
 
 const SCAN_COOLDOWN_MS = 1500;
 
-// Scan supporté : BarcodeDetector (Chrome/Edge) OU getUserMedia (Safari/iPhone → Quagga2)
+// Scan supporté : BarcodeDetector (Chrome/Edge Mac) OU getUserMedia (Safari/iPhone → ZXing)
 const scanSupported = computed(() => {
   if (typeof window === 'undefined') return false;
   if (typeof window.BarcodeDetector === 'function') return true;
   return !!(navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function');
 });
+
+const barcodeDetectorSupported = computed(
+  () => typeof window !== 'undefined' && typeof window.BarcodeDetector === 'function'
+);
 
 const produitsFiltres = computed(() => {
   let list = [...products.value];
@@ -470,75 +464,50 @@ function detectFromVideo() {
 async function startCamera() {
   cameraError.value = '';
   if (!scanSupported.value) return;
-  const hasNativeBarcode = typeof window !== 'undefined' && typeof window.BarcodeDetector === 'function';
+  const hasNative = barcodeDetectorSupported.value;
   try {
-    if (hasNativeBarcode) {
+    if (hasNative) {
       barcodeDetector.value = new window.BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'code_128', 'codabar'] });
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
       });
       stream.value = mediaStream;
-      useQuagga.value = false;
       if (videoEl.value) {
         videoEl.value.srcObject = mediaStream;
         await videoEl.value.play();
         startScanLoop();
       }
     } else {
-      // Fallback Quagga2 (Safari / iPhone)
-      const Quagga = (await import('@ericblade/quagga2')).default;
-      quaggaModule.value = Quagga;
-      const container = quaggaContainerRef.value;
-      if (!container) throw new Error('Conteneur caméra non trouvé');
-      const handler = (data) => {
-        if (!data?.codeResult?.code) return;
-        if (Date.now() - lastScanTime.value < SCAN_COOLDOWN_MS) return;
-        lastScanTime.value = Date.now();
-        addScanned(data.codeResult.code);
+      const { BrowserMultiFormatReader } = await import('@zxing/browser');
+      const codeReader = new BrowserMultiFormatReader();
+      const videoElem = videoEl.value;
+      if (!videoElem) throw new Error('Élément vidéo non trouvé');
+      const constraints = {
+        video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } },
       };
-      quaggaOnDetectedHandler.value = handler;
-      Quagga.onDetected(handler);
-      Quagga.init(
-        {
-          inputStream: {
-            name: 'Live',
-            type: 'LiveStream',
-            target: container,
-            constraints: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
-          },
-          decoder: {
-            readers: ['ean_reader', 'ean_8_reader', 'code_128_reader', 'codabar_reader', 'upc_reader'],
-          },
-          locator: { patchSize: 'medium', halfSample: true },
-        },
-        (err) => {
-          if (err) {
-            cameraError.value = err.message || 'Impossible d\'accéder à la caméra';
-            quaggaModule.value = null;
-            quaggaOnDetectedHandler.value = null;
-            return;
-          }
-          useQuagga.value = true;
-          Quagga.start();
+      const controls = await codeReader.decodeFromConstraints(
+        constraints,
+        videoElem,
+        (result, err) => {
+          if (err || !result) return;
+          if (Date.now() - lastScanTime.value < SCAN_COOLDOWN_MS) return;
+          lastScanTime.value = Date.now();
+          addScanned(result.getText());
         }
       );
+      zxingControls.value = controls;
     }
   } catch (err) {
     cameraError.value = err.message || 'Impossible d\'accéder à la caméra';
-    quaggaModule.value = null;
-    useQuagga.value = false;
   }
 }
 
 function stopCamera() {
-  if (quaggaModule.value) {
+  if (zxingControls.value) {
     try {
-      quaggaModule.value.offDetected(quaggaOnDetectedHandler.value);
-      quaggaModule.value.stop();
+      zxingControls.value.stop();
     } catch (_) {}
-    quaggaModule.value = null;
-    quaggaOnDetectedHandler.value = null;
-    useQuagga.value = false;
+    zxingControls.value = null;
   }
   if (scanIntervalId.value) {
     clearInterval(scanIntervalId.value);
