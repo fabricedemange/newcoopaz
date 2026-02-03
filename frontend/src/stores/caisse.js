@@ -79,6 +79,8 @@ export const useCaisseStore = defineStore('caisse', {
     commandeACharger: null,
     selectedCommandeId: null,
     cotisationCheck: null,
+    /** Email pour envoyer la facture PDF (client anonyme) */
+    emailFactureAnonyme: '',
   }),
 
   getters: {
@@ -289,7 +291,10 @@ export const useCaisseStore = defineStore('caisse', {
       this.montantPaiement = this.total;
       this.showPaiementModal = true;
       this.cotisationCheck = null;
-      if (this.selectedUtilisateur) {
+      this.emailFactureAnonyme = '';
+      const user = this.utilisateurs.find((u) => u.id === this.selectedUtilisateur);
+      const estAnonyme = user && (user.username || '').toLowerCase() === 'anonyme';
+      if (this.selectedUtilisateur && !estAnonyme) {
         try {
           const data = await fetchCaisseCotisationCheck(this.selectedUtilisateur);
           if (data.success) this.cotisationCheck = data;
@@ -429,7 +434,18 @@ export const useCaisseStore = defineStore('caisse', {
         if (this.currentPanierId) this.supprimerPanier(this.currentPanierId);
         this.viderPanier();
         this.fermerPaiement();
-        alert(`Vente enregistrée ! Ticket n°${venteData.vente.numero_ticket}`);
+        const emailFacture = (this.emailFactureAnonyme || '').trim();
+        if (emailFacture) {
+          try {
+            await postCaisseEnvoyerFacture(venteData.vente.id, emailFacture);
+            alert(`Vente enregistrée ! Ticket n°${venteData.vente.numero_ticket}. Facture envoyée par email.`);
+          } catch (errEmail) {
+            alert(`Vente enregistrée (Ticket n°${venteData.vente.numero_ticket}). Envoi de la facture par email a échoué : ${errEmail.message}`);
+          }
+          this.emailFactureAnonyme = '';
+        } else {
+          alert(`Vente enregistrée ! Ticket n°${venteData.vente.numero_ticket}`);
+        }
       } catch (e) {
         this.error = e.message;
         alert('Erreur : ' + e.message);

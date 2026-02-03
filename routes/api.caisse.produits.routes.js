@@ -1,11 +1,11 @@
 const express = require("express");
 const router = express.Router();
 const { db } = require("../config/config");
-const { requirePermission } = require("../middleware/rbac.middleware");
+const { requireAnyPermission } = require("../middleware/rbac.middleware");
 const { getCurrentOrgId } = require("../utils/session-helpers");
 
-// GET /api/caisse/produits - Liste produits pour la caisse
-router.get("/", requirePermission("caisse.sell", { json: true }), (req, res) => {
+// GET /api/caisse/produits - Liste produits (caisse ou page Inventaire)
+router.get("/", requireAnyPermission(["caisse.sell", "inventory_stock"], { json: true }), (req, res) => {
   const orgId = getCurrentOrgId(req);
 
   const produitsQuery = `

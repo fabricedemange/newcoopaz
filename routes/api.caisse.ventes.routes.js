@@ -148,8 +148,26 @@ router.post("/", requirePermission("caisse.sell", { json: true }), (req, res) =>
                       return reject(err);
                     }
 
-                    // Pas de vérification de stock - on autorise les stocks négatifs
-                    resolve();
+                    // Historique : insérer dans stock_movements (si table présente)
+                    connection.query(
+                      'SELECT stock FROM products WHERE id = ? AND organization_id = ?',
+                      [ligne.produit_id, orgId],
+                      (errSel, rows) => {
+                        if (errSel) return resolve(); // ne pas bloquer la vente
+                        const stockApres = Number(rows[0]?.stock) ?? 0;
+                        const stockAvant = stockApres + Number(ligne.quantite);
+                        connection.query(
+                          `INSERT INTO stock_movements
+                            (organization_id, product_id, type, quantite, stock_avant, stock_apres, reference_type, reference_id, created_by)
+                           VALUES (?, ?, 'vente', ?, ?, ?, 'vente', ?, ?)`,
+                          [orgId, ligne.produit_id, -Number(ligne.quantite), stockAvant, stockApres, venteId, userId],
+                          (errIns) => {
+                            if (errIns) console.error('Erreur insert stock_movements (non bloquant):', errIns);
+                            resolve();
+                          }
+                        );
+                      }
+                    );
                   }
                 );
               });

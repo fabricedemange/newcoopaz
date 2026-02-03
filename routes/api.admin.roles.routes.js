@@ -9,9 +9,8 @@
 const express = require("express");
 const router = express.Router();
 const { db } = require("../config/db-trace-wrapper");
-const { requirePermission, requireAllPermissions } = require("../middleware/rbac.middleware");
+const { requirePermission, requireAllPermissions, hasPermission, clearAllPermissionCaches } = require("../middleware/rbac.middleware");
 const { getCurrentOrgId, getCurrentUserId } = require("../utils/session-helpers");
-const { hasPermission } = require("../middleware/rbac.middleware");
 
 // Helper: Query with promise
 function queryPromise(query, params) {
@@ -171,6 +170,7 @@ router.post("/", requirePermission('roles', { json: true }), async (req, res) =>
       [userId, roleId, JSON.stringify({ name, display_name, permission_count: permission_ids?.length || 0 })]
     );
 
+    await clearAllPermissionCaches();
     res.json({ success: true, role_id: roleId });
   } catch (error) {
     console.error('Error creating role:', error);
@@ -233,6 +233,7 @@ router.put("/:id", requirePermission('roles', { json: true }), async (req, res) 
       [userId, roleId, JSON.stringify({ display_name, permission_count: permission_ids?.length || 0 })]
     );
 
+    await clearAllPermissionCaches();
     res.json({ success: true });
   } catch (error) {
     console.error('Error updating role:', error);

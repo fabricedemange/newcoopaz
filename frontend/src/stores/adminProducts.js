@@ -27,6 +27,46 @@ export const useAdminProductsStore = defineStore('adminProducts', {
   }),
 
   getters: {
+    /** Catégories à afficher dans le filtre : si un fournisseur est sélectionné, uniquement celles qui ont au moins un produit de ce fournisseur. */
+    filteredCategoriesForFilters(state) {
+      if (!state.filters.supplierId) return state.categories;
+      const sid = state.filters.supplierId;
+      const sidNum = Number(sid);
+      const sidStr = String(sid);
+      const categoryIds = new Set(
+        state.products
+          .filter(
+            (p) =>
+              p != null &&
+              (p.supplier_id == sid || String(p.supplier_id ?? '') === sidStr || Number(p.supplier_id) === sidNum)
+          )
+          .map((p) => (p.category_id != null ? Number(p.category_id) : null))
+          .filter((id) => id != null)
+      );
+      return state.categories.filter(
+        (c) => c != null && (categoryIds.has(Number(c.id)) || categoryIds.has(c.id))
+      );
+    },
+    /** Fournisseurs à afficher dans le filtre : si une catégorie est sélectionnée, uniquement ceux qui ont au moins un produit dans cette catégorie. */
+    filteredSuppliersForFilters(state) {
+      if (!state.filters.categoryId) return state.suppliers;
+      const cid = state.filters.categoryId;
+      const cidNum = Number(cid);
+      const cidStr = String(cid);
+      const supplierIds = new Set(
+        state.products
+          .filter(
+            (p) =>
+              p != null &&
+              (p.category_id == cid || String(p.category_id ?? '') === cidStr || Number(p.category_id) === cidNum)
+          )
+          .map((p) => (p.supplier_id != null ? Number(p.supplier_id) : null))
+          .filter((id) => id != null)
+      );
+      return state.suppliers.filter(
+        (s) => s != null && (supplierIds.has(Number(s.id)) || supplierIds.has(s.id))
+      );
+    },
     filteredProducts(state) {
       let filtered = [...state.products];
       if (state.filters.categoryId != null && state.filters.categoryId !== '') {

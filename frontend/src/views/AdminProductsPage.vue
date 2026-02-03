@@ -140,16 +140,24 @@
                 </div>
                 <div class="col-md-3">
                   <label class="form-label">Catégorie</label>
-                  <select class="form-select" v-model="store.filters.categoryId">
+                  <select
+                    class="form-select"
+                    v-model="store.filters.categoryId"
+                    :key="'cat-' + (store.filters.supplierId || 'all')"
+                  >
                     <option value="">Toutes les catégories</option>
-                    <option v-for="c in store.categories" :key="c.id" :value="String(c.id)">{{ c.nom }}</option>
+                    <option v-for="c in store.filteredCategoriesForFilters" :key="c.id" :value="String(c.id)">{{ c.nom }}</option>
                   </select>
                 </div>
                 <div class="col-md-2">
                   <label class="form-label">Fournisseur</label>
-                  <select class="form-select" v-model="store.filters.supplierId">
+                  <select
+                    class="form-select"
+                    v-model="store.filters.supplierId"
+                    :key="'sup-' + (store.filters.categoryId || 'all')"
+                  >
                     <option value="">Tous les fournisseurs</option>
-                    <option v-for="s in store.suppliers" :key="s.id" :value="String(s.id)">{{ s.nom }}</option>
+                    <option v-for="s in store.filteredSuppliersForFilters" :key="s.id" :value="String(s.id)">{{ s.nom }}</option>
                   </select>
                 </div>
                 <div class="col-md-2">
@@ -411,11 +419,35 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useAdminProductsStore } from '@/stores/adminProducts';
 import AdminProductFormContent from '@/components/AdminProductFormContent.vue';
 
 const store = useAdminProductsStore();
+
+// Réinitialiser le filtre fournisseur si le fournisseur sélectionné n'a pas de produit dans la catégorie choisie (et inversement)
+watch(
+  () => store.filters.categoryId,
+  () => {
+    if (
+      store.filters.supplierId &&
+      !store.filteredSuppliersForFilters.some((s) => String(s.id) === store.filters.supplierId)
+    ) {
+      store.filters.supplierId = '';
+    }
+  }
+);
+watch(
+  () => store.filters.supplierId,
+  () => {
+    if (
+      store.filters.categoryId &&
+      !store.filteredCategoriesForFilters.some((c) => String(c.id) === store.filters.categoryId)
+    ) {
+      store.filters.categoryId = '';
+    }
+  }
+);
 const showNewModal = ref(false);
 
 const csrfToken = computed(() => typeof window !== 'undefined' ? (window.CSRF_TOKEN || '') : '');

@@ -43,10 +43,15 @@ router.get("/", requirePermission('roles', { json: true }), async (req, res) => 
       return acc;
     }, {});
 
+    // Libellés des modules (zone de saisie unique pour Inventaire et stock)
+    const moduleDisplayNames = {
+      inventory_stock: 'Inventaire et stock'
+    };
+
     // Get module list with counts
     const modules = Object.keys(grouped).map(moduleName => ({
       name: moduleName,
-      display_name: moduleName.charAt(0).toUpperCase() + moduleName.slice(1),
+      display_name: moduleDisplayNames[moduleName] || moduleName.charAt(0).toUpperCase() + moduleName.slice(1).replace(/_/g, ' '),
       permission_count: grouped[moduleName].length
     }));
 
@@ -78,12 +83,13 @@ router.get("/modules", requirePermission('roles', { json: true }), async (req, r
     `;
 
     const modules = await queryPromise(query, []);
+    const moduleDisplayNames = { inventory_stock: 'Inventaire et stock' };
 
     res.json({
       success: true,
       modules: modules.map(m => ({
         name: m.module,
-        display_name: m.module.charAt(0).toUpperCase() + m.module.slice(1),
+        display_name: moduleDisplayNames[m.module] || m.module.charAt(0).toUpperCase() + m.module.slice(1).replace(/_/g, ' '),
         permission_count: m.permission_count
       }))
     });

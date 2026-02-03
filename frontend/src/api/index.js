@@ -227,6 +227,116 @@ export async function postCaisseVente(body) {
   return response.json();
 }
 
+// --- Inventaire et mouvements stock ---
+/** POST /api/caisse/inventaires - Créer une session d'inventaire (draft) */
+export async function createInventaire(comment) {
+  const response = await fetch('/api/caisse/inventaires', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'csrf-token': typeof window !== 'undefined' && window.CSRF_TOKEN ? window.CSRF_TOKEN : '',
+    },
+    credentials: 'include',
+    body: JSON.stringify({ comment: comment || null }),
+  });
+  checkAuth(response);
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+/** GET /api/caisse/inventaires - Liste des sessions d'inventaire */
+export async function fetchInventaires(params = {}) {
+  const q = new URLSearchParams(params).toString();
+  const response = await fetch(`/api/caisse/inventaires${q ? `?${q}` : ''}`, {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+    credentials: 'include',
+  });
+  checkAuth(response);
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+/** GET /api/caisse/inventaires/:id - Détail inventaire + lignes */
+export async function fetchInventaireDetail(id) {
+  const response = await fetch(`/api/caisse/inventaires/${id}`, {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+    credentials: 'include',
+  });
+  checkAuth(response);
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    if (response.status === 404) throw Object.assign(new Error(data.error || 'Non trouvé'), { notFound: true });
+    throw new Error(data.error || `HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+/** POST /api/caisse/inventaires/:id/lignes - Ajouter ou mettre à jour une ligne (comment optionnel) */
+export async function addInventaireLigne(inventaireId, productId, quantiteComptee, comment) {
+  const body = { product_id: productId, quantite_comptee: quantiteComptee };
+  if (comment !== undefined && comment !== null) body.comment = comment;
+  const response = await fetch(`/api/caisse/inventaires/${inventaireId}/lignes`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'csrf-token': typeof window !== 'undefined' && window.CSRF_TOKEN ? window.CSRF_TOKEN : '',
+    },
+    credentials: 'include',
+    body: JSON.stringify(body),
+  });
+  checkAuth(response);
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+/** POST /api/caisse/inventaires/:id/appliquer - Appliquer l'inventaire (mise à jour stocks) */
+export async function appliquerInventaire(inventaireId) {
+  const response = await fetch(`/api/caisse/inventaires/${inventaireId}/appliquer`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'csrf-token': typeof window !== 'undefined' && window.CSRF_TOKEN ? window.CSRF_TOKEN : '',
+    },
+    credentials: 'include',
+  });
+  checkAuth(response);
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+/** GET /api/caisse/stock-mouvements - Liste des mouvements de stock */
+export async function fetchStockMouvements(params = {}) {
+  const q = new URLSearchParams(params).toString();
+  const response = await fetch(`/api/caisse/stock-mouvements${q ? `?${q}` : ''}`, {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+    credentials: 'include',
+  });
+  checkAuth(response);
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
 /** POST /api/caisse/paiements - Créer un paiement */
 export async function postCaissePaiement(body) {
   const response = await fetch('/api/caisse/paiements', {

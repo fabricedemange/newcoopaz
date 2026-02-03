@@ -85,9 +85,12 @@
                   :alt="produit.nom"
                   style="height: 120px; object-fit: cover"
                 />
-                <div class="card-body p-2">
+                <div class="card-body p-2 d-flex flex-column">
                   <h6 class="card-title mb-1" style="font-size: 0.9rem">{{ produit.nom }}</h6>
-                  <strong class="text-primary">{{ (parseFloat(produit.prix) || 0).toFixed(2) }} €</strong>
+                  <div class="mt-auto pt-1 d-flex justify-content-between align-items-center">
+                    <span class="text-primary fw-bold">{{ (parseFloat(produit.prix) || 0).toFixed(2) }} €</span>
+                    <span class="small text-muted">Stock : {{ produit.stock ?? 0 }} {{ produit.unite || 'pièce' }}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -336,8 +339,9 @@
             <button type="button" class="btn-close" @click="store.fermerPaiement()"></button>
           </div>
           <div class="modal-body">
+            <!-- Cotisation : jamais pour client Anonyme -->
             <div
-              v-if="store.cotisationCheck?.doit_cotiser && !store.aPanierCotisation"
+              v-if="!estAnonyme && store.cotisationCheck?.doit_cotiser && !store.aPanierCotisation"
               class="alert alert-warning mb-3"
             >
               <strong><i class="bi bi-info-circle me-1"></i>Cotisation mensuelle</strong>
@@ -347,6 +351,18 @@
                 <button type="button" class="btn btn-outline-primary" @click="store.ajouterCotisation(10)">10 €</button>
                 <button type="button" class="btn btn-outline-primary" @click="store.ajouterCotisation(15)">15 €</button>
               </div>
+            </div>
+            <!-- Email optionnel pour envoyer la facture PDF (client anonyme uniquement) -->
+            <div v-if="estAnonyme" class="alert alert-info mb-3">
+              <label class="form-label small mb-1">
+                <i class="bi bi-envelope me-1"></i>Email pour recevoir la facture en PDF (optionnel)
+              </label>
+              <input
+                v-model="store.emailFactureAnonyme"
+                type="email"
+                class="form-control form-control-sm"
+                placeholder="exemple@email.com"
+              />
             </div>
             <div class="alert alert-success">
               Total à payer: <strong>{{ store.total.toFixed(2) }} €</strong>
@@ -526,6 +542,12 @@ const totalProduitsPanier = computed(() => {
   return store.lignes
     .filter((l) => !l.is_avoir)
     .reduce((sum, l) => sum + l.quantite * l.prix_unitaire, 0);
+});
+
+/** True si l'utilisateur sélectionné est "Anonyme" (pas de cotisation, proposition email facture) */
+const estAnonyme = computed(() => {
+  const u = store.utilisateurs.find((x) => x.id === store.selectedUtilisateur);
+  return u && (u.username || '').toLowerCase() === 'anonyme';
 });
 
 function confirmSupprimerPanier(panierId) {

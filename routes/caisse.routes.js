@@ -24,10 +24,24 @@ router.get("/test-codes-barres", requirePermission("caisse.sell"), (req, res) =>
   });
 });
 
-// GET /caisse/inventaire - Inventaire (scan caméra, smartphone)
-router.get("/inventaire", requirePermission("caisse.sell"), (req, res) => {
+// GET /caisse/inventaire - Inventaire (scan caméra + recherche produit) — droit Administration Inventaire et stock
+router.get("/inventaire", requirePermission("inventory_stock"), (req, res) => {
   renderAdminView(res, "caisse_inventaire_vue", {
     pageTitle: "Inventaire"
+  });
+});
+
+// GET /caisse/stock-mouvements - Historique des mouvements de stock
+router.get("/stock-mouvements", requirePermission("inventory_stock"), (req, res) => {
+  renderAdminView(res, "caisse_stock_mouvements_vue", {
+    pageTitle: "Mouvements de stock"
+  });
+});
+
+// GET /caisse/inventaires-historique - Historique des sessions d'inventaire
+router.get("/inventaires-historique", requirePermission("inventory_stock"), (req, res) => {
+  renderAdminView(res, "caisse_inventaires_historique_vue", {
+    pageTitle: "Historique des inventaires"
   });
 });
 

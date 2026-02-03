@@ -390,6 +390,7 @@ const apiCaissePaniersVentesRoutes = require("./routes/api.caisse.paniers-ventes
 const apiCaisseVentesHistoriqueRoutes = require("./routes/api.caisse.ventes-historique.routes");
 const apiCaisseCommandesRoutes = require("./routes/api.caisse.commandes.routes");
 const apiCaisseCotisationRoutes = require("./routes/api.caisse.cotisation.routes");
+const apiCaisseInventaireRoutes = require("./routes/api.caisse.inventaire.routes");
 
 // --- Middleware: inject user/admin info and bandeaux in views ---
 app.use(async (req, res, next) => {
@@ -630,6 +631,7 @@ app.use("/api/caisse/utilisateurs", apiCaisseUtilisateursRoutes);
 app.use("/api/caisse/paniers", apiCaissePaniersVentesRoutes);
 app.use("/api/caisse/ventes-historique", apiCaisseVentesHistoriqueRoutes);
 app.use("/api/caisse/cotisation", apiCaisseCotisationRoutes);
+app.use("/api/caisse", apiCaisseInventaireRoutes);
 app.use("/api/caisse", apiCaisseCommandesRoutes);
 
 // Helpers pour les dates

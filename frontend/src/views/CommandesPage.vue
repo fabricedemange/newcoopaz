@@ -17,7 +17,7 @@
                 type="button"
                 @click="store.setActiveTab('catalogues')"
               >
-                <i class="bi bi-book me-2"></i>Catalogues ({{ store.commandes.length }})
+                <i class="bi bi-book me-2"></i>Précommandes ({{ store.commandes.length }})
               </button>
             </li>
             <li class="nav-item" role="presentation">
@@ -39,7 +39,7 @@
         <button type="button" class="btn-close" @click="store.error = null"></button>
       </div>
 
-      <!-- Tab Catalogues -->
+      <!-- Tab Précommandes -->
       <template v-if="store.activeTab === 'catalogues'">
         <div v-if="store.loading" class="text-center py-5">
           <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;"></div>
