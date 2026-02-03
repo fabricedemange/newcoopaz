@@ -28,27 +28,27 @@
           </div>
         </div>
 
-        <!-- Gauche : recherche + résumé | Droite : note + bouton -->
+        <!-- Gauche : préremplissage + résumé | Droite : note + bouton -->
         <div class="row mb-3 catalogue-detail-row-equal">
           <div class="col-12 col-md-4 mb-3 mb-md-0 d-flex">
             <div class="catalogue-detail-side catalogue-detail-side-left w-100 h-100">
-              <div class="input-group mb-2">
-                <span class="input-group-text"><i class="bi bi-search"></i></span>
-                <input
-                  v-model="store.searchTerm"
-                  type="text"
-                  class="form-control"
-                  placeholder="Rechercher un produit..."
-                />
+              <div v-if="store.catalogue.modifiable" class="card mb-2">
+                <div class="card-body py-2">
+                  <h6 class="card-title mb-2"><i class="bi bi-arrow-repeat me-2"></i>Préremplir le panier</h6>
+                  <button
+                    type="button"
+                    class="btn btn-outline-primary btn-sm w-100"
+                    :disabled="prefillLoading"
+                    @click="prefillFromRecent"
+                  >
+                    <span v-if="prefillLoading" class="spinner-border spinner-border-sm me-1"></span>
+                    <i v-else class="bi bi-arrow-repeat me-1"></i>Mes dernières commandes (60 jours)
+                  </button>
+                  <p v-if="prefillMessage" class="small mb-0 mt-2" :class="prefillMessageType === 'success' ? 'text-success' : prefillMessageType === 'error' ? 'text-danger' : 'text-muted'">
+                    {{ prefillMessage }}
+                  </p>
+                </div>
               </div>
-              <select
-                v-if="store.categories.length > 0"
-                v-model="store.selectedCategory"
-                class="form-select mb-2"
-              >
-                <option value="all">Toutes les catégories</option>
-                <option v-for="cat in store.categories" :key="cat.nom" :value="cat.nom">{{ cat.nom }}</option>
-              </select>
               <div class="alert alert-info py-2 mb-2">
                 <i class="bi bi-cart3 me-2"></i>
                 <strong>{{ store.totalArticles }}</strong> article{{ store.totalArticles > 1 ? 's' : '' }}
@@ -71,7 +71,7 @@
                   :disabled="!store.catalogue.modifiable || store.totalArticles === 0"
                   @input="debouncedPanierNote($event.target.value)"
                 />
-                <small class="text-muted d-block mb-2">Cette note sera visible sur la commande après validation</small>
+                <small class="text-muted d-block mb-2">Cette note sera editable sur la commande après validation</small>
                 <div class="d-grid">
                   <button
                     v-if="store.catalogue.modifiable"
@@ -88,14 +88,38 @@
           </div>
         </div>
 
-        <!-- Changement de propriétaire : visible pour les autorisés dès l'ouverture, désactivé tant qu'il n'y a pas d'article -->
-        <div v-if="store.canChangeOwner && store.users.length > 0" class="row mb-3">
-          <div class="col-12">
-            <div class="card">
+        <!-- Recherche + Changement de propriétaire : alignés sur une même ligne -->
+        <div class="row mb-3">
+          <div class="col-12 col-md-4 mb-3 mb-md-0">
+            <div class="card h-100">
+              <div class="card-body">
+                <h5 class="card-title mb-2"><i class="bi bi-search me-2"></i>Recherche</h5>
+                <div class="input-group mb-2">
+                  <span class="input-group-text"><i class="bi bi-search"></i></span>
+                  <input
+                    v-model="store.searchTerm"
+                    type="text"
+                    class="form-control"
+                    placeholder="Rechercher un produit..."
+                  />
+                </div>
+                <select
+                  v-if="store.categories.length > 0"
+                  v-model="store.selectedCategory"
+                  class="form-select"
+                >
+                  <option value="all">Toutes les catégories</option>
+                  <option v-for="cat in store.categories" :key="cat.nom" :value="cat.nom">{{ cat.nom }}</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div v-if="store.canChangeOwner && store.users.length > 0" class="col-12 col-md-8">
+            <div class="card h-100">
               <div class="card-body">
                 <h5 class="card-title mb-3">
                   Changement de propriétaire
-                  <span v-if="store.totalArticles === 0" class="text-muted fw-normal">(Ajoutez au moins un article pour activer le changement de propriétaire.)</span>
+                  <span v-if="store.totalArticles === 0" class="text-muted fw-normal">(Ajoutez au moins un article pour activer.)</span>
                 </h5>
                 <div class="d-flex flex-column flex-md-row gap-2 align-items-md-center flex-wrap">
                   <label class="form-label mb-0 text-nowrap">Propriétaire actuel : <strong>{{ store.panier?.username || '—' }}</strong></label>
@@ -122,7 +146,7 @@
         </template>
 
         <template v-else>
-          <div v-for="cat in store.productsByCategory" :key="cat.name" class="card mb-3 border-0 shadow-sm">
+          <div v-for="cat in store.sortedProductsByCategory" :key="cat.name" class="card mb-3 border-0 shadow-sm">
             <div class="card-header" :style="{ backgroundColor: cat.color, color: 'white' }">
               <h5 class="mb-0">{{ cat.name }}</h5>
             </div>
@@ -131,12 +155,24 @@
               <div class="d-none d-md-block">
                 <div class="table-responsive">
                   <table class="table table-hover mb-0">
-                    <thead class="table-light">
+                    <thead class="thead-precommandes">
                       <tr>
-                        <th style="width: 35%;">Produit</th>
-                        <th class="text-center" style="width: 15%;">Prix</th>
-                        <th class="text-center" style="width: 20%;">Quantité</th>
-                        <th style="width: 30%;">Note</th>
+                        <th style="width: 35%;" class="sortable" @click="store.setSort('produit')">
+                          Produit
+                          <i v-if="store.sortColumn === 'produit'" :class="store.sortDirection === 'asc' ? 'bi bi-arrow-up' : 'bi bi-arrow-down'" class="ms-1"></i>
+                        </th>
+                        <th class="text-center sortable" style="width: 15%;" @click="store.setSort('prix')">
+                          Prix
+                          <i v-if="store.sortColumn === 'prix'" :class="store.sortDirection === 'asc' ? 'bi bi-arrow-up' : 'bi bi-arrow-down'" class="ms-1"></i>
+                        </th>
+                        <th class="text-center sortable" style="width: 20%;" @click="store.setSort('quantite')">
+                          Quantité
+                          <i v-if="store.sortColumn === 'quantite'" :class="store.sortDirection === 'asc' ? 'bi bi-arrow-up' : 'bi bi-arrow-down'" class="ms-1"></i>
+                        </th>
+                        <th style="width: 30%;" class="sortable" @click="store.setSort('note')">
+                          Note
+                          <i v-if="store.sortColumn === 'note'" :class="store.sortDirection === 'asc' ? 'bi bi-arrow-up' : 'bi bi-arrow-down'" class="ms-1"></i>
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -310,6 +346,9 @@ import { onMounted, ref } from 'vue';
 const store = useCatalogueDetailStore();
 const catalogueIdRef = ref(null);
 const nouveauPanierRef = ref(false);
+const prefillLoading = ref(false);
+const prefillMessage = ref('');
+const prefillMessageType = ref('success');
 
 let debounceQtyTimer = null;
 let debounceNoteTimer = null;
@@ -411,6 +450,28 @@ function confirmChangeOwner() {
   });
 }
 
+async function prefillFromRecent() {
+  const cid = catalogueIdRef.value;
+  const csrf = typeof window !== 'undefined' ? window.CSRF_TOKEN : '';
+  if (!cid) return;
+  prefillMessage.value = '';
+  prefillLoading.value = true;
+  try {
+    const count = await store.prefillFromRecentOrders(cid, nouveauPanierRef.value, csrf);
+    prefillMessageType.value = 'success';
+    if (count > 0) {
+      prefillMessage.value = `${count} article${count > 1 ? 's' : ''} ajouté${count > 1 ? 's' : ''} avec une quantité de 1.`;
+    } else {
+      prefillMessage.value = 'Aucun produit commandé dans les 60 derniers jours pour ce catalogue.';
+    }
+  } catch (e) {
+    prefillMessageType.value = 'error';
+    prefillMessage.value = e.message || 'Erreur lors du préremplissage.';
+  } finally {
+    prefillLoading.value = false;
+  }
+}
+
 onMounted(() => {
   const id = getCatalogueIdFromPath();
   catalogueIdRef.value = id;
@@ -448,5 +509,12 @@ onMounted(() => {
 .catalogue-detail-note-wrapper {
   width: 100%;
   max-width: 100%;
+}
+th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+th.sortable:hover {
+  background-color: rgba(0, 0, 0, 0.05);
 }
 </style>

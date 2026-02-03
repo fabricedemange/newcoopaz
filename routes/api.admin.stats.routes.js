@@ -1,21 +1,21 @@
 const express = require("express");
 const router = express.Router();
 const { db } = require("../config/config");
-const { requirePermission } = require("../middleware/rbac.middleware");
-const { getCurrentOrgId, getCurrentUserRole } = require("../utils/session-helpers");
+const { requirePermission, hasPermission } = require("../middleware/rbac.middleware");
+const { getCurrentOrgId } = require("../utils/session-helpers");
 const { logger } = require("../config/logger");
 
 // ============================================================================
 // API: Statistiques générales
 // ============================================================================
-router.get("/", requirePermission('reports', { json: true }), (req, res) => {
-  const role = getCurrentUserRole(req);
+router.get("/", requirePermission('reports', { json: true }), async (req, res) => {
+  const canViewAllOrgs = await hasPermission(req, "organizations.view_all");
   const orgId = getCurrentOrgId(req);
 
   let sql;
   let params = [];
 
-  if (role === "SuperAdmin") {
+  if (canViewAllOrgs) {
     sql = `SELECT
       (SELECT COUNT(*) FROM paniers WHERE is_submitted = 1) as total_commandes,
       (SELECT COUNT(*) FROM users) as total_utilisateurs,
@@ -55,14 +55,14 @@ router.get("/", requirePermission('reports', { json: true }), (req, res) => {
 // ============================================================================
 // API: Statistiques - Commandes
 // ============================================================================
-router.get("/commandes", requirePermission('catalogues', { json: true }), (req, res) => {
-  const role = getCurrentUserRole(req);
+router.get("/commandes", requirePermission('catalogues', { json: true }), async (req, res) => {
+  const canViewAllOrgs = await hasPermission(req, "organizations.view_all");
   const orgId = getCurrentOrgId(req);
 
   let orgFilter = "";
   let orgParams = [];
 
-  if (role !== "SuperAdmin") {
+  if (!canViewAllOrgs) {
     orgFilter = " AND users.organization_id = ? ";
     orgParams = [orgId];
   }
@@ -96,14 +96,14 @@ router.get("/commandes", requirePermission('catalogues', { json: true }), (req, 
 // ============================================================================
 // API: Statistiques - Utilisateurs
 // ============================================================================
-router.get("/utilisateurs", requirePermission('catalogues', { json: true }), (req, res) => {
-  const role = getCurrentUserRole(req);
+router.get("/utilisateurs", requirePermission('catalogues', { json: true }), async (req, res) => {
+  const canViewAllOrgs = await hasPermission(req, "organizations.view_all");
   const orgId = getCurrentOrgId(req);
 
   let orgFilter = "";
   let orgParams = [];
 
-  if (role !== "SuperAdmin") {
+  if (!canViewAllOrgs) {
     orgFilter = " WHERE users.organization_id = ? ";
     orgParams = [orgId];
   }
@@ -134,14 +134,14 @@ router.get("/utilisateurs", requirePermission('catalogues', { json: true }), (re
 // ============================================================================
 // API: Statistiques - Catalogues
 // ============================================================================
-router.get("/catalogues", requirePermission('catalogues', { json: true }), (req, res) => {
-  const role = getCurrentUserRole(req);
+router.get("/catalogues", requirePermission('catalogues', { json: true }), async (req, res) => {
+  const canViewAllOrgs = await hasPermission(req, "organizations.view_all");
   const orgId = getCurrentOrgId(req);
 
   let orgFilter = "";
   let orgParams = [];
 
-  if (role !== "SuperAdmin") {
+  if (!canViewAllOrgs) {
     orgFilter = " WHERE c.organization_id = ? ";
     orgParams = [orgId];
   }
@@ -181,14 +181,14 @@ router.get("/catalogues", requirePermission('catalogues', { json: true }), (req,
 // ============================================================================
 // API: Statistiques - Commandes par période
 // ============================================================================
-router.get("/commandes-periode", requirePermission('catalogues', { json: true }), (req, res) => {
-  const role = getCurrentUserRole(req);
+router.get("/commandes-periode", requirePermission('catalogues', { json: true }), async (req, res) => {
+  const canViewAllOrgs = await hasPermission(req, "organizations.view_all");
   const orgId = getCurrentOrgId(req);
 
   let orgFilter = "";
   let orgParams = [];
 
-  if (role !== "SuperAdmin") {
+  if (!canViewAllOrgs) {
     orgFilter = " AND users.organization_id = ? ";
     orgParams = [orgId, orgId];
   }

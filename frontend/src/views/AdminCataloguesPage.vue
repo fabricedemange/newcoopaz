@@ -16,16 +16,21 @@
 
     <!-- Content -->
     <template v-else>
-      <div class="d-flex justify-content-between align-items-center mb-4">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
         <h2>Gestion des catalogues</h2>
-        <button
-          v-if="store.referentScopeActive"
-          type="button"
-          class="btn btn-outline-primary"
-          @click="toggleScope"
-        >
-          {{ store.showAllScope ? 'Voir mes catalogues uniquement' : 'Voir tous les catalogues' }}
-        </button>
+        <div class="d-flex gap-2 align-items-center">
+          <a href="/admin/catalogues/new" class="btn btn-success">
+            <i class="bi bi-plus-circle me-1"></i>Nouveau catalogue
+          </a>
+          <button
+            v-if="store.referentScopeActive"
+            type="button"
+            class="btn btn-outline-primary"
+            @click="toggleScope"
+          >
+            {{ store.showAllScope ? 'Voir mes catalogues uniquement' : 'Voir tous les catalogues' }}
+          </button>
+        </div>
       </div>
 
       <!-- Catalogues actifs -->
@@ -47,7 +52,7 @@
           </div>
           <div v-else class="table-responsive d-none d-lg-block">
             <table class="table table-hover">
-              <thead class="table-dark">
+              <thead class="thead-administration">
                 <tr>
                   <th style="cursor: pointer" @click="store.handleSort('id', false)">ID</th>
                   <th v-if="store.isSuperAdmin">Org</th>
@@ -136,7 +141,7 @@
           </div>
           <div v-else class="table-responsive d-none d-lg-block">
             <table class="table table-hover">
-              <thead class="table-dark">
+              <thead class="thead-administration">
                 <tr>
                   <th style="cursor: pointer" @click="store.handleSort('id', true)">ID</th>
                   <th v-if="store.isSuperAdmin">Org</th>

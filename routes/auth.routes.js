@@ -4,7 +4,7 @@ const bcrypt = require("bcrypt");
 const crypto = require("crypto");
 const rateLimit = require("express-rate-limit");
 const { db } = require("../config/config");
-const { requireRole } = require("../middleware/middleware");
+const { requireLogin } = require("../middleware/middleware");
 const emailService = require("../services/email.service");
 const { logger } = require("../config/logger");
 const { queryWithUser } = require("../config/db-trace-wrapper");
@@ -194,10 +194,10 @@ router.get("/logout", (req, res) => {
   });
 });
 
-// GET /account - Formulaire Mon compte Vue+Vite
+// GET /account - Formulaire Mon compte Vue+Vite (tout utilisateur connecté)
 router.get(
   "/account",
-  requireRole(["admin", "epicier", "referent", "utilisateur", "SuperAdmin"]),
+  requireLogin,
   (req, res) => {
     db.query(
       "SELECT username, email, description, email_catalogue FROM users WHERE id = ?",
@@ -216,10 +216,10 @@ router.get(
   }
 );
 
-// POST /account - Traiter la modification du compte
+// POST /account - Traiter la modification du compte (tout utilisateur connecté)
 router.post(
   "/account",
-  requireRole(["admin", "epicier", "referent", "utilisateur", "SuperAdmin"]),
+  requireLogin,
   validatePasswordChangeInput,
   async (req, res) => {
     const {

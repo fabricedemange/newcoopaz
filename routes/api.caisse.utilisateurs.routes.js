@@ -2,12 +2,13 @@ const express = require("express");
 const router = express.Router();
 const { db } = require("../config/db-trace-wrapper");
 const { getCurrentOrgId } = require("../utils/session-helpers");
+const { requirePermission } = require("../middleware/rbac.middleware");
 
 /**
  * GET /api/caisse/utilisateurs
  * Récupère la liste des utilisateurs actifs pour la caisse
  */
-router.get("/", (req, res) => {
+router.get("/", requirePermission("caisse.sell", { json: true }), (req, res) => {
   const orgId = getCurrentOrgId(req);
 
   const query = `

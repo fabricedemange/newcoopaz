@@ -84,19 +84,6 @@ function isImpersonating(req) {
   return Boolean(req.session && req.session.originalUser);
 }
 
-/**
- * Check if current user is SuperAdmin
- * @param {Object} req - Request object
- * @returns {boolean} True if user is SuperAdmin
- */
-function isSuperAdmin(req) {
-  try {
-    return getCurrentUserRole(req) === "SuperAdmin";
-  } catch (error) {
-    return false;
-  }
-}
-
 module.exports = {
   getCurrentOrgId,
   getCurrentUserId,
@@ -104,5 +91,4 @@ module.exports = {
   getCurrentUsername,
   getOriginalUser,
   isImpersonating,
-  isSuperAdmin,
 };

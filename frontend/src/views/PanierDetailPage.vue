@@ -19,7 +19,7 @@
         <!-- En-tête -->
         <div class="row mb-4">
           <div class="col">
-            <h2><i class="bi bi-cart3 me-2"></i>Mon panier</h2>
+            <h2><i class="bi bi-cart3 me-2"></i>{{ titrePanier }}</h2>
             <div class="card">
               <div class="card-body">
                 <dl class="row mb-0">
@@ -140,7 +140,7 @@
               <div class="d-none d-lg-block">
                 <div class="table-responsive">
                   <table class="table table-hover mb-0">
-                    <thead class="table-light">
+                    <thead class="thead-precommandes">
                       <tr>
                         <th style="width: 30%;">Produit</th>
                         <th class="text-center" style="width: 13%;">Prix</th>
@@ -262,10 +262,20 @@
 
 <script setup>
 import { usePanierDetailStore } from '@/stores/panierDetail';
-import { onMounted, ref } from 'vue';
+import { onMounted, ref, computed } from 'vue';
 
 const store = usePanierDetailStore();
 const panierIdRef = ref(null);
+
+/** "Mon panier" si c'est le panier de l'utilisateur connecté, sinon "Panier de [propriétaire]" (mode référent). */
+const titrePanier = computed(() => {
+  if (!store.panier) return 'Mon panier';
+  const currentId = typeof window !== 'undefined' && window.CURRENT_USER_ID != null ? Number(window.CURRENT_USER_ID) : null;
+  if (currentId != null && store.panier.user_id !== currentId) {
+    return 'Panier de ' + (store.panier.username || '');
+  }
+  return 'Mon panier';
+});
 
 let debounceQtyTimer = null;
 let debounceNoteTimer = null;

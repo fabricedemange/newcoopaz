@@ -6,7 +6,7 @@ const {
   getCurrentUserId,
   getCurrentUsername,
 } = require("../utils/session-helpers");
-const { hasAnyPermission } = require("./rbac.middleware");
+const { hasPermission } = require("./rbac.middleware");
 
 function requireLogin(req, res, next) {
   try {
@@ -21,45 +21,6 @@ function requireLogin(req, res, next) {
     }
     return res.redirect("/login");
   }
-}
-
-// RBAC ONLY - Plus de support legacy
-const { requireAnyPermission } = require('./rbac.middleware');
-
-// Wrapper pour migration: convertit rôles legacy en permissions RBAC
-function requireRole(roles) {
-  // Mapping rôles legacy → permissions RBAC minimales
-  const rolePermissionMap = {
-    'SuperAdmin': ['users.view'], // SuperAdmin a tout via rôle super_admin
-    'admin': ['users.view', 'organizations.view', 'catalogues.view'],
-    'referent': ['catalogues.view', 'paniers.validate'],
-    'epicier': ['paniers.validate'],
-    'utilisateur': ['paniers.view_own', 'paniers.create']
-  };
-
-  // Collecter toutes les permissions correspondant aux rôles demandés
-  if (!Array.isArray(roles)) roles = [roles];
-  const requiredPermissions = [];
-
-  for (const role of roles) {
-    if (rolePermissionMap[role]) {
-      requiredPermissions.push(...rolePermissionMap[role]);
-    }
-  }
-
-  // Si aucune permission trouvée, bloquer
-  if (requiredPermissions.length === 0) {
-    return async (req, res, next) => {
-      return res.status(403).render("403", {
-        message: "Accès refusé - rôles non reconnus",
-        user: getCurrentUsername(req),
-        role: getCurrentUserRole(req),
-      });
-    };
-  }
-
-  // Utiliser requireAnyPermission pour vérifier
-  return requireAnyPermission(requiredPermissions);
 }
 
 function injectBandeaux(req, res, next) {
@@ -95,22 +56,12 @@ function handle404(req, res) {
   });
 }
 
-// Specific role middlewares
-const requireAdmin = requireRole(["admin", "SuperAdmin"]);
-const requireSuperAdmin = requireRole(["SuperAdmin"]);
-const requireReferent = requireRole(["admin", "referent", "SuperAdmin"]);
-const requireUtilisateur = requireRole([
-  "admin",
-  "referent",
-  "utilisateur",
-  "SuperAdmin",
-]);
-
-// Middleware de validation
-function validateCatalogOwnership(req, res, next) {
+// Middleware de validation (accès catalogue : toutes orgs si permission organizations.view_all, sinon filtre par org)
+async function validateCatalogOwnership(req, res, next) {
   const id = req.params.id;
   let sql, params;
-  if (getCurrentUserRole(req) === "SuperAdmin") {
+  const canViewAllOrgs = await hasPermission(req, "organizations.view_all");
+  if (canViewAllOrgs) {
     sql = "SELECT * FROM catalog_files WHERE id = ?";
     params = [id];
   } else {
@@ -132,11 +83,6 @@ function validateCatalogOwnership(req, res, next) {
 
 module.exports = {
   requireLogin,
-  requireRole,
-  requireAdmin,
-  requireSuperAdmin,
-  requireReferent,
-  requireUtilisateur,
   validateCatalogOwnership,
   injectBandeaux,
   handleCSRFError,

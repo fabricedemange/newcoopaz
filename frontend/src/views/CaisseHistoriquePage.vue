@@ -3,15 +3,15 @@
     <div class="row mb-4">
       <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-3">
-          <h2><i class="bi bi-clock-history me-2"></i>Historique des ventes</h2>
-          <a href="/caisse" class="btn btn-outline-primary">
+          <h2 class="text-caisse"><i class="bi bi-clock-history me-2"></i>Historique des ventes</h2>
+          <a href="/caisse" class="btn btn-outline-caisse">
             <i class="bi bi-arrow-left me-2"></i>Retour à la caisse
           </a>
         </div>
 
         <div class="row g-3" v-if="store.stats">
           <div class="col-md-3">
-            <div class="card bg-primary text-white">
+            <div class="card card-caisse">
               <div class="card-body">
                 <h6 class="card-title">Nombre de ventes</h6>
                 <h3 class="mb-0">{{ store.stats.nb_ventes }}</h3>
@@ -19,7 +19,7 @@
             </div>
           </div>
           <div class="col-md-3">
-            <div class="card bg-success text-white">
+            <div class="card card-caisse">
               <div class="card-body">
                 <h6 class="card-title">CA Total</h6>
                 <h3 class="mb-0">{{ store.stats.ca_total.toFixed(2) }} €</h3>
@@ -47,7 +47,7 @@
     </div>
 
     <div class="card mb-4">
-      <div class="card-header bg-light">
+      <div class="card-header card-header-caisse">
         <h5 class="mb-0"><i class="bi bi-funnel me-2"></i>Filtres de recherche</h5>
       </div>
       <div class="card-body">
@@ -70,7 +70,7 @@
             />
           </div>
           <div class="col-md-2 d-flex align-items-end gap-2">
-            <button class="btn btn-primary" @click="store.rechercher()">
+            <button class="btn btn-caisse" @click="store.rechercher()">
               <i class="bi bi-search me-1"></i>Rechercher
             </button>
             <button class="btn btn-outline-secondary" @click="store.resetFiltres()">
@@ -87,11 +87,11 @@
     </div>
 
     <div v-if="store.loading" class="text-center py-5">
-      <div class="spinner-border text-primary"></div>
+      <div class="spinner-border text-caisse"></div>
     </div>
 
     <div v-else class="card">
-      <div class="card-header">
+      <div class="card-header card-header-caisse">
         <h5 class="mb-0">
           Résultats ({{ store.total }} vente{{ store.total > 1 ? 's' : '' }})
         </h5>
@@ -104,7 +104,7 @@
 
         <div v-else class="table-responsive">
           <table class="table table-hover mb-0">
-            <thead class="table-light">
+            <thead class="thead-caisse">
               <tr>
                 <th>Ticket</th>
                 <th>Date/Heure</th>
@@ -112,7 +112,7 @@
                 <th>Client</th>
                 <th>Nb articles</th>
                 <th>Montant</th>
-                <th>Source</th>
+                <th>PréCde</th>
                 <th>Statut</th>
                 <th>Actions</th>
               </tr>
@@ -126,15 +126,8 @@
                 <td>{{ vente.nb_lignes }}</td>
                 <td><strong class="text-primary">{{ vente.montant_ttc.toFixed(2) }} €</strong></td>
                 <td>
-                  <span v-if="vente.panier_source === 'caisse'" class="badge bg-info">
-                    <i class="bi bi-cart me-1"></i>Panier caisse
-                  </span>
-                  <span v-else-if="vente.panier_source === 'catalogue'" class="badge bg-secondary">
-                    <i class="bi bi-book me-1"></i>Catalogue
-                  </span>
-                  <span v-else class="badge bg-light text-dark">
-                    <i class="bi bi-lightning me-1"></i>Direct
-                  </span>
+                  <span v-if="vente.catalogues_oui" class="badge bg-secondary">Oui</span>
+                  <span v-else class="text-muted">—</span>
                 </td>
                 <td>
                   <span :class="['badge', vente.statut === 'complete' ? 'bg-success' : 'bg-warning']">
@@ -142,7 +135,7 @@
                   </span>
                 </td>
                 <td>
-                  <button class="btn btn-sm btn-outline-primary" @click="store.ouvrirDetail(vente.id)">
+                  <button class="btn btn-sm btn-outline-caisse" @click="store.ouvrirDetail(vente.id)">
                     <i class="bi bi-eye me-1"></i>Détails
                   </button>
                 </td>
@@ -183,7 +176,7 @@
     >
       <div class="modal-dialog modal-xl">
         <div class="modal-content">
-          <div class="modal-header">
+          <div class="modal-header card-header-caisse">
             <h5 class="modal-title">
               <i class="bi bi-receipt me-2"></i>
               Détail vente {{ store.selectedVente.vente.numero_ticket }}
@@ -207,30 +200,12 @@
                   </dd>
                 </dl>
               </div>
-              <div class="col-md-6" v-if="store.selectedVente.vente.panier_id">
-                <h6>Informations panier</h6>
-                <dl class="row">
-                  <dt class="col-sm-4">Source</dt>
-                  <dd class="col-sm-8">
-                    <span
-                      :class="[
-                        'badge',
-                        store.selectedVente.vente.panier_source === 'caisse' ? 'bg-info' : 'bg-secondary',
-                      ]"
-                    >
-                      {{ store.selectedVente.vente.panier_source }}
-                    </span>
-                  </dd>
-                  <dt class="col-sm-4">Sauvegardé le</dt>
-                  <dd class="col-sm-8">{{ store.formatDate(store.selectedVente.vente.panier_saved_at) }}</dd>
-                </dl>
-              </div>
             </div>
 
             <h6>Produits vendus</h6>
             <div class="table-responsive mb-4">
               <table class="table table-sm table-bordered">
-                <thead class="table-light">
+                <thead class="thead-caisse">
                   <tr>
                     <th>Produit</th>
                     <th class="text-end">Quantité</th>
@@ -242,16 +217,17 @@
                   <tr
                     v-for="ligne in store.selectedVente.lignes"
                     :key="ligne.id"
-                    :class="{ 'table-warning': ligne.is_avoir }"
+                    :class="{ 'table-warning': ligne.is_avoir, 'table-info': ligne.is_cotisation }"
                   >
                     <td>
                       {{ ligne.nom_produit || ligne.product_nom_actuel }}
+                      <span v-if="ligne.is_cotisation" class="badge bg-info ms-2">Cotisation</span>
                       <span v-if="ligne.is_avoir" class="badge bg-warning text-dark ms-2">AVOIR</span>
                     </td>
                     <td class="text-end">{{ ligne.quantite.toFixed(3) }}</td>
                     <td class="text-end">{{ ligne.prix_unitaire.toFixed(2) }} €</td>
                     <td class="text-end">
-                      <strong :class="ligne.is_avoir ? 'text-warning' : 'text-primary'">
+                      <strong :class="ligne.is_cotisation ? 'text-info' : ligne.is_avoir ? 'text-warning' : 'text-primary'">
                         {{ ligne.montant_ttc.toFixed(2) }} €
                       </strong>
                     </td>
@@ -271,7 +247,7 @@
             <h6 v-if="store.selectedVente.paiements?.length > 0">Paiements</h6>
             <div v-if="store.selectedVente.paiements?.length > 0" class="table-responsive">
               <table class="table table-sm">
-                <thead class="table-light">
+                <thead class="thead-caisse">
                   <tr>
                     <th>Mode de paiement</th>
                     <th class="text-end">Montant</th>
@@ -289,6 +265,15 @@
             </div>
           </div>
           <div class="modal-footer">
+            <a
+              :href="`/api/caisse/ventes-historique/${store.selectedVente?.vente?.id}/pdf`"
+              class="btn btn-outline-caisse"
+              download
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <i class="bi bi-file-earmark-pdf me-1"></i>Télécharger PDF
+            </a>
             <button type="button" class="btn btn-secondary" @click="store.fermerDetail()">Fermer</button>
           </div>
         </div>

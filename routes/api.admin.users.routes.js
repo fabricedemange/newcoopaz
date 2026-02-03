@@ -7,8 +7,8 @@
 const express = require("express");
 const router = express.Router();
 const { db } = require("../config/db-trace-wrapper");
-const { requirePermission } = require("../middleware/rbac.middleware");
-const { getCurrentOrgId, getCurrentUserId, isSuperAdmin } = require("../utils/session-helpers");
+const { requirePermission, hasPermission } = require("../middleware/rbac.middleware");
+const { getCurrentOrgId, getCurrentUserId } = require("../utils/session-helpers");
 
 // Helper: Query with promise
 function queryPromise(query, params) {
@@ -27,7 +27,7 @@ function queryPromise(query, params) {
 router.get("/", requirePermission('users', { json: true }), async (req, res) => {
   try {
     const orgId = getCurrentOrgId(req);
-    const superAdmin = isSuperAdmin(req);
+    const superAdmin = await hasPermission(req, "organizations.view_all");
 
     // Base query - get users with role count
     let query = `
@@ -160,7 +160,7 @@ router.get("/:id", requirePermission('users', { json: true }), async (req, res) 
   try {
     const userId = parseInt(req.params.id);
     const orgId = getCurrentOrgId(req);
-    const superAdmin = isSuperAdmin(req);
+    const superAdmin = await hasPermission(req, "organizations.view_all");
 
     // Get user
     const userQuery = `SELECT * FROM users WHERE id = ?`;
@@ -221,7 +221,7 @@ router.put("/:id/roles", requirePermission('roles', { json: true }), async (req,
     const { role_ids } = req.body;
     const actorId = getCurrentUserId(req);
     const orgId = getCurrentOrgId(req);
-    const superAdmin = isSuperAdmin(req);
+    const superAdmin = await hasPermission(req, "organizations.view_all");
 
     // Get user
     const userQuery = `SELECT * FROM users WHERE id = ?`;
@@ -284,7 +284,7 @@ router.post("/bulk-assign-roles", requirePermission('roles', { json: true }), as
     const { user_ids, role_ids } = req.body;
     const actorId = getCurrentUserId(req);
     const orgId = getCurrentOrgId(req);
-    const superAdmin = isSuperAdmin(req);
+    const superAdmin = await hasPermission(req, "organizations.view_all");
 
     if (!user_ids || !Array.isArray(user_ids) || user_ids.length === 0) {
       return res.status(400).json({ success: false, error: 'Aucun utilisateur sélectionné' });
@@ -364,7 +364,7 @@ router.put("/:id/toggle-rbac", requirePermission('users.manage', { json: true })
     const userId = parseInt(req.params.id);
     const { rbac_enabled } = req.body;
     const orgId = getCurrentOrgId(req);
-    const superAdmin = isSuperAdmin(req);
+    const superAdmin = await hasPermission(req, "organizations.view_all");
 
     // Get user
     const userQuery = `SELECT * FROM users WHERE id = ?`;
@@ -409,7 +409,7 @@ router.delete("/:id", requirePermission('users', { json: true }), async (req, re
   try {
     const userId = parseInt(req.params.id);
     const orgId = getCurrentOrgId(req);
-    const superAdmin = isSuperAdmin(req);
+    const superAdmin = await hasPermission(req, "organizations.view_all");
     const currentUserId = getCurrentUserId(req);
 
     // Prevent self-deletion
@@ -480,7 +480,7 @@ router.put("/:id/toggle-active", requirePermission('users', { json: true }), asy
     const userId = parseInt(req.params.id);
     const { is_active } = req.body;
     const orgId = getCurrentOrgId(req);
-    const superAdmin = isSuperAdmin(req);
+    const superAdmin = await hasPermission(req, "organizations.view_all");
     const currentUserId = getCurrentUserId(req);
 
     // Prevent self-deactivation

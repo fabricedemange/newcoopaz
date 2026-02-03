@@ -12,7 +12,36 @@ export const useAdminDashboardStore = defineStore('adminDashboard', {
     paniers: [],
     referentScopeActive: false,
     showAllScope: false,
+    commandesSortColumn: 'created_at',
+    commandesSortDirection: 'desc',
   }),
+
+  getters: {
+    sortedCommandes(state) {
+      const list = [...(state.commandes || [])];
+      const col = state.commandesSortColumn || 'created_at';
+      const dir = state.commandesSortDirection || 'desc';
+      list.sort((a, b) => {
+        let aVal = a[col];
+        let bVal = b[col];
+        if (col === 'created_at' || col === 'date_livraison') {
+          aVal = aVal ? new Date(aVal).getTime() : 0;
+          bVal = bVal ? new Date(bVal).getTime() : 0;
+          return dir === 'asc' ? aVal - bVal : bVal - aVal;
+        }
+        if (col === 'nb_produits' || col === 'montant_total' || col === 'id') {
+          aVal = Number(aVal) || 0;
+          bVal = Number(bVal) || 0;
+          return dir === 'asc' ? aVal - bVal : bVal - aVal;
+        }
+        aVal = (aVal ?? '').toString().toLowerCase();
+        bVal = (bVal ?? '').toString().toLowerCase();
+        const cmp = aVal.localeCompare(bVal, 'fr');
+        return dir === 'asc' ? cmp : -cmp;
+      });
+      return list;
+    },
+  },
 
   actions: {
     async loadDashboard(scope = 'all') {
@@ -43,6 +72,15 @@ export const useAdminDashboardStore = defineStore('adminDashboard', {
     toggleScope() {
       const newScope = this.showAllScope ? 'referent' : 'all';
       window.location.href = `?scope=${newScope}#catalogues`;
+    },
+
+    setCommandesSort(column) {
+      if (this.commandesSortColumn === column) {
+        this.commandesSortDirection = this.commandesSortDirection === 'asc' ? 'desc' : 'asc';
+      } else {
+        this.commandesSortColumn = column;
+        this.commandesSortDirection = column === 'created_at' || column === 'id' ? 'desc' : 'asc';
+      }
     },
   },
 });

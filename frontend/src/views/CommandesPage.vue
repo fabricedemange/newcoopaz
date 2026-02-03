@@ -77,7 +77,7 @@
           <div class="d-none d-md-block">
             <div class="table-responsive">
               <table class="table table-hover">
-                <thead class="table-dark">
+                <thead class="thead-precommandes">
                   <tr>
                     <th v-for="col in sortColumns" :key="col.key" class="sortable" style="cursor: pointer;" @click="store.sortBy(col.key)">
                       {{ col.label }} <i class="bi" :class="'bi-' + store.sortIcon(col.key) + ' ms-1'"></i>
@@ -178,21 +178,22 @@
           </div>
           <div class="d-none d-md-block">
             <div class="table-responsive">
-              <table class="table table-hover">
-                <thead class="table-dark">
+              <table class="table table-hover table-commandes-caisse">
+                <thead class="thead-precommandes">
                   <tr>
-                    <th>N° Ticket</th>
+                    <th class="col-ticket">N° Ticket</th>
                     <th>Client</th>
                     <th>Produits</th>
                     <th>Montant</th>
                     <th>Mode paiement</th>
                     <th>Date</th>
+                    <th>PréCde</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr v-for="v in store.ventes" :key="v.id">
-                    <td><strong>{{ v.numero_ticket }}</strong></td>
+                    <td class="col-ticket"><strong>{{ v.numero_ticket }}</strong></td>
                     <td>{{ v.nom_client || 'Anonyme' }}</td>
                     <td>
                       <span class="badge bg-secondary">{{ v.nb_produits }} article(s)</span>
@@ -201,6 +202,10 @@
                     <td><strong class="text-primary">{{ parseFloat(v.montant_ttc).toFixed(2) }} €</strong></td>
                     <td>{{ v.mode_paiement || 'N/A' }}</td>
                     <td>{{ v.created_formatted }}</td>
+                    <td>
+                      <span v-if="v.avec_precommandes" class="badge bg-secondary">Oui</span>
+                      <span v-else class="text-muted">—</span>
+                    </td>
                     <td>
                       <button class="btn btn-sm btn-info" @click="store.loadVenteDetail(v.id)"><i class="bi bi-eye"></i> Détails</button>
                     </td>
@@ -260,20 +265,11 @@
                 <dd class="col-sm-8"><strong class="text-primary">{{ parseFloat(store.selectedVente.vente?.montant_ttc || 0).toFixed(2) }} €</strong></dd>
               </dl>
             </div>
-            <div v-if="store.selectedVente.vente?.panier_id" class="col-md-6">
-              <h6>Informations panier</h6>
-              <dl class="row">
-                <dt class="col-sm-4">Source</dt>
-                <dd class="col-sm-8"><span class="badge bg-info">{{ store.selectedVente.vente?.panier_source || 'N/A' }}</span></dd>
-                <dt class="col-sm-4">Sauvegardé le</dt>
-                <dd class="col-sm-8">{{ formatDate(store.selectedVente.vente?.panier_saved_at) }}</dd>
-              </dl>
-            </div>
           </div>
           <h6>Produits vendus</h6>
           <div class="table-responsive mb-4">
             <table class="table table-sm table-bordered">
-              <thead class="table-light">
+              <thead class="thead-precommandes">
                 <tr>
                   <th>Produit</th>
                   <th class="text-end">Quantité</th>
@@ -304,7 +300,7 @@
             <h6>Paiements</h6>
             <div class="table-responsive">
               <table class="table table-sm">
-                <thead class="table-light">
+                <thead class="thead-precommandes">
                   <tr><th>Mode</th><th class="text-end">Montant</th><th>Date</th></tr>
                 </thead>
                 <tbody>
@@ -319,6 +315,15 @@
           </template>
         </div>
         <div class="modal-footer">
+          <a
+            :href="`/api/${store.selectedVente?.vente?.id}/pdf`"
+            class="btn btn-outline-primary"
+            download
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <i class="bi bi-file-earmark-pdf me-1"></i>Télécharger PDF
+          </a>
           <button type="button" class="btn btn-primary" @click="confirmSendPdf(store.selectedVente.vente?.id)">
             <i class="bi bi-envelope-fill me-1"></i>Envoyer par email
           </button>
@@ -378,4 +383,9 @@ onMounted(() => {
 <style scoped>
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.table-commandes-caisse .col-ticket {
+  width: 1%;
+  max-width: 4em;
+  white-space: nowrap;
+}
 </style>

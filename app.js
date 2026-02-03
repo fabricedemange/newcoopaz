@@ -39,7 +39,6 @@ const rateLimit = require("express-rate-limit");
 const compression = require("compression");
 const {
   requireLogin,
-  requireRole,
   injectBandeaux,
   handleCSRFError,
   handle404,
@@ -49,7 +48,9 @@ const {
 const { getBandeaux } = require("./utils/bandeaux-cache");
 
 // Import du logger sécurisé
-const { logger, httpLogger } = require("./config/logger");
+const { logger, httpLogger, logsDir } = require("./config/logger");
+const logsPath = (logsDir && path.resolve(logsDir)) || path.join(__dirname, "logs");
+console.log("Logs écrits dans:", logsPath);
 const { debugLog } = require("./utils/logger-helpers");
 const {
   getCurrentOrgId,
@@ -102,14 +103,16 @@ const app = express();
 const APP_VERSION = Date.now();
 app.locals.APP_VERSION = APP_VERSION;
 
-// Démarre la file d'attente de traitement des emails
-startEmailQueueWorker();
-
-// Démarre le worker d'alerte référent (Expiration + 8h)
-startCatalogueOrderReminderWorker();
-
-// Masque/Archive automatiquement les catalogues (01:00)
-startCatalogueAutoArchiveScheduler();
+// En dehors du mode test : démarrer les workers (évite connexions DB/Redis en tests)
+if (process.env.NODE_ENV !== "test") {
+  startEmailQueueWorker();
+  startCatalogueOrderReminderWorker();
+  startCatalogueAutoArchiveScheduler();
+  logger.info("Workers démarrés (email, rappel catalogue, auto-archive)", {
+    logsPath,
+    isMainModule: require.main === module,
+  });
+}
 
 // Compression Gzip pour toutes les réponses
 app.use(compression());
@@ -211,16 +214,19 @@ app.use(express.json({ limit: "50mb" }));
 app.use(httpLogger);
 
 // gestion de l'expiration de session à 1 heure, sauf action utilisateur
-const MySQLStore = require("express-mysql-session")(session);
-
-const options = {
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASS,
-  database: process.env.DB_NAME,
-};
-
-const sessionStore = new MySQLStore(options);
+let sessionStore;
+if (process.env.NODE_ENV === "test") {
+  sessionStore = new (require("express-session").MemoryStore)();
+} else {
+  const MySQLStore = require("express-mysql-session")(session);
+  const options = {
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASS,
+    database: process.env.DB_NAME,
+  };
+  sessionStore = new MySQLStore(options);
+}
 
 app.use(
   session({
@@ -238,6 +244,18 @@ app.use(
     rolling: true,
   })
 );
+
+// Route de test (NODE_ENV=test uniquement) pour créer une session mockée (RBAC 403)
+if (process.env.NODE_ENV === "test") {
+  app.post("/test/session", (req, res) => {
+    req.session.userId = 999;
+    req.session.rbac_enabled = true;
+    req.session.save((err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.status(204).end();
+    });
+  });
+}
 
 // Protection CSRF - Middleware
 app.use(cookieParser());
@@ -371,6 +389,7 @@ const apiCaisseUtilisateursRoutes = require("./routes/api.caisse.utilisateurs.ro
 const apiCaissePaniersVentesRoutes = require("./routes/api.caisse.paniers-ventes.routes");
 const apiCaisseVentesHistoriqueRoutes = require("./routes/api.caisse.ventes-historique.routes");
 const apiCaisseCommandesRoutes = require("./routes/api.caisse.commandes.routes");
+const apiCaisseCotisationRoutes = require("./routes/api.caisse.cotisation.routes");
 
 // --- Middleware: inject user/admin info and bandeaux in views ---
 app.use(async (req, res, next) => {
@@ -610,6 +629,7 @@ app.use("/api/caisse/modes-paiement", apiCaisseModePaiementRoutes);
 app.use("/api/caisse/utilisateurs", apiCaisseUtilisateursRoutes);
 app.use("/api/caisse/paniers", apiCaissePaniersVentesRoutes);
 app.use("/api/caisse/ventes-historique", apiCaisseVentesHistoriqueRoutes);
+app.use("/api/caisse/cotisation", apiCaisseCotisationRoutes);
 app.use("/api/caisse", apiCaisseCommandesRoutes);
 
 // Helpers pour les dates
@@ -655,16 +675,33 @@ app.use((req, res) => {
 
 // Gestion des promesses rejetées non gérées (pour éviter les crashes)
 process.on("unhandledRejection", (reason, promise) => {
-  logger.error("Unhandled Rejection at:", promise, "reason:", reason);
-  // Ne pas quitter le processus, juste logger
-});
-
-// Démarrage du serveur
-// Backend sur 3000 ; front (Vite) sur 3200 en dev
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  logger.info("Serveur démarré", {
-    port: PORT,
-    environment: process.env.NODE_ENV || "development",
+  const errMessage = reason instanceof Error ? reason.message : String(reason);
+  const errStack = reason instanceof Error ? reason.stack : undefined;
+  logger.error("Unhandled Rejection", {
+    message: errMessage,
+    stack: errStack,
+    reason: reason !== null && typeof reason === "object" ? JSON.stringify(reason) : String(reason),
   });
 });
+
+// Démarrage du serveur (sauf en mode test ; nécessaire même quand Passenger charge l'app comme module)
+const PORT = process.env.PORT || 3000;
+if (process.env.NODE_ENV !== "test") {
+  const server = app.listen(PORT, () => {
+    logger.info("Serveur démarré", {
+      port: PORT,
+      environment: process.env.NODE_ENV || "development",
+      logsPath,
+    });
+  });
+  server.on("error", (err) => {
+    if (err.code === "EADDRINUSE") {
+      logger.error("Port déjà utilisé", { port: PORT, code: err.code });
+    } else {
+      logger.error("Erreur serveur au démarrage", { error: err.message, code: err.code });
+    }
+    process.exitCode = 1;
+  });
+}
+
+module.exports = app;

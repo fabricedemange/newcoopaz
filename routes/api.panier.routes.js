@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { requireLogin } = require("../middleware/middleware");
 const { requireAnyPermission } = require("../middleware/rbac.middleware");
-const { hasAnyPermission } = require("../middleware/rbac.middleware");
+const { hasAnyPermission, hasPermission } = require("../middleware/rbac.middleware");
 const { queryWithUser } = require("../config/db-trace-wrapper");
 
 // Convertir queryWithUser en promesse
@@ -22,12 +22,14 @@ router.get("/panier/:id", requireLogin, async (req, res) => {
   const userRole = req.session?.role;
 
   try {
-    // Vérifier que l'utilisateur a accès à ce panier
+    // Référent / admin : accès à tout panier ; sinon : uniquement ses paniers
+    const canEditAny = await hasAnyPermission(req, ["paniers.admin"]);
     const accessCheckQuery = `
       SELECT * FROM paniers
-      WHERE id = ? AND (user_id = ? OR ? IN (SELECT id FROM users WHERE role <> 'utilisateur'))
+      WHERE id = ? ${canEditAny ? "" : "AND user_id = ?"}
     `;
-    const accessResults = await queryPromise(accessCheckQuery, [panierId, userId, userId], req);
+    const accessParams = canEditAny ? [panierId] : [panierId, userId];
+    const accessResults = await queryPromise(accessCheckQuery, accessParams, req);
 
     if (!accessResults || accessResults.length === 0) {
       return res.status(403).json({
@@ -129,8 +131,8 @@ router.get("/panier/:id", requireLogin, async (req, res) => {
     const isExpired = panier.expiration_date && new Date(panier.expiration_date) < hier;
 
     // Déterminer si modifiable
-    const isAdminRole = ["admin", "referent", "epicier", "SuperAdmin"].includes(userRole);
-    const modifiable = isAdminRole || !isExpired;
+    const canAdminPaniers = await hasPermission(req, "paniers.admin");
+    const modifiable = canAdminPaniers || !isExpired;
 
     // Peut changer le propriétaire (RBAC: paniers.admin ou paniers.change_owner, ex. rôle referent)
     const canChangeOwner = await hasAnyPermission(req, ["paniers.admin", "paniers.change_owner"]);
@@ -323,15 +325,15 @@ router.post("/panier/:id/note", requireLogin, async (req, res) => {
   const panierId = req.params.id;
   const { note } = req.body;
   const userId = req.session?.userId;
-  const userRole = req.session?.role;
 
   try {
-    // Vérifier que l'utilisateur a accès à ce panier
+    const canEditAny = await hasAnyPermission(req, ["paniers.admin"]);
     const accessCheckQuery = `
       SELECT * FROM paniers
-      WHERE id = ? AND (user_id = ? OR ? IN (SELECT id FROM users WHERE role <> 'utilisateur'))
+      WHERE id = ? ${canEditAny ? "" : "AND user_id = ?"}
     `;
-    const accessResults = await queryPromise(accessCheckQuery, [panierId, userId, userId], req);
+    const accessParams = canEditAny ? [panierId] : [panierId, userId];
+    const accessResults = await queryPromise(accessCheckQuery, accessParams, req);
 
     if (!accessResults || accessResults.length === 0) {
       return res.status(403).json({
@@ -363,12 +365,13 @@ router.delete("/panier/:id", requireLogin, async (req, res) => {
   const userId = req.session?.userId;
 
   try {
-    // Vérifier que l'utilisateur a accès à ce panier
+    const canEditAny = await hasAnyPermission(req, ["paniers.admin"]);
     const accessCheckQuery = `
       SELECT * FROM paniers
-      WHERE id = ? AND (user_id = ? OR ? IN (SELECT id FROM users WHERE role <> 'utilisateur'))
+      WHERE id = ? ${canEditAny ? "" : "AND user_id = ?"}
     `;
-    const accessResults = await queryPromise(accessCheckQuery, [panierId, userId, userId], req);
+    const accessParams = canEditAny ? [panierId] : [panierId, userId];
+    const accessResults = await queryPromise(accessCheckQuery, accessParams, req);
 
     if (!accessResults || accessResults.length === 0) {
       return res.status(403).json({

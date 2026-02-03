@@ -24,6 +24,8 @@ export const useAdminUsersStore = defineStore('adminUsers', {
     selectedUsers: [],
     bulkRoleIds: [],
     searchQuery: '',
+    sortColumn: 'username',
+    sortDirection: 'asc',
     newUser: {
       username: '',
       email: '',
@@ -43,28 +45,61 @@ export const useAdminUsersStore = defineStore('adminUsers', {
           (u.role_names && u.role_names.toLowerCase().includes(query))
       );
     },
-    allSelected(state) {
-      const filtered = state.searchQuery
-        ? state.users.filter(
+    sortedUsers(state) {
+      const filtered = !state.searchQuery
+        ? state.users
+        : state.users.filter(
             (u) =>
               (u.username && u.username.toLowerCase().includes(state.searchQuery.toLowerCase())) ||
               (u.email && u.email.toLowerCase().includes(state.searchQuery.toLowerCase())) ||
               (u.role_names && u.role_names.toLowerCase().includes(state.searchQuery.toLowerCase()))
-          )
-        : state.users;
-      return filtered.length > 0 && state.selectedUsers.length === filtered.length;
+          );
+      const list = [...filtered];
+      const col = state.sortColumn || 'username';
+      const dir = state.sortDirection || 'asc';
+      list.sort((a, b) => {
+        let aVal = a[col];
+        let bVal = b[col];
+        if (col === 'is_active') {
+          aVal = aVal ? 1 : 0;
+          bVal = bVal ? 1 : 0;
+          return dir === 'asc' ? aVal - bVal : bVal - aVal;
+        }
+        if (col === 'id') {
+          aVal = Number(aVal) || 0;
+          bVal = Number(bVal) || 0;
+          return dir === 'asc' ? aVal - bVal : bVal - aVal;
+        }
+        aVal = (aVal ?? '').toString().toLowerCase();
+        bVal = (bVal ?? '').toString().toLowerCase();
+        const cmp = aVal.localeCompare(bVal, 'fr');
+        return dir === 'asc' ? cmp : -cmp;
+      });
+      return list;
+    },
+    allSelected(state) {
+      const list = !state.searchQuery
+        ? state.users
+        : state.users.filter(
+            (u) =>
+              (u.username && u.username.toLowerCase().includes(state.searchQuery.toLowerCase())) ||
+              (u.email && u.email.toLowerCase().includes(state.searchQuery.toLowerCase())) ||
+              (u.role_names && u.role_names.toLowerCase().includes(state.searchQuery.toLowerCase()))
+          );
+      return list.length > 0 && list.every((u) => state.selectedUsers.includes(u.id));
     },
     someSelected(state) {
-      const filtered = state.searchQuery
-        ? state.users.filter(
+      if (state.selectedUsers.length === 0) return false;
+      const list = !state.searchQuery
+        ? state.users
+        : state.users.filter(
             (u) =>
               (u.username && u.username.toLowerCase().includes(state.searchQuery.toLowerCase())) ||
               (u.email && u.email.toLowerCase().includes(state.searchQuery.toLowerCase())) ||
               (u.role_names && u.role_names.toLowerCase().includes(state.searchQuery.toLowerCase()))
-          )
-        : state.users;
-      const allSel = filtered.length > 0 && state.selectedUsers.length === filtered.length;
-      return state.selectedUsers.length > 0 && !allSel;
+          );
+      const allSel = list.length > 0 && list.every((u) => state.selectedUsers.includes(u.id));
+      return !allSel;
     },
   },
 
@@ -155,7 +190,16 @@ export const useAdminUsersStore = defineStore('adminUsers', {
       if (this.allSelected) {
         this.selectedUsers = [];
       } else {
-        this.selectedUsers = this.filteredUsers.map((u) => u.id);
+        this.selectedUsers = this.sortedUsers.map((u) => u.id);
+      }
+    },
+
+    setSort(column) {
+      if (this.sortColumn === column) {
+        this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+      } else {
+        this.sortColumn = column;
+        this.sortDirection = 'asc';
       }
     },
 

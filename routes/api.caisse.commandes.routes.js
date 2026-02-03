@@ -66,7 +66,7 @@ router.get('/commandes/:id/articles', requirePermission('caisse.sell', { json: t
   const { id } = req.params;
   const organization_id = getCurrentOrgId(req);
 
-  // Vérifier que la commande appartient bien à l'organisation
+  // Vérifier que la commande appartient à l'organisation
   db.query(
     'SELECT p.id FROM paniers p INNER JOIN users u ON p.user_id = u.id WHERE p.id = ? AND u.organization_id = ?',
     [id, organization_id],
@@ -75,13 +75,10 @@ router.get('/commandes/:id/articles', requirePermission('caisse.sell', { json: t
         console.error('Erreur vérification panier:', err);
         return res.status(500).json({ error: 'Erreur serveur' });
       }
-
       if (!paniers || paniers.length === 0) {
         return res.status(404).json({ error: 'Commande non trouvée' });
       }
 
-      // Récupérer les articles de la commande
-      // avec mapping vers products (caisse)
       const query = `
         SELECT
           pa.id as panier_article_id,
@@ -107,8 +104,7 @@ router.get('/commandes/:id/articles', requirePermission('caisse.sell', { json: t
           console.error('Erreur récupération articles commande:', err2);
           return res.status(500).json({ error: 'Erreur serveur' });
         }
-
-        res.json(articles);
+        res.json(articles || []);
       });
     }
   );

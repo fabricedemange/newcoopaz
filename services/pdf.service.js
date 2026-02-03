@@ -308,8 +308,12 @@ function createSyntheseUtilisateurDocDefinition(catalogue, data) {
   };
 }
 
+/** Alias pour generatePdf (utilisé par ticket-pdf) */
+const createPdfBuffer = generatePdf;
+
 module.exports = {
   generatePdf,
+  createPdfBuffer,
   cleanSubject,
   createSyntheseSimpleDocDefinition,
   createSyntheseDetaileeDocDefinition,

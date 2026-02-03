@@ -21,7 +21,7 @@
             <div v-if="store.userRoles.length === 0" class="text-muted">Aucun rôle assigné</div>
             <div v-else class="table-responsive">
               <table class="table">
-                <thead>
+                <thead class="thead-admin-site">
                   <tr>
                     <th>Rôle</th>
                     <th>Type</th>

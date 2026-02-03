@@ -51,7 +51,9 @@ export async function fetchCommandeDetail(commandeId) {
   checkAuth(response);
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    throw new Error(data.error || `HTTP ${response.status}`);
+    const err = new Error(data.error || `HTTP ${response.status}`);
+    if (response.status === 404) err.notFound = true;
+    throw err;
   }
   return response.json();
 }
@@ -236,6 +238,42 @@ export async function postCaissePaiement(body) {
     },
     credentials: 'include',
     body: JSON.stringify(body),
+  });
+  checkAuth(response);
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+/** GET /api/caisse/cotisation/check?adherent_id= - Vérifier si l'adhérent doit payer la cotisation du mois (5-15 €) */
+export async function fetchCaisseCotisationCheck(adherentId) {
+  const q = adherentId ? `?adherent_id=${encodeURIComponent(adherentId)}` : '';
+  const response = await fetch(`/api/caisse/cotisation/check${q}`, {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+    credentials: 'include',
+  });
+  checkAuth(response);
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+/** GET /api/caisse/cotisation/mon-historique - Historique des cotisations de l'utilisateur connecté */
+export async function fetchMonHistoriqueCotisation(params = {}) {
+  const sp = new URLSearchParams();
+  if (params.date_debut) sp.set('date_debut', params.date_debut);
+  if (params.date_fin) sp.set('date_fin', params.date_fin);
+  if (params.limit) sp.set('limit', String(params.limit));
+  const q = sp.toString() ? `?${sp.toString()}` : '';
+  const response = await fetch(`/api/caisse/cotisation/mon-historique${q}`, {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+    credentials: 'include',
   });
   checkAuth(response);
   if (!response.ok) {
@@ -440,8 +478,29 @@ export async function fetchCatalogueDetail(catalogueId, nouveauPanier = false) {
   return response.json();
 }
 
+/** GET /api/catalogues/:id/produits-commandes-recentes - Produits commandés (60 derniers jours) pour ce catalogue */
+export async function fetchCatalogueProduitsCommandesRecentes(catalogueId) {
+  const response = await fetch(`/api/catalogues/${catalogueId}/produits-commandes-recentes`, {
+    method: 'GET',
+    headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+    credentials: 'include',
+  });
+  checkAuth(response);
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
 /** POST /panier/update-quantity - Mettre à jour la quantité d'un produit */
 export async function updatePanierQuantity(catalogFileId, catalogProductId, quantity, nouveauPanier, csrfToken) {
+  const body = {
+    catalog_file_id: catalogFileId,
+    catalog_product_id: catalogProductId,
+    quantity: parseInt(quantity) || 0,
+    nouveau_panier: nouveauPanier === true,
+  };
   const response = await fetch('/panier/update-quantity', {
     method: 'POST',
     headers: {
@@ -450,12 +509,7 @@ export async function updatePanierQuantity(catalogFileId, catalogProductId, quan
       'csrf-token': csrfToken || '',
     },
     credentials: 'include',
-    body: JSON.stringify({
-      catalog_file_id: catalogFileId,
-      catalog_product_id: catalogProductId,
-      quantity: parseInt(quantity) || 0,
-      nouveau_panier: nouveauPanier === true,
-    }),
+    body: JSON.stringify(body),
   });
   checkAuth(response);
   if (!response.ok) {
@@ -467,6 +521,11 @@ export async function updatePanierQuantity(catalogFileId, catalogProductId, quan
 
 /** POST /panier/update-note - Mettre à jour la note d'un article du panier */
 export async function updatePanierArticleNote(catalogFileId, catalogProductId, note, csrfToken) {
+  const body = {
+    catalog_file_id: catalogFileId,
+    catalog_product_id: catalogProductId,
+    note: note ?? '',
+  };
   const response = await fetch('/panier/update-note', {
     method: 'POST',
     headers: {
@@ -475,11 +534,7 @@ export async function updatePanierArticleNote(catalogFileId, catalogProductId, n
       'csrf-token': csrfToken || '',
     },
     credentials: 'include',
-    body: JSON.stringify({
-      catalog_file_id: catalogFileId,
-      catalog_product_id: catalogProductId,
-      note: note ?? '',
-    }),
+    body: JSON.stringify(body),
   });
   checkAuth(response);
   if (!response.ok) {

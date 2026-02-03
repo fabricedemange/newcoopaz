@@ -10,7 +10,8 @@ const express = require("express");
 const router = express.Router();
 const { db } = require("../config/db-trace-wrapper");
 const { requirePermission, requireAllPermissions } = require("../middleware/rbac.middleware");
-const { getCurrentOrgId, getCurrentUserId, isSuperAdmin } = require("../utils/session-helpers");
+const { getCurrentOrgId, getCurrentUserId } = require("../utils/session-helpers");
+const { hasPermission } = require("../middleware/rbac.middleware");
 
 // Helper: Query with promise
 function queryPromise(query, params) {
@@ -29,7 +30,7 @@ function queryPromise(query, params) {
 router.get("/", requirePermission('roles', { json: true }), async (req, res) => {
   try {
     const orgId = getCurrentOrgId(req);
-    const superAdmin = isSuperAdmin(req);
+    const superAdmin = await hasPermission(req, "organizations.view_all");
 
     let query = `
       SELECT r.*,
@@ -68,7 +69,7 @@ router.get("/:id", requirePermission('roles', { json: true }), async (req, res) 
   try {
     const roleId = req.params.id;
     const orgId = getCurrentOrgId(req);
-    const superAdmin = isSuperAdmin(req);
+    const superAdmin = await hasPermission(req, "organizations.view_all");
 
     // Get role
     const roleQuery = `SELECT * FROM roles WHERE id = ?`;
@@ -187,7 +188,7 @@ router.put("/:id", requirePermission('roles', { json: true }), async (req, res) 
     const { display_name, description, permission_ids } = req.body;
     const userId = getCurrentUserId(req);
     const orgId = getCurrentOrgId(req);
-    const superAdmin = isSuperAdmin(req);
+    const superAdmin = await hasPermission(req, "organizations.view_all");
 
     // Check if role exists and is editable
     const checkQuery = `SELECT is_system, organization_id FROM roles WHERE id = ?`;
@@ -248,7 +249,7 @@ router.delete("/:id", requirePermission('roles', { json: true }), async (req, re
     const roleId = req.params.id;
     const userId = getCurrentUserId(req);
     const orgId = getCurrentOrgId(req);
-    const superAdmin = isSuperAdmin(req);
+    const superAdmin = await hasPermission(req, "organizations.view_all");
 
     // Check if role exists and can be deleted
     const checkQuery = `

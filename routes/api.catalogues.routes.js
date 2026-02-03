@@ -51,6 +51,57 @@ router.get("/catalogues", requireLogin, async (req, res) => {
   }
 });
 
+// GET /api/catalogues/:id/produits-commandes-recentes - Produits commandés par l'utilisateur (60 j), tous catalogues, mappés au catalogue courant
+router.get("/catalogues/:id/produits-commandes-recentes", requireLogin, async (req, res) => {
+  const catalogueId = req.params.id;
+  const orgId = req.session?.organization_id;
+  const userId = req.session?.userId;
+
+  try {
+    const checkCatalogueQuery = `
+      SELECT id FROM catalog_files WHERE id = ? AND is_archived = 0 AND organization_id = ?
+    `;
+    const catalogCheck = await queryPromise(checkCatalogueQuery, [catalogueId, orgId], req);
+    if (!catalogCheck || catalogCheck.length === 0) {
+      return res.status(404).json({ success: false, error: "Catalogue non trouvé" });
+    }
+
+    // 1) Produits (product_id) commandés récemment par l'utilisateur, tous catalogues confondus
+    const recentProductIdsQuery = `
+      SELECT DISTINCT cp.product_id
+      FROM panier_articles pa
+      INNER JOIN paniers p ON pa.panier_id = p.id
+      INNER JOIN catalog_products cp ON pa.catalog_product_id = cp.id
+      WHERE p.user_id = ?
+        AND p.is_submitted = 1
+        AND p.created_at >= DATE_SUB(NOW(), INTERVAL 60 DAY)
+        AND pa.quantity > 0
+    `;
+    const productRows = await queryPromise(recentProductIdsQuery, [userId], req);
+    const productIds = (productRows || []).map((r) => r.product_id).filter((id) => id != null);
+    if (productIds.length === 0) {
+      return res.json({ success: true, catalog_product_ids: [] });
+    }
+
+    // 2) catalog_product_id du catalogue courant pour ces product_id
+    const placeholders = productIds.map(() => "?").join(",");
+    const mapQuery = `
+      SELECT id FROM catalog_products
+      WHERE catalog_file_id = ? AND product_id IN (${placeholders})
+    `;
+    const mapRows = await queryPromise(mapQuery, [catalogueId, ...productIds], req);
+    const catalog_product_ids = (mapRows || []).map((r) => r.id).filter((id) => id != null);
+
+    res.json({ success: true, catalog_product_ids });
+  } catch (error) {
+    console.error("❌ ERREUR API /api/catalogues/:id/produits-commandes-recentes:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la récupération des produits commandés récemment"
+    });
+  }
+});
+
 // GET /api/catalogues/:id - Détail d'un catalogue avec ses produits
 router.get("/catalogues/:id", requireLogin, async (req, res) => {
   const catalogueId = req.params.id;
@@ -88,6 +139,7 @@ router.get("/catalogues/:id", requireLogin, async (req, res) => {
         p.nom as produit,
         p.description,
         p.image_filename,
+        p.category_id,
         c.nom as categorie,
         c.couleur as categorie_couleur,
         c.ordre as categorie_ordre
@@ -142,8 +194,8 @@ router.get("/catalogues/:id", requireLogin, async (req, res) => {
     const isExpired = catalogue.expiration_date && new Date(catalogue.expiration_date) < hier;
 
     // Déterminer si modifiable
-    const isAdminRole = ["admin", "referent", "epicier", "SuperAdmin"].includes(req.session.role);
-    const modifiable = isAdminRole || !isExpired;
+    const canAdminPaniers = await hasAnyPermission(req, ["paniers.admin", "paniers.change_owner"]);
+    const modifiable = canAdminPaniers || !isExpired;
 
     // Changement de propriétaire : pour ceux autorisés (paniers.admin / paniers.change_owner), dès la première fois
     let canChangeOwner = false;

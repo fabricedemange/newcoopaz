@@ -103,7 +103,7 @@
       <div v-if="store.currentTab === 'notifications'" class="card">
         <div class="table-responsive">
           <table class="table table-hover mb-0">
-            <thead class="table-light">
+            <thead class="thead-admin-site">
               <tr>
                 <th style="width: 45%">Sujet</th>
                 <th style="width: 20%">Initié par</th>
@@ -132,7 +132,7 @@
       <div v-if="store.currentTab === 'individual'" class="card">
         <div class="table-responsive">
           <table class="table table-hover mb-0">
-            <thead class="table-light">
+            <thead class="thead-admin-site">
               <tr>
                 <th style="width: 60px">ID</th>
                 <th>Statut</th>

@@ -41,7 +41,7 @@
       <div class="card">
         <div class="table-responsive">
           <table class="table table-hover mb-0">
-            <thead class="table-light">
+            <thead class="thead-admin-site">
               <tr>
                 <th @click="store.sortBy('id')" style="cursor: pointer; width: 80px">
                   ID <i :class="'bi ms-1 ' + store.getSortIcon('id')"></i>

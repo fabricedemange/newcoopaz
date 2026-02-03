@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { db } = require("../config/config");
 const { queryWithUser } = require("../config/db-trace-wrapper");
-const { requirePermission } = require("../middleware/rbac.middleware");
+const { requirePermission, hasPermission } = require("../middleware/rbac.middleware");
 const {
   getCurrentOrgId,
   getCurrentUserRole,
@@ -14,13 +14,14 @@ const { getAllOrganizations } = require("../utils/db-helpers");
  * GET /api/admin/bandeaux
  * Retourne la liste des bandeaux (filtrée par org sauf pour SuperAdmin)
  */
-router.get("/", requirePermission("users", { json: true }), (req, res) => {
+router.get("/", requirePermission("users", { json: true }), async (req, res) => {
+  const canViewAllOrgs = await hasPermission(req, "organizations.view_all");
   let sql = `SELECT b.*, o.name AS organization_name
               FROM bandeaux b
               LEFT JOIN organizations o ON b.organization_id = o.id`;
   let params = [];
 
-  if (getCurrentUserRole(req) !== "SuperAdmin") {
+  if (!canViewAllOrgs) {
     sql += " WHERE b.organization_id = ?";
     params.push(getCurrentOrgId(req));
   }
@@ -49,8 +50,9 @@ router.get("/", requirePermission("users", { json: true }), (req, res) => {
  * GET /api/admin/bandeaux/organizations
  * Retourne les organisations disponibles (pour SuperAdmin)
  */
-router.get("/organizations", requirePermission("users", { json: true }), (req, res) => {
-  if (getCurrentUserRole(req) !== "SuperAdmin") {
+router.get("/organizations", requirePermission("users", { json: true }), async (req, res) => {
+  const canViewAllOrgs = await hasPermission(req, "organizations.view_all");
+  if (!canViewAllOrgs) {
     return res.json({
       success: false,
       error: "Accès refusé",
@@ -76,7 +78,7 @@ router.get("/organizations", requirePermission("users", { json: true }), (req, r
  * POST /api/admin/bandeaux
  * Créer un nouveau bandeau
  */
-router.post("/", requirePermission("users", { json: true }), (req, res) => {
+router.post("/", requirePermission("users", { json: true }), async (req, res) => {
   let { message, expiration_date, page_cible, type, organization_id } = req.body;
 
   // Validation
@@ -92,8 +94,8 @@ router.post("/", requirePermission("users", { json: true }), (req, res) => {
     page_cible = null;
   }
 
-  // Non-SuperAdmin : forcer son org
-  if (getCurrentUserRole(req) !== "SuperAdmin") {
+  const canViewAllOrgs = await hasPermission(req, "organizations.view_all");
+  if (!canViewAllOrgs) {
     organization_id = getCurrentOrgId(req);
   }
 
@@ -132,7 +134,8 @@ router.post("/", requirePermission("users", { json: true }), (req, res) => {
  * GET /api/admin/bandeaux/:id
  * Retourne un bandeau par son ID
  */
-router.get("/:id", requirePermission("users", { json: true }), (req, res) => {
+router.get("/:id", requirePermission("users", { json: true }), async (req, res) => {
+  const canViewAllOrgs = await hasPermission(req, "organizations.view_all");
   db.query(
     "SELECT b.*, o.name AS organization_name FROM bandeaux b LEFT JOIN organizations o ON b.organization_id = o.id WHERE b.id = ?",
     [req.params.id],
@@ -153,11 +156,7 @@ router.get("/:id", requirePermission("users", { json: true }), (req, res) => {
 
       const bandeau = results[0];
 
-      // Vérifier droits d'accès
-      if (
-        getCurrentUserRole(req) !== "SuperAdmin" &&
-        bandeau.organization_id != getCurrentOrgId(req)
-      ) {
+      if (!canViewAllOrgs && bandeau.organization_id != getCurrentOrgId(req)) {
         return res.json({
           success: false,
           error: "Accès refusé",
@@ -176,7 +175,8 @@ router.get("/:id", requirePermission("users", { json: true }), (req, res) => {
  * PUT /api/admin/bandeaux/:id
  * Modifier un bandeau
  */
-router.put("/:id", requirePermission("users", { json: true }), (req, res) => {
+router.put("/:id", requirePermission("users", { json: true }), async (req, res) => {
+  const canViewAllOrgs = await hasPermission(req, "organizations.view_all");
   const { message, page_cible, expiration_date, type, organization_id } = req.body;
 
   // Validation
@@ -187,7 +187,6 @@ router.put("/:id", requirePermission("users", { json: true }), (req, res) => {
     });
   }
 
-  // Vérifier que le bandeau existe et que l'utilisateur a le droit de le modifier
   db.query("SELECT * FROM bandeaux WHERE id = ?", [req.params.id], (err, results) => {
     if (err || results.length === 0) {
       return res.json({
@@ -198,10 +197,7 @@ router.put("/:id", requirePermission("users", { json: true }), (req, res) => {
 
     const bandeau = results[0];
 
-    if (
-      getCurrentUserRole(req) !== "SuperAdmin" &&
-      bandeau.organization_id != getCurrentOrgId(req)
-    ) {
+    if (!canViewAllOrgs && bandeau.organization_id != getCurrentOrgId(req)) {
       return res.json({
         success: false,
         error: "Accès refusé",
@@ -244,7 +240,8 @@ router.put("/:id", requirePermission("users", { json: true }), (req, res) => {
  * DELETE /api/admin/bandeaux/:id
  * Supprimer un bandeau
  */
-router.delete("/:id", requirePermission("users", { json: true }), (req, res) => {
+router.delete("/:id", requirePermission("users", { json: true }), async (req, res) => {
+  const canViewAllOrgs = await hasPermission(req, "organizations.view_all");
   db.query(
     "SELECT * FROM bandeaux WHERE id = ?",
     [req.params.id],
@@ -258,10 +255,7 @@ router.delete("/:id", requirePermission("users", { json: true }), (req, res) => 
 
       const bandeau = results[0];
 
-      if (
-        getCurrentUserRole(req) !== "SuperAdmin" &&
-        bandeau.organization_id != getCurrentOrgId(req)
-      ) {
+      if (!canViewAllOrgs && bandeau.organization_id != getCurrentOrgId(req)) {
         return res.json({
           success: false,
           error: "Accès refusé",

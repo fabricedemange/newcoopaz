@@ -82,7 +82,7 @@ Le script JavaScript `mobile-table-fix.js` gère automatiquement ces tableaux.
 ### JavaScript
 1. `public/js/mobile-table-fix.js` - Script automatique pour rendre tableaux scrollables
 2. `public/js/mobile-menu-debug.js` - Debug menu mobile
-3. `public/vue/responsive-helper.js` - Helper pour futures conversions
+3. `public/js/responsive-helper.js` - Helper pour futures conversions (anciennement dans `public/vue/`, désormais dans `public/js/` ; apps Vue CDN archivées dans `archive/vue_cdn/`)
 
 ### Views
 1. `views/partials/header.ejs` - Chargement de tous les CSS/JS mobile

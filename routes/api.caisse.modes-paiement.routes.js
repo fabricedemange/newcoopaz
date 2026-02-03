@@ -5,7 +5,7 @@ const { requirePermission } = require("../middleware/rbac.middleware");
 const { getCurrentOrgId } = require("../utils/session-helpers");
 
 // GET /api/caisse/modes-paiement - Liste modes de paiement actifs
-router.get("/", (req, res) => {
+router.get("/", requirePermission("caisse.sell", { json: true }), (req, res) => {
   try {
     const orgId = getCurrentOrgId(req);
 

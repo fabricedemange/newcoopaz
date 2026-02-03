@@ -120,7 +120,7 @@
             </div>
             <div class="table-responsive">
               <table class="table table-hover mb-0">
-                <thead class="table-light">
+                <thead class="thead-admin-site">
                   <tr>
                     <th style="cursor: pointer" @click="store.sortBy('commande_id')">
                       ID <i :class="'bi ms-1 ' + getSortIcon('commande_id')"></i>
@@ -162,7 +162,7 @@
             </div>
             <div class="table-responsive">
               <table class="table table-hover mb-0">
-                <thead class="table-light">
+                <thead class="thead-admin-site">
                   <tr>
                     <th style="cursor: pointer" @click="store.sortBy('id')">
                       ID <i :class="'bi ms-1 ' + getSortIcon('id')"></i>
@@ -211,7 +211,7 @@
             </div>
             <div class="table-responsive">
               <table class="table table-hover mb-0">
-                <thead class="table-light">
+                <thead class="thead-admin-site">
                   <tr>
                     <th style="cursor: pointer" @click="store.sortBy('catalogue_id')">
                       Action <i :class="'bi ms-1 ' + getSortIcon('catalogue_id')"></i>
@@ -278,7 +278,7 @@
             </div>
             <div class="table-responsive">
               <table class="table table-hover mb-0">
-                <thead class="table-light">
+                <thead class="thead-admin-site">
                   <tr>
                     <th>Type</th>
                     <th>Période</th>

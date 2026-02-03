@@ -8,6 +8,7 @@ const express = require("express");
 const router = express.Router();
 const { db } = require("../config/db-trace-wrapper");
 const { getCurrentOrgId } = require("../utils/session-helpers");
+const { requirePermission } = require("../middleware/rbac.middleware");
 
 // Helper: Query with promise
 function queryPromise(query, params) {
@@ -20,10 +21,67 @@ function queryPromise(query, params) {
 }
 
 /**
+ * Récupère le détail d'une vente pour affichage ou PDF (vente, lignes, paiements).
+ * @returns {Promise<{ vente, lignes, paiements }|null>}
+ */
+async function getVenteDetailForPdf(venteId, orgId) {
+  const ventes = await queryPromise(
+    `SELECT
+      v.*,
+      u_caissier.username as caissier_nom,
+      u_client.username as client_nom
+    FROM ventes v
+    LEFT JOIN users u_caissier ON v.created_by = u_caissier.id
+    LEFT JOIN users u_client ON v.adherent_id = u_client.id
+    WHERE v.id = ? AND v.organization_id = ? AND v.statut = 'complete'`,
+    [venteId, orgId]
+  );
+  if (ventes.length === 0) return null;
+
+  const vente = ventes[0];
+  const lignes = await queryPromise(
+    `SELECT lv.*, p.nom as product_nom_actuel
+     FROM lignes_vente lv
+     LEFT JOIN products p ON lv.produit_id = p.id
+     WHERE lv.vente_id = ? ORDER BY lv.id`,
+    [venteId]
+  );
+  const paiements = await queryPromise(
+    `SELECT pai.*, mp.nom as mode_paiement_nom
+     FROM paiements pai
+     LEFT JOIN modes_paiement mp ON pai.mode_paiement_id = mp.id
+     WHERE pai.vente_id = ?`,
+    [venteId]
+  );
+
+  return {
+    vente: {
+      ...vente,
+      montant_ttc: parseFloat(vente.montant_ttc) || 0
+    },
+    lignes: lignes.map(l => {
+      const isCotisation = !!(l.is_cotisation || (l.produit_id == null && (l.nom_produit || '').includes('Cotisation mensuelle')));
+      return {
+        ...l,
+        quantite: parseFloat(l.quantite) || 0,
+        prix_unitaire: parseFloat(l.prix_unitaire) || 0,
+        montant_ttc: parseFloat(l.montant_ttc) || 0,
+        is_cotisation: isCotisation,
+        is_avoir: (l.produit_id === null || l.produit_id === 0) && !isCotisation
+      };
+    }),
+    paiements: paiements.map(p => ({
+      ...p,
+      montant: parseFloat(p.montant) || 0
+    }))
+  };
+}
+
+/**
  * GET /api/caisse/ventes-historique
  * Liste des ventes avec filtres (date, numéro ticket, client, caissier)
  */
-router.get("/", async (req, res) => {
+router.get("/", requirePermission("caisse.sell", { json: true }), async (req, res) => {
   try {
     const orgId = getCurrentOrgId(req);
     const {
@@ -49,7 +107,8 @@ router.get("/", async (req, res) => {
         v.source,
         u_caissier.username as caissier_nom,
         u_client.username as client_nom,
-        COUNT(DISTINCT lv.id) as nb_lignes
+        COUNT(DISTINCT lv.id) as nb_lignes,
+        MAX(CASE WHEN lv.nom_produit LIKE '%(cde #%' AND lv.nom_produit LIKE '%cat #%' THEN 1 ELSE 0 END) AS catalogues_oui
       FROM ventes v
       LEFT JOIN users u_caissier ON v.created_by = u_caissier.id
       LEFT JOIN users u_client ON v.adherent_id = u_client.id
@@ -139,21 +198,49 @@ router.get("/", async (req, res) => {
 });
 
 /**
- * GET /api/caisse/ventes-historique/:id
- * Détail complet d'une vente (lignes, paiements, panier source)
+ * GET /api/caisse/ventes-historique/:id/pdf
+ * Télécharge le PDF détail de la vente (identique à la modale)
  */
-router.get("/:id", async (req, res) => {
+router.get("/:id/pdf", requirePermission("caisse.sell", { json: true }), async (req, res) => {
   try {
     const venteId = parseInt(req.params.id);
     const orgId = getCurrentOrgId(req);
 
-    // Récupérer la vente
+    const detail = await getVenteDetailForPdf(venteId, orgId);
+    if (!detail) {
+      return res.status(404).json({ success: false, error: 'Vente non trouvée' });
+    }
+
+    const { generateTicketPdf } = require('../utils/ticket-pdf');
+    const pdfBuffer = await generateTicketPdf(detail);
+
+    const filename = `ticket-${detail.vente.numero_ticket || venteId}.pdf`.replace(/\s/g, '-');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error('Error generating PDF:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/caisse/ventes-historique/:id
+ * Détail complet d'une vente (lignes, paiements, panier source)
+ */
+router.get("/:id", requirePermission("caisse.sell", { json: true }), async (req, res) => {
+  try {
+    const venteId = parseInt(req.params.id);
+    const orgId = getCurrentOrgId(req);
+
+    // Récupérer la vente (source depuis ventes.source)
     const ventes = await queryPromise(
       `SELECT
         v.*,
         u_caissier.username as caissier_nom,
         u_caissier.email as caissier_email,
-        u_client.username as client_nom
+        u_client.username as client_nom,
+        v.source as panier_source
       FROM ventes v
       LEFT JOIN users u_caissier ON v.created_by = u_caissier.id
       LEFT JOIN users u_client ON v.adherent_id = u_client.id
@@ -215,13 +302,17 @@ router.get("/:id", async (req, res) => {
         ...vente,
         montant_ttc: parseFloat(vente.montant_ttc) || 0
       },
-      lignes: lignes.map(l => ({
-        ...l,
-        quantite: parseFloat(l.quantite) || 0,
-        prix_unitaire: parseFloat(l.prix_unitaire) || 0,
-        montant_ttc: parseFloat(l.montant_ttc) || 0,
-        is_avoir: l.produit_id === null || l.produit_id === 0
-      })),
+      lignes: lignes.map(l => {
+        const isCotisation = !!(l.is_cotisation || (l.produit_id == null && (l.nom_produit || '').includes('Cotisation mensuelle')));
+        return {
+          ...l,
+          quantite: parseFloat(l.quantite) || 0,
+          prix_unitaire: parseFloat(l.prix_unitaire) || 0,
+          montant_ttc: parseFloat(l.montant_ttc) || 0,
+          is_cotisation: isCotisation,
+          is_avoir: (l.produit_id === null || l.produit_id === 0) && !isCotisation
+        };
+      }),
       paiements: paiements.map(p => ({
         ...p,
         montant: parseFloat(p.montant) || 0
@@ -243,7 +334,7 @@ router.get("/:id", async (req, res) => {
  * GET /api/caisse/ventes-historique/stats/resume
  * Statistiques des ventes (CA total, nb ventes, ticket moyen)
  */
-router.get("/stats/resume", async (req, res) => {
+router.get("/stats/resume", requirePermission("caisse.sell", { json: true }), async (req, res) => {
   try {
     const orgId = getCurrentOrgId(req);
     const { date_debut, date_fin } = req.query;

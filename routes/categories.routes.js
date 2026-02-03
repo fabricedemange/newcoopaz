@@ -22,24 +22,10 @@ router.get("/", requirePermission('categories'), (req, res) => {
 });
 
 // ============================================================================
-// Formulaire de création (Vue+Vite)
+// Formulaire de création (Vue+Vite) — redirige vers la liste avec modal
 // ============================================================================
-router.get("/new", requirePermission('categories'), csrfProtection, (req, res) => {
-  const orgId = getCurrentOrgId(req);
-
-  db.query(
-    "SELECT * FROM categories WHERE organization_id = ? ORDER BY ordre, nom",
-    [orgId],
-    (err, allCategories) => {
-      const payload = {
-        category: null,
-        allCategories: allCategories || [],
-        csrfToken: req.csrfToken(),
-        APP_VERSION: req.app.locals.APP_VERSION || Date.now(),
-      };
-      res.render("admin_category_form_vue", payload);
-    }
-  );
+router.get("/new", requirePermission('categories'), (req, res) => {
+  res.redirect("/admin/categories/vue?modal=new");
 });
 
 // ============================================================================

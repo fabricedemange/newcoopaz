@@ -29,15 +29,13 @@ export const useAdminProductsStore = defineStore('adminProducts', {
   getters: {
     filteredProducts(state) {
       let filtered = [...state.products];
-      if (state.filters.categoryId) {
-        filtered = filtered.filter(
-          (p) => p.category_id && p.category_id.toString() === state.filters.categoryId
-        );
+      if (state.filters.categoryId != null && state.filters.categoryId !== '') {
+        const cid = String(state.filters.categoryId);
+        filtered = filtered.filter((p) => p != null && String(p.category_id ?? '') === cid);
       }
-      if (state.filters.supplierId) {
-        filtered = filtered.filter(
-          (p) => p.supplier_id && p.supplier_id.toString() === state.filters.supplierId
-        );
+      if (state.filters.supplierId != null && state.filters.supplierId !== '') {
+        const sid = String(state.filters.supplierId);
+        filtered = filtered.filter((p) => p != null && String(p.supplier_id ?? '') === sid);
       }
       if (state.filters.label) {
         const labelLower = state.filters.label.toLowerCase();

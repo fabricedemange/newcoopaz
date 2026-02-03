@@ -1,0 +1,15 @@
+<%- include('partials/header', { title: 'Nouveau catalogue', user, role }) %>
+
+<div class="admin-content-wrapper">
+  <div id="admin-catalogue-new-app"></div>
+</div>
+
+<script>
+window.CSRF_TOKEN = '<%= typeof csrfToken !== "undefined" ? csrfToken : "" %>';
+window.INITIAL_DATA = <%- JSON.stringify({
+  error: typeof error !== 'undefined' ? error : null
+}) %>;
+</script>
+<script type="module" src="/dist/admin-catalogue-new.js?v=<%= typeof APP_VERSION !== 'undefined' ? APP_VERSION : Date.now() %>"></script>
+
+<%- include('partials/footer') %>

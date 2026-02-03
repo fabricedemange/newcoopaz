@@ -74,7 +74,7 @@
               </div>
               <div v-else class="table-responsive">
                 <table class="table table-hover">
-                  <thead>
+                  <thead class="thead-administration">
                     <tr>
                       <th>Produit</th>
                       <th>Catégorie</th>

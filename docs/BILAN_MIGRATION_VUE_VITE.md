@@ -130,6 +130,8 @@ Ces vues ne font que charger le layout et le script du bundle Vite correspondant
 - admin_categories_list_vue.ejs, admin_category_form_vue.ejs  
 - admin_suppliers_list_vue.ejs, admin_supplier_form_vue.ejs, admin_supplier_detail_vue.ejs  
 - admin_products_list_vue.ejs, admin_product_form_vue.ejs, admin_product_detail_vue.ejs  
+- admin_catalogues_vue.ejs, admin_catalogue_form_vue.ejs, admin_catalogue_edit_form_vue.ejs  
+- admin_article_edit_form_vue.ejs  
 - admin_stats_vue.ejs, admin_trace_vue.ejs, admin_organizations_vue.ejs  
 - admin_bandeaux_vue.ejs, admin_email_queue_vue.ejs  
 - caisse_vue.ejs, caisse_historique_vue.ejs  
@@ -156,10 +158,14 @@ Ces vues ne font que charger le layout et le script du bundle Vite correspondant
   - **Catégorie** : `GET /admin/categories/new` et `GET /admin/categories/:id/edit` → `admin_category_form_vue.ejs` (`AdminCategoryFormPage.vue`). POST `/admin/categories` et POST `/admin/categories/:id` acceptent JSON.
   - **Fournisseur** : `GET /admin/suppliers/new` et `GET /admin/suppliers/:id/edit` → `admin_supplier_form_vue.ejs` (`AdminSupplierFormPage.vue`). `GET /admin/suppliers/:id` → `admin_supplier_detail_vue.ejs` (`AdminSupplierDetailPage.vue`). POST `/admin/suppliers` et POST `/admin/suppliers/:id` acceptent JSON.
   - **Produit** : `GET /admin/products/new` et `GET /admin/products/:id/edit` → `admin_product_form_vue.ejs` (`AdminProductFormPage.vue`). `GET /admin/products/:id` → `admin_product_detail_vue.ejs` (`AdminProductDetailPage.vue`). POST `/admin/products` et POST `/admin/products/:id` acceptent JSON (édition avec image via FormData multipart).
+  - **Catalogue (new + upload)** : `GET /admin/catalogues/new` → `admin_catalogue_form_vue.ejs` (`AdminCatalogueNewPage.vue`). Choix : Importer Excel ou Créer nouveau (vide ou depuis un catalogue). POST `/admin/catalogues/upload` accepte JSON (`success`, `redirect`, `error`). POST `create-empty` et `create-from-catalog` renvoyaient déjà du JSON.
+  - **Catalogue (édition)** : `GET /admin/catalogues/:id/edit` → `admin_catalogue_edit_form_vue.ejs` (`AdminCatalogueEditPage.vue`). Formulaire métadonnées (nom, description, dates, visibilité, rappel référent), liste d’articles (lien édition Vue, suppression avec JSON), ajout de produits (filtres + sélection, POST add-multiple en JSON), import depuis un autre catalogue (POST import-from-catalog en JSON). POST `/admin/catalogues/:id/edit` et POST `.../articles/:article_id/delete` acceptent JSON.
+  - **Article catalogue** : `GET /admin/catalogues/:catalogue_id/articles/:article_id/edit` → `admin_article_edit_form_vue.ejs` (`AdminArticleEditPage.vue`). Formulaire prix + unité. POST `/admin/catalogues/:catalogue_id/articles/:article_id/edit` accepte JSON (`success`, `redirect`, `error`).
+  - **Bandeaux** : déjà en Vue + API (liste + modal création/édition via `/api/admin/bandeaux`).
 
 ### 7.2 Reste à migrer (même pattern)
 
-- **Formulaires admin** : catalogues (new, upload, edit), articles, bandeaux. Chaque écran = une page Vue + entry + shell EJS + route qui rend le shell + POST en JSON.
+- **Formulaires admin** : aucun bloc majeur restant pour la Phase 3 ; éventuelles pages utilitaires (import, table) à traiter si besoin.
 - **Caisse** : déjà en vues `*_vue.ejs`.
 - **Accueil** : `GET /` → `/vue` ; `GET /legacy-home` conservé pour rollback.
 

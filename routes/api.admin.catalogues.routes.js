@@ -1,8 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const { requirePermission } = require("../middleware/rbac.middleware");
 const { queryWithUser } = require("../config/db-trace-wrapper");
-const { getCurrentUserId, getCurrentUserRole, getCurrentOrgId } = require("../utils/session-helpers");
+const { getCurrentUserId, getCurrentOrgId, getCurrentUserRole } = require("../utils/session-helpers");
+const { requirePermission, hasPermission } = require("../middleware/rbac.middleware");
 
 // Convertir queryWithUser en promesse
 const queryPromise = (sql, params, req) => {
@@ -17,9 +17,9 @@ const queryPromise = (sql, params, req) => {
 // GET /api/admin/catalogues - Liste des catalogues
 router.get("/admin/catalogues", requirePermission("catalogues", { json: true }), async (req, res) => {
   const orgId = getCurrentOrgId(req);
-  const role = getCurrentUserRole(req);
   const userId = getCurrentUserId(req);
-  const isSuperAdmin = role === "SuperAdmin";
+  const role = getCurrentUserRole(req);
+  const isSuperAdmin = await hasPermission(req, "organizations.view_all");
   const scopeToggleAvailable = !isSuperAdmin;
 
   // Gestion du scope
@@ -29,7 +29,6 @@ router.get("/admin/catalogues", requirePermission("catalogues", { json: true }),
   try {
     // DEBUG: Log des paramètres de filtrage
     console.log("🔍 DEBUG API /api/admin/catalogues:");
-    console.log("  - role:", role);
     console.log("  - userId:", userId);
     console.log("  - orgId:", orgId);
     console.log("  - isSuperAdmin:", isSuperAdmin);

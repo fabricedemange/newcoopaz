@@ -3,6 +3,11 @@ const { logger } = require("../config/logger");
 const { enqueueEmail } = require("./email-queue.service");
 const { generateCatalogueSynthesisPdfBuffer } = require("../utils/exports");
 
+/** Activer le worker cron d'envoi des rappels "prévoir la commande". En dev, laisser à false pour ne pas envoyer de mails aux utilisateurs. */
+const REMINDER_CRON_ENABLED =
+  process.env.CATALOGUE_ORDER_REMINDER_ENABLED === "true" ||
+  process.env.CATALOGUE_ORDER_REMINDER_ENABLED === "1";
+
 const REMINDER_OFFSET_HOURS = Number(
   process.env.CATALOGUE_ORDER_REMINDER_OFFSET_HOURS || 8
 );
@@ -158,6 +163,13 @@ async function processCatalogueOrderRemindersOnce() {
 }
 
 function startCatalogueOrderReminderWorker() {
+  if (!REMINDER_CRON_ENABLED) {
+    logger.info("Catalogue order reminder cron désactivé (CATALOGUE_ORDER_REMINDER_ENABLED != true)", {
+      hint: "En production, définir CATALOGUE_ORDER_REMINDER_ENABLED=true pour activer les rappels.",
+    });
+    return;
+  }
+
   if (reminderTimer) {
     return;
   }
@@ -183,4 +195,5 @@ function startCatalogueOrderReminderWorker() {
 module.exports = {
   startCatalogueOrderReminderWorker,
   processCatalogueOrderRemindersOnce,
+  isReminderCronEnabled: () => REMINDER_CRON_ENABLED,
 };

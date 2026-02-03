@@ -120,7 +120,7 @@
               </div>
               <div v-else class="table-responsive">
                 <table class="table table-hover">
-                  <thead>
+                  <thead class="thead-administration">
                     <tr>
                       <th>Catalogue</th>
                       <th>Date de livraison</th>

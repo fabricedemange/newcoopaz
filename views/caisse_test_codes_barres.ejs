@@ -1,0 +1,241 @@
+<%- include('partials/header', { title: typeof pageTitle !== 'undefined' ? pageTitle : 'Test codes-barres' }) %>
+
+<div class="container-fluid mt-4 ms-280 px-3">
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="d-flex justify-content-between align-items-center">
+        <h2><i class="bi bi-upc-scan me-2"></i>Test lecteur de codes-barres</h2>
+        <a href="/caisse" class="btn btn-outline-primary"><i class="bi bi-arrow-left me-2"></i>Retour caisse</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-lg-6 mb-4">
+      <div class="card">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0"><i class="bi bi-usb-symbol me-2"></i>Lecteur USB</h5>
+        </div>
+        <div class="card-body">
+          <p class="text-muted small">Branchez un lecteur USB (clavier). Scannez un code-barres : le lecteur envoie le code puis Entrée.</p>
+          <label for="input-usb" class="form-label">Zone de scan (cliquez puis scannez)</label>
+          <input
+            type="text"
+            id="input-usb"
+            class="form-control form-control-lg"
+            placeholder="Code lu par le lecteur USB..."
+            autocomplete="off"
+          />
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6 mb-4">
+      <div class="card">
+        <div class="card-header bg-success text-white">
+          <h5 class="mb-0"><i class="bi bi-camera-video me-2"></i>Caméra</h5>
+        </div>
+        <div class="card-body">
+          <p class="text-muted small">Chrome/Edge : présentez un code-barres devant la caméra.</p>
+          <div id="camera-zone" class="mb-3">
+            <video id="video-cam" class="rounded border" style="width:100%;max-width:400px;background:#000" playsinline muted></video>
+            <div id="camera-error" class="alert alert-warning mt-2 d-none"></div>
+          </div>
+          <button type="button" id="btn-start-cam" class="btn btn-success"><i class="bi bi-camera-video me-1"></i>Démarrer la caméra</button>
+          <button type="button" id="btn-stop-cam" class="btn btn-secondary d-none"><i class="bi bi-stop-circle me-1"></i>Arrêter</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="mb-0"><i class="bi bi-list-ul me-2"></i>Dernier code lu</h5>
+        </div>
+        <div class="card-body">
+          <div id="last-code" class="fs-3 fw-bold text-primary mb-1">—</div>
+          <div id="last-scan-time" class="text-muted small mb-2">—</div>
+          <p class="text-muted small mb-0">Historique des scans (pour test)</p>
+          <ul id="history-list" class="list-group list-group-flush mt-2"></ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const inputUsb = document.getElementById('input-usb');
+  const lastCodeEl = document.getElementById('last-code');
+  const lastScanTimeEl = document.getElementById('last-scan-time');
+  const historyList = document.getElementById('history-list');
+  const videoCam = document.getElementById('video-cam');
+  const btnStartCam = document.getElementById('btn-start-cam');
+  const btnStopCam = document.getElementById('btn-stop-cam');
+  const cameraError = document.getElementById('camera-error');
+
+  const history = [];
+  const maxHistory = 20;
+  let streamCam = null;
+  let scanInterval = null;
+  let barcodeDetector = null;
+  let usbBuffer = '';
+  let lastScanTime = 0;
+  const scanCooldownMs = 1500;
+  let inputDebounceTimer = null;
+  const USB_SCAN_DELAY_MS = 120;
+  const USB_MIN_LENGTH = 4;
+  let cameraDetecting = false;
+
+  function setLastCode(code) {
+    if (!code) return;
+    var now = new Date();
+    var timeStr = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    lastCodeEl.textContent = code;
+    lastScanTimeEl.textContent = 'Heure du scan : ' + timeStr;
+    history.unshift({ code: code, at: timeStr });
+    if (history.length > maxHistory) history.pop();
+    const html = history.map(function (h) {
+      return '<li class="list-group-item d-flex justify-content-between"><code>' + h.code + '</code><span class="text-muted small">' + h.at + '</span></li>';
+    }).join('');
+    historyList.innerHTML = html || '<li class="list-group-item text-muted">Aucun scan</li>';
+  }
+
+  function pushCode(code) {
+    code = (code || '').toString().trim().replace(/^[\s\u0000-\u001F]+|[\s\u0000-\u001F]+$/g, '');
+    if (code.length >= USB_MIN_LENGTH) setLastCode(code);
+  }
+
+  // USB : le lecteur envoie les caractères très vite puis Entrée (ou parfois sans Entrée)
+  // Délai plus long pour laisser le temps à tous les caractères d'arriver (scanners rapides)
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (e.target.id === 'input-usb') {
+        var self = inputUsb;
+        clearTimeout(inputDebounceTimer);
+        setTimeout(function () {
+          pushCode(self.value);
+          self.value = '';
+        }, USB_SCAN_DELAY_MS);
+      } else {
+        setTimeout(function () {
+          pushCode(usbBuffer);
+          usbBuffer = '';
+        }, USB_SCAN_DELAY_MS);
+      }
+      return;
+    }
+    if (e.target.id !== 'input-usb' && !e.target.closest('input') && !e.target.closest('textarea')) {
+      if (e.key.length === 1) usbBuffer += e.key;
+      else if (e.key === 'Backspace') usbBuffer = usbBuffer.slice(0, -1);
+    }
+  });
+
+  // Champ input USB : sur Enter on lit après un délai ; aussi détection "rafale" (scanner sans Entrée)
+  inputUsb.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      clearTimeout(inputDebounceTimer);
+      var self = this;
+      setTimeout(function () {
+        pushCode(self.value);
+        self.value = '';
+      }, USB_SCAN_DELAY_MS);
+    }
+  });
+
+  inputUsb.addEventListener('input', function () {
+    clearTimeout(inputDebounceTimer);
+    var self = this;
+    var val = self.value;
+    if (val.length >= USB_MIN_LENGTH && /^\d+$/.test(val)) {
+      inputDebounceTimer = setTimeout(function () {
+        pushCode(self.value);
+        self.value = '';
+      }, 150);
+    }
+  });
+
+  // Focus automatique sur la zone USB au chargement
+  inputUsb.focus();
+  document.getElementById('camera-zone').closest('.card').addEventListener('click', function () { inputUsb.blur(); });
+  document.getElementById('input-usb').closest('.card').addEventListener('click', function () { inputUsb.focus(); });
+
+  // Caméra
+  function stopCamera() {
+    if (scanInterval) {
+      clearInterval(scanInterval);
+      scanInterval = null;
+    }
+    if (streamCam) {
+      streamCam.getTracks().forEach(function (t) { t.stop(); });
+      streamCam = null;
+    }
+    videoCam.srcObject = null;
+    btnStartCam.classList.remove('d-none');
+    btnStopCam.classList.add('d-none');
+    cameraError.classList.add('d-none');
+  }
+
+  function detectFromVideo() {
+    if (!barcodeDetector || !videoCam.srcObject || videoCam.readyState < 2) return;
+    if (videoCam.videoWidth === 0 || videoCam.videoHeight === 0) return;
+    if (Date.now() - lastScanTime < scanCooldownMs) return;
+    if (cameraDetecting) return;
+    cameraDetecting = true;
+    barcodeDetector.detect(videoCam).then(function (res) {
+      if (res && res.length > 0 && res[0].rawValue) {
+        lastScanTime = Date.now();
+        setLastCode(res[0].rawValue);
+      }
+    }).catch(function () {}).finally(function () {
+      cameraDetecting = false;
+    });
+  }
+
+  btnStartCam.addEventListener('click', function () {
+    cameraError.classList.add('d-none');
+    if (typeof BarcodeDetector === 'undefined') {
+      cameraError.textContent = 'Votre navigateur ne supporte pas la détection par caméra. Utilisez Chrome ou Edge à jour.';
+      cameraError.classList.remove('d-none');
+      return;
+    }
+    try {
+      barcodeDetector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'code_128', 'codabar'] });
+    } catch (err) {
+      barcodeDetector = new BarcodeDetector();
+    }
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } })
+      .then(function (stream) {
+        streamCam = stream;
+        videoCam.srcObject = stream;
+        videoCam.play().then(function () {
+          btnStartCam.classList.add('d-none');
+          btnStopCam.classList.remove('d-none');
+          function startScanLoop() {
+            if (videoCam.videoWidth > 0 && videoCam.videoHeight > 0) {
+              scanInterval = setInterval(detectFromVideo, 350);
+              return;
+            }
+            setTimeout(startScanLoop, 100);
+          }
+          startScanLoop();
+        }).catch(function (err) {
+          cameraError.textContent = 'Erreur lecture vidéo : ' + (err.message || err);
+          cameraError.classList.remove('d-none');
+        });
+      })
+      .catch(function (err) {
+        cameraError.textContent = 'Impossible d\'accéder à la caméra : ' + (err.message || err);
+        cameraError.classList.remove('d-none');
+      });
+  });
+
+  btnStopCam.addEventListener('click', stopCamera);
+})();
+</script>
+
+<%- include('partials/footer') %>

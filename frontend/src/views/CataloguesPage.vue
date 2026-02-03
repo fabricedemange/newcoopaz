@@ -1,12 +1,12 @@
 <template>
   <div class="admin-content-wrapper">
     <div class="container-fluid mt-4">
-      <button class="btn btn-outline-secondary d-md-none mb-3" @click="history.back()">
+      <button class="btn btn-outline-precommandes d-md-none mb-3" @click="history.back()">
         <i class="bi bi-arrow-left me-2"></i>Retour
       </button>
 
       <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="bi bi-book me-2"></i>Catalogues disponibles</h2>
+        <h2 class="text-precommandes"><i class="bi bi-book me-2"></i>Catalogues disponibles</h2>
       </div>
 
       <div v-if="store.error" class="alert alert-danger alert-dismissible fade show">
@@ -15,7 +15,7 @@
       </div>
 
       <div v-if="store.loading" class="text-center py-5">
-        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;"></div>
+        <div class="spinner-border text-precommandes" role="status" style="width: 3rem; height: 3rem;"></div>
         <p class="mt-3 text-muted">Chargement des catalogues...</p>
       </div>
 
@@ -42,10 +42,13 @@
         <template v-else>
           <!-- Desktop: table -->
           <div class="card border-0 shadow-sm d-none d-md-block">
+            <div class="card-header card-header-precommandes">
+              <h5 class="mb-0"><i class="bi bi-journal-text me-2"></i>Liste des catalogues</h5>
+            </div>
             <div class="card-body p-0">
               <div class="table-responsive">
                 <table class="table table-hover mb-0 catalogues-table">
-                  <thead class="table-light">
+                  <thead class="thead-precommandes">
                     <tr>
                       <th
                         class="sortable text-nowrap catalogue-col-id"
@@ -108,7 +111,7 @@
                         <span v-if="!c.nb_paniers_non_submis && !c.nb_paniers_submis" class="text-muted">-</span>
                       </td>
                       <td class="text-end">
-                        <a v-if="daysRemaining(c.expiration_date) >= 0" :href="`/catalogues/${c.id}/vue?nouveau=1`" class="btn btn-sm btn-primary">
+                        <a v-if="daysRemaining(c.expiration_date) >= 0" :href="`/catalogues/${c.id}/vue?nouveau=1`" class="btn btn-sm btn-precommandes">
                           <i class="bi bi-cart-plus me-1"></i>Faire un panier
                         </a>
                         <span v-else class="badge bg-secondary">Expiré</span>
@@ -157,7 +160,7 @@
                     <span v-if="!c.nb_paniers_non_submis && !c.nb_paniers_submis" class="text-muted">-</span>
                   </div>
                 </div>
-                <a v-if="daysRemaining(c.expiration_date) >= 0" :href="`/catalogues/${c.id}/vue?nouveau=1`" class="btn btn-primary w-100">
+                <a v-if="daysRemaining(c.expiration_date) >= 0" :href="`/catalogues/${c.id}/vue?nouveau=1`" class="btn btn-precommandes w-100">
                   <i class="bi bi-cart-plus me-2"></i>Faire un panier
                 </a>
                 <div v-else class="alert alert-secondary mb-0 text-center">

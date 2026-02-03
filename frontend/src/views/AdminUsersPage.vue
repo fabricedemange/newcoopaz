@@ -60,7 +60,7 @@
         <div class="card">
           <div class="card-body">
             <table class="table table-hover">
-              <thead>
+              <thead class="thead-admin-site">
                 <tr>
                   <th style="width: 40px">
                     <input
@@ -71,16 +71,16 @@
                       @change="store.toggleSelectAll()"
                     />
                   </th>
-                  <th>Utilisateur</th>
-                  <th>Email</th>
-                  <th>Organisation</th>
-                  <th>Rôles</th>
-                  <th style="width: 80px">Statut</th>
+                  <th style="cursor: pointer" class="user-select-none" @click="store.setSort('username')">Utilisateur <i :class="'bi ms-1 ' + getSortIcon('username')"></i></th>
+                  <th style="cursor: pointer" class="user-select-none" @click="store.setSort('email')">Email <i :class="'bi ms-1 ' + getSortIcon('email')"></i></th>
+                  <th style="cursor: pointer" class="user-select-none" @click="store.setSort('organization_name')">Organisation <i :class="'bi ms-1 ' + getSortIcon('organization_name')"></i></th>
+                  <th style="cursor: pointer" class="user-select-none" @click="store.setSort('role_names')">Rôles <i :class="'bi ms-1 ' + getSortIcon('role_names')"></i></th>
+                  <th style="cursor: pointer; width: 80px" class="user-select-none" @click="store.setSort('is_active')">Statut <i :class="'bi ms-1 ' + getSortIcon('is_active')"></i></th>
                   <th style="width: 100px">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="user in store.filteredUsers" :key="user.id">
+                <tr v-for="user in store.sortedUsers" :key="user.id">
                   <td>
                     <input
                       type="checkbox"
@@ -152,7 +152,7 @@
                 </tr>
               </tbody>
             </table>
-            <div v-if="store.filteredUsers.length === 0" class="text-center text-muted py-4">
+            <div v-if="store.sortedUsers.length === 0" class="text-center text-muted py-4">
               Aucun utilisateur trouvé
             </div>
           </div>
@@ -161,7 +161,7 @@
 
       <!-- Mobile cards -->
       <div class="d-md-none">
-        <div v-for="user in store.filteredUsers" :key="user.id" class="card mb-3">
+        <div v-for="user in store.sortedUsers" :key="user.id" class="card mb-3">
           <div class="card-body">
             <div class="form-check mb-3">
               <input
@@ -336,21 +336,28 @@
         </div>
       </div>
 
-      <!-- Create User Modal -->
+    </div>
+
+    <!-- Modal Créer un utilisateur : hors du v-else pour être toujours montée -->
+    <Teleport to="body">
       <div
-        v-if="store.showCreateModal"
-        class="modal show d-block"
+        v-show="store.showCreateModal"
+        class="modal fade"
+        :class="{ show: store.showCreateModal }"
+        :aria-hidden="!store.showCreateModal"
         tabindex="-1"
-        style="background-color: rgba(0,0,0,0.5)"
+        :style="store.showCreateModal ? { display: 'flex', visibility: 'visible' } : { display: 'none', visibility: 'hidden' }"
+        @click.self="store.closeCreateModal()"
       >
-        <div class="modal-dialog modal-lg">
+        <div class="modal-backdrop fade" :class="{ show: store.showCreateModal }" @click="store.closeCreateModal()"></div>
+        <div class="modal-dialog modal-lg modal-dialog-scrollable" role="document" @click.stop>
           <div class="modal-content">
             <div class="modal-header">
               <h5 class="modal-title">
                 <i class="bi bi-person-plus-fill"></i>
                 Créer un nouvel utilisateur
               </h5>
-              <button type="button" class="btn-close" @click="store.closeCreateModal()"></button>
+              <button type="button" class="btn-close" aria-label="Fermer" @click="store.closeCreateModal()"></button>
             </div>
             <div class="modal-body">
               <div class="alert alert-info">
@@ -420,7 +427,7 @@
           </div>
         </div>
       </div>
-    </div>
+    </Teleport>
   </div>
 </template>
 
@@ -430,8 +437,20 @@ import { useAdminUsersStore } from '@/stores/adminUsers';
 
 const store = useAdminUsersStore();
 
+function getSortIcon(column) {
+  if (store.sortColumn !== column) return 'bi-arrow-down-up text-secondary opacity-50';
+  return store.sortDirection === 'asc' ? 'bi-arrow-up' : 'bi-arrow-down';
+}
+
 onMounted(() => {
   store.loadData();
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('modal') === 'new') {
+    store.openCreateModal();
+    const url = new URL(window.location.href);
+    url.searchParams.delete('modal');
+    window.history.replaceState({}, '', url.toString());
+  }
 });
 </script>
 

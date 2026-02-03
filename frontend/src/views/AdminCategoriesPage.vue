@@ -29,9 +29,9 @@
       <div class="row">
         <div class="col-12">
           <div class="d-flex flex-column flex-sm-row gap-2 mb-3">
-            <a href="/admin/categories/new" class="btn btn-success">
+            <button type="button" class="btn btn-success" @click="openNewModal">
               <i class="bi bi-plus-circle me-2"></i>Ajouter une catégorie
-            </a>
+            </button>
             <button type="button" class="btn btn-outline-warning" @click="store.openMergeModal()">
               <i class="bi bi-union me-2"></i>Fusionner des catégories
             </button>
@@ -72,7 +72,7 @@
                   : 'Commencez par créer votre première catégorie.'
               }}
             </p>
-            <a href="/admin/categories/new" class="btn btn-primary">Créer une catégorie</a>
+            <button type="button" class="btn btn-primary" @click="openNewModal">Créer une catégorie</button>
           </div>
 
           <div v-else>
@@ -87,7 +87,7 @@
                 <!-- Desktop table -->
                 <div class="table-responsive d-none d-md-block">
                   <table class="table table-hover">
-                    <thead>
+                    <thead class="thead-administration">
                       <tr>
                         <th style="cursor: pointer" @click="store.sortBy('nom')">
                           Catégorie <i :class="'bi ms-1 ' + getSortIcon('nom')"></i>
@@ -199,6 +199,41 @@
       </div>
     </template>
 
+    <!-- Modal nouvelle catégorie : hors du v-else pour être toujours monté -->
+    <Teleport to="body">
+      <div
+        v-show="showNewModal"
+        class="modal fade"
+        :class="{ show: showNewModal }"
+        :aria-hidden="!showNewModal"
+        tabindex="-1"
+        :style="showNewModal ? { display: 'flex', visibility: 'visible' } : { display: 'none', visibility: 'hidden' }"
+        @click.self="closeNewModal"
+      >
+        <div class="modal-backdrop fade" :class="{ show: showNewModal }" @click="closeNewModal"></div>
+        <div class="modal-dialog modal-lg modal-dialog-scrollable" role="document" @click.stop>
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">Créer une nouvelle catégorie</h5>
+              <button type="button" class="btn-close" aria-label="Fermer" @click="closeNewModal"></button>
+            </div>
+            <div class="modal-body">
+              <AdminCategoryFormContent
+                v-if="showNewModal"
+                :all-categories="store.categories"
+                :category="null"
+                :category-id="null"
+                :modal="true"
+                :csrf-token="csrfToken"
+                @success="onNewCategorySuccess"
+                @cancel="closeNewModal"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
     <!-- Modal Fusion -->
     <div
       v-if="store.showMergeModal"
@@ -265,10 +300,27 @@
 </template>
 
 <script setup>
-import { onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useAdminCategoriesStore } from '@/stores/adminCategories';
+import AdminCategoryFormContent from '@/components/AdminCategoryFormContent.vue';
 
 const store = useAdminCategoriesStore();
+const showNewModal = ref(false);
+
+const csrfToken = computed(() => (typeof window !== 'undefined' ? window.CSRF_TOKEN || '' : ''));
+
+function openNewModal() {
+  showNewModal.value = true;
+}
+
+function closeNewModal() {
+  showNewModal.value = false;
+}
+
+function onNewCategorySuccess() {
+  closeNewModal();
+  store.loadData();
+}
 
 function getSortIcon(column) {
   if (store.sortColumn !== column) return 'bi-arrow-down-up';
@@ -277,6 +329,13 @@ function getSortIcon(column) {
 
 onMounted(() => {
   store.loadData();
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('modal') === 'new') {
+    showNewModal.value = true;
+    const url = new URL(window.location.href);
+    url.searchParams.delete('modal');
+    window.history.replaceState({}, '', url.toString());
+  }
 });
 </script>
 

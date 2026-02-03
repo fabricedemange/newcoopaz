@@ -9,7 +9,8 @@ const express = require("express");
 const router = express.Router();
 const { db } = require("../config/db-trace-wrapper");
 const { requirePermission, clearUserPermissionCache } = require("../middleware/rbac.middleware");
-const { getCurrentOrgId, getCurrentUserId, isSuperAdmin } = require("../utils/session-helpers");
+const { getCurrentOrgId, getCurrentUserId } = require("../utils/session-helpers");
+const { hasPermission } = require("../middleware/rbac.middleware");
 
 // Helper: Query with promise
 function queryPromise(query, params) {
@@ -29,7 +30,7 @@ router.get("/:userId/roles", requirePermission('users', { json: true }), async (
   try {
     const targetUserId = req.params.userId;
     const orgId = getCurrentOrgId(req);
-    const superAdmin = isSuperAdmin(req);
+    const superAdmin = await hasPermission(req, "organizations.view_all");
 
     // Check user belongs to org (unless SuperAdmin)
     if (!superAdmin) {
@@ -78,7 +79,7 @@ router.post("/:userId/roles", requirePermission('users', { json: true }), async 
     const { role_id, expires_at, reason } = req.body;
     const actorId = getCurrentUserId(req);
     const orgId = getCurrentOrgId(req);
-    const superAdmin = isSuperAdmin(req);
+    const superAdmin = await hasPermission(req, "organizations.view_all");
 
     if (!role_id) {
       return res.status(400).json({
@@ -170,7 +171,7 @@ router.delete("/:userId/roles/:roleId", requirePermission('users', { json: true 
     const roleId = req.params.roleId;
     const actorId = getCurrentUserId(req);
     const orgId = getCurrentOrgId(req);
-    const superAdmin = isSuperAdmin(req);
+    const superAdmin = await hasPermission(req, "organizations.view_all");
 
     // Check target user
     const userCheckQuery = `SELECT organization_id FROM users WHERE id = ?`;
@@ -240,7 +241,7 @@ router.get("/:userId/effective-permissions", requirePermission('users', { json: 
   try {
     const targetUserId = req.params.userId;
     const orgId = getCurrentOrgId(req);
-    const superAdmin = isSuperAdmin(req);
+    const superAdmin = await hasPermission(req, "organizations.view_all");
 
     // Check target user
     const userCheckQuery = `SELECT organization_id, rbac_enabled FROM users WHERE id = ?`;

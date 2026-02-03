@@ -1,10 +1,9 @@
 const express = require("express");
 const router = express.Router();
 const { db } = require("../config/config");
-const { requirePermission } = require("../middleware/rbac.middleware");
+const { requirePermission, hasPermission } = require("../middleware/rbac.middleware");
 const {
   getCurrentOrgId,
-  getCurrentUserRole,
   getCurrentUserId,
 } = require("../utils/session-helpers");
 
@@ -12,9 +11,8 @@ const {
  * GET /api/admin/dashboard
  * Retourne les données du dashboard (catalogues, commandes, paniers)
  */
-router.get("/", requirePermission("catalogues", { json: true }), (req, res) => {
-  const role = getCurrentUserRole(req);
-  const isSuperAdmin = role === "SuperAdmin";
+router.get("/", requirePermission("catalogues", { json: true }), async (req, res) => {
+  const isSuperAdmin = await hasPermission(req, "organizations.view_all");
   const scopeToggleAvailable = !isSuperAdmin;
   const showAllScope = !scopeToggleAvailable || req.query.scope === "all";
   const orgId = getCurrentOrgId(req);

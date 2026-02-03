@@ -59,7 +59,7 @@
           <div class="card-body p-0">
             <div class="table-responsive">
               <table class="table table-hover mb-0">
-                <thead class="table-light">
+                <thead class="thead-precommandes">
                   <tr>
                     <th style="width: 40%;">Produit</th>
                     <th style="width: 10%;">Fournisseur</th>

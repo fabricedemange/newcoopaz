@@ -13,7 +13,7 @@ const { debugLog } = require("../utils/logger-helpers");
 // GET /commandes - Redirection vers la liste des commandes Vue+Vite
 router.get(
   "/",
-  requireAnyPermission(["commandes.user", "commandes.admin"]),
+  requireAnyPermission(["commandes.user", "commandes.admin", "commandes.own"]),
   (req, res) => {
     res.redirect("/commandes/vue");
   }
@@ -22,7 +22,7 @@ router.get(
 // GET /commandes/vue - Version Vue.js de la liste des commandes
 router.get(
   "/vue",
-  requireAnyPermission(["commandes.user", "commandes.admin"]),
+  requireAnyPermission(["commandes.user", "commandes.admin", "commandes.own"]),
   (req, res) => {
     res.render("commandes_vue", {
       title: "Mes commandes",
@@ -31,10 +31,31 @@ router.get(
   }
 );
 
+// GET /commandes/cotisation - Redirection vers Mon historique de cotisation
+router.get(
+  "/cotisation",
+  requireAnyPermission(["commandes.user", "commandes.admin", "commandes.own"]),
+  (req, res) => {
+    res.redirect("/commandes/cotisation/vue");
+  }
+);
+
+// GET /commandes/cotisation/vue - Mon historique de cotisation (Vue.js)
+router.get(
+  "/cotisation/vue",
+  requireAnyPermission(["commandes.user", "commandes.admin", "commandes.own"]),
+  (req, res) => {
+    res.render("commandes_cotisation_vue", {
+      title: "Mon historique de cotisation",
+      hideSidebar: false,
+    });
+  }
+);
+
 // GET /commandes/:id/vue - Version Vue.js du détail d'une commande
 router.get(
   "/:id/vue",
-  requireAnyPermission(["commandes.user", "commandes.admin"]),
+  requireAnyPermission(["commandes.user", "commandes.admin", "commandes.own"]),
   (req, res) => {
     res.render("commande_detail_vue", {
       title: "Détail de la commande",
@@ -46,7 +67,7 @@ router.get(
 // GET /commandes/:id - Redirection vers le détail commande Vue+Vite
 router.get(
   "/:id",
-  requireAnyPermission(["commandes.user", "commandes.admin"]),
+  requireAnyPermission(["commandes.user", "commandes.admin", "commandes.own"]),
   (req, res) => {
     res.redirect(`/commandes/${req.params.id}/vue`);
   }
@@ -69,7 +90,7 @@ router.post("/:id/note", (req, res) => {
   db.query(
     "SELECT * FROM paniers WHERE id = ?",
     [commandeId],
-    (err, results) => {
+    async (err, results) => {
       if (err || !results || results.length === 0) {
         if (wantsJson) {
           return res.status(404).json({ success: false, error: "Commande non trouvée" });
@@ -78,11 +99,10 @@ router.post("/:id/note", (req, res) => {
       }
       const commande = results[0];
 
+      const canAdminCommandes = await hasPermission(req, "commandes.admin");
       if (
         commande.user_id !== getCurrentUserId(req) &&
-        !["admin", "epicier", "referent", "SuperAdmin"].includes(
-          getCurrentUserRole(req)
-        )
+        !canAdminCommandes
       ) {
         if (wantsJson) {
           return res.status(403).json({ success: false, error: "Non autorisé" });
@@ -114,7 +134,7 @@ router.post("/:id/note", (req, res) => {
 // POST /commandes/:id/edit - Réouvrir une commande (transformer en panier)
 router.post(
   "/:id/edit",
-  requireAnyPermission(["commandes.user", "commandes.admin"]),
+  requireAnyPermission(["commandes.user", "commandes.admin", "commandes.own"]),
   (req, res) => {
     const commandeId = req.params.id;
     const source = req.body.source;

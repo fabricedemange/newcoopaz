@@ -1,15 +1,15 @@
 const express = require("express");
 const router = express.Router();
 const { db } = require("../config/db-trace-wrapper");
-const { requirePermission } = require("../middleware/rbac.middleware");
+const { requirePermission, hasPermission } = require("../middleware/rbac.middleware");
 const { getCurrentOrgId } = require("../utils/session-helpers");
 
 // ============================================================================
 // API: Liste des produits (JSON)
 // ============================================================================
-router.get("/", requirePermission('products', { json: true }), (req, res) => {
+router.get("/", requirePermission('products', { json: true }), async (req, res) => {
   const orgId = getCurrentOrgId(req);
-  const isSuperAdmin = req.user && req.user.role === 'superadmin';
+  const isSuperAdmin = await hasPermission(req, "organizations.view_all");
 
   // Récupérer les produits avec prix depuis products.prix
   const productsQuery = `
@@ -78,10 +78,10 @@ router.get("/", requirePermission('products', { json: true }), (req, res) => {
 // ============================================================================
 // API: Mise à jour en masse (catégorie, fournisseur, unité, quantité min)
 // ============================================================================
-router.post("/bulk-update", requirePermission('products', { json: true }), (req, res) => {
+router.post("/bulk-update", requirePermission('products', { json: true }), async (req, res) => {
   const { productIds, categoryId, supplierId, unite, quantiteMin } = req.body;
   const orgId = getCurrentOrgId(req);
-  const isSuperAdmin = req.user && req.user.role === 'superadmin';
+  const isSuperAdmin = await hasPermission(req, "organizations.view_all");
 
   // Validation
   if (!Array.isArray(productIds) || productIds.length === 0) {

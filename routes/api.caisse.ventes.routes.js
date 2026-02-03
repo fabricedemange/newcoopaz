@@ -19,11 +19,12 @@ router.post("/", requirePermission("caisse.sell", { json: true }), (req, res) =>
     return res.status(400).json({ success: false, error: "Montant invalide" });
   }
 
-  // Générer numéro ticket temporaire (sera remplacé par l'ID)
-  const numero_ticket_temp = `T-TEMP-${Date.now()}`;
+  const adherentId = adherent_id ? parseInt(adherent_id, 10) : null;
+  const aLigneCotisation = lignes.some((l) => l.is_cotisation === true);
 
-  // Transaction SQL - Get connection from pool
-  db.getConnection((err, connection) => {
+  function proceedWithVente() {
+    const numero_ticket_temp = `T-TEMP-${Date.now()}`;
+    db.getConnection((err, connection) => {
     if (err) {
       console.error('Erreur connexion:', err);
       return res.status(500).json({ success: false, error: err.message });
@@ -36,51 +37,71 @@ router.post("/", requirePermission("caisse.sell", { json: true }), (req, res) =>
         return res.status(500).json({ success: false, error: err.message });
       }
 
-      // 1. Créer la vente
-      const insertVenteQuery = `
-        INSERT INTO ventes
-          (organization_id, numero_ticket, adherent_id, nom_client, montant_ttc, created_by, source, statut, panier_id)
-        VALUES (?, ?, ?, ?, ?, ?, 'caisse', 'complete', ?)
-      `;
-
-      connection.query(
-        insertVenteQuery,
-        [orgId, numero_ticket_temp, adherent_id, nom_client || 'Anonyme', montant_ttc, userId, panier_id || null],
-        (err, result) => {
-          if (err) {
-            console.error('Erreur création vente:', err);
-            return connection.rollback(() => {
-              connection.release();
-              res.status(500).json({ success: false, error: err.message });
-            });
-          }
-
-          const venteId = result.insertId;
-          const numero_ticket = `T${venteId}`;
-
-          // Mettre à jour le numéro de ticket avec l'ID de la vente
-          connection.query(
-            'UPDATE ventes SET numero_ticket = ? WHERE id = ?',
-            [numero_ticket, venteId],
-            (err) => {
-              if (err) {
-                console.error('Erreur mise à jour numero_ticket:', err);
-                return connection.rollback(() => {
-                  connection.release();
-                  res.status(500).json({ success: false, error: err.message });
-                });
-              }
-
-              // Continuer avec les lignes de vente
-              updateVenteWithLines(connection, venteId, numero_ticket);
+      function doInsertVente(venteSource) {
+        const insertVenteQuery = `
+          INSERT INTO ventes
+            (organization_id, numero_ticket, adherent_id, nom_client, montant_ttc, created_by, source, statut, panier_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 'complete', ?)
+        `;
+        connection.query(
+          insertVenteQuery,
+          [orgId, numero_ticket_temp, adherent_id, nom_client || 'Anonyme', montant_ttc, userId, venteSource, panier_id || null],
+          (err, result) => {
+            if (err) {
+              console.error('Erreur création vente:', err);
+              return connection.rollback(() => {
+                connection.release();
+                res.status(500).json({ success: false, error: err.message });
+              });
             }
-          );
-        }
-      );
+
+            const venteId = result.insertId;
+            const numero_ticket = `T${venteId}`;
+
+            connection.query(
+              'UPDATE ventes SET numero_ticket = ? WHERE id = ?',
+              [numero_ticket, venteId],
+              (err) => {
+                if (err) {
+                  console.error('Erreur mise à jour numero_ticket:', err);
+                  return connection.rollback(() => {
+                    connection.release();
+                    res.status(500).json({ success: false, error: err.message });
+                  });
+                }
+                updateVenteWithLines(connection, venteId, numero_ticket);
+              }
+            );
+          }
+        );
+      }
+
+      // Si panier_id fourni, déterminer si panier catalogue (source + suffixe cde/cat sur les libellés)
+      if (panier_id) {
+        connection.query(
+          'SELECT id, catalog_file_id FROM paniers WHERE id = ?',
+          [panier_id],
+          (err, rows) => {
+            if (err) {
+              console.error('Erreur lecture panier:', err);
+              return connection.rollback(() => {
+                connection.release();
+                res.status(500).json({ success: false, error: err.message });
+              });
+            }
+            const venteSource = (rows[0] && rows[0].catalog_file_id != null) ? 'catalogue' : 'caisse';
+            const panierInfo = (rows[0] && rows[0].catalog_file_id != null)
+              ? { panier_id: rows[0].id, catalog_file_id: rows[0].catalog_file_id }
+              : null;
+            doInsertVente(venteSource);
+          }
+        );
+      } else {
+        doInsertVente('caisse');
+      }
 
       function updateVenteWithLines(connection, venteId, numero_ticket) {
-
-          // 2. Créer les lignes de vente
+          // Colonnes sans is_cotisation pour compatibilité si la migration n'est pas encore exécutée
           const insertLignesQuery = `
             INSERT INTO lignes_vente
               (vente_id, produit_id, nom_produit, quantite, prix_unitaire, montant_ttc)
@@ -89,8 +110,8 @@ router.post("/", requirePermission("caisse.sell", { json: true }), (req, res) =>
 
           const lignesValues = lignes.map(l => [
             venteId,
-            l.produit_id,
-            l.nom_produit,
+            l.produit_id ?? null,
+            l.nom_produit || '',
             l.quantite,
             l.prix_unitaire,
             l.quantite * l.prix_unitaire
@@ -105,8 +126,11 @@ router.post("/", requirePermission("caisse.sell", { json: true }), (req, res) =>
               });
             }
 
-            // 3. Décrémenter le stock pour chaque produit (sans vérification de stock suffisant)
-            const updateStockPromises = lignes.map(ligne => {
+            // 3. Décrémenter le stock pour chaque produit (sauf cotisation / avoir : pas de produit_id)
+            const lignesAvecProduit = lignes.filter(
+              (l) => l.produit_id != null && l.produit_id !== 0 && !l.is_cotisation
+            );
+            const updateStockPromises = lignesAvecProduit.map(ligne => {
               return new Promise((resolve, reject) => {
                 const updateStockQuery = `
                   UPDATE products
@@ -213,6 +237,34 @@ router.post("/", requirePermission("caisse.sell", { json: true }), (req, res) =>
           });
       }
     });
+  });
+  } // end proceedWithVente
+
+  if (!adherentId) return proceedWithVente();
+
+  // Détection cotisation sans exiger la colonne is_cotisation (compatible avant migration)
+    const sqlCotisation = `
+    SELECT 1 FROM ventes v
+    INNER JOIN lignes_vente l ON l.vente_id = v.id
+    WHERE v.adherent_id = ? AND v.organization_id = ? AND v.statut = 'complete'
+      AND l.produit_id IS NULL AND l.nom_produit LIKE 'Cotisation mensuelle%'
+      AND YEAR(v.created_at) = YEAR(CURDATE()) AND MONTH(v.created_at) = MONTH(CURDATE())
+    LIMIT 1
+  `;
+  db.query(sqlCotisation, [adherentId, orgId], (err, rows) => {
+    if (err) {
+      console.error('Erreur vérification cotisation:', err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+    const aDejaPaye = Array.isArray(rows) && rows.length > 0;
+    if (aDejaPaye) return proceedWithVente();
+    if (!aLigneCotisation) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cotisation mensuelle requise (5-15 €). Veuillez ajouter la cotisation au panier.',
+      });
+    }
+    proceedWithVente();
   });
 });
 

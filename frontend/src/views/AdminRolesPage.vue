@@ -2,7 +2,7 @@
   <div class="container-fluid mt-4">
     <!-- Loading -->
     <div v-if="store.loading" class="text-center py-5">
-      <div class="spinner-border text-primary" role="status">
+      <div class="spinner-border text-admin-site" role="status">
         <span class="visually-hidden">Chargement...</span>
       </div>
       <p class="mt-3 text-muted">Chargement des rôles...</p>
@@ -17,15 +17,15 @@
     <div v-else>
       <!-- Header -->
       <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="bi bi-shield-lock me-2"></i>Gestion des Rôles</h2>
-        <button type="button" class="btn btn-primary" @click="store.showCreateForm = !store.showCreateForm">
+        <h2 class="text-admin-site"><i class="bi bi-shield-lock me-2"></i>Gestion des Rôles</h2>
+        <button type="button" class="btn btn-admin-site" @click="store.showCreateForm = !store.showCreateForm">
           <i class="bi bi-plus-lg me-2"></i>Nouveau rôle
         </button>
       </div>
 
       <!-- Create Form -->
-      <div v-if="store.showCreateForm" class="card mb-4 border-primary">
-        <div class="card-header bg-primary text-white">
+      <div v-if="store.showCreateForm" class="card mb-4">
+        <div class="card-header card-header-admin-site">
           <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>Créer un nouveau rôle</h5>
         </div>
         <div class="card-body">
@@ -67,7 +67,7 @@
             </div>
           </div>
           <div class="d-flex gap-2">
-            <button type="button" class="btn btn-primary" @click="store.createRole()">
+            <button type="button" class="btn btn-admin-site" @click="store.createRole()">
               <i class="bi bi-check-lg me-2"></i>Créer
             </button>
             <button type="button" class="btn btn-secondary" @click="store.cancelCreate()">
@@ -89,7 +89,7 @@
 
       <!-- System Roles -->
       <div class="card mb-4">
-        <div class="card-header bg-primary text-white">
+        <div class="card-header card-header-admin-site">
           <h5 class="mb-0"><i class="bi bi-shield-fill me-2"></i>Rôles Système</h5>
         </div>
         <div class="card-body p-0">
@@ -163,7 +163,7 @@
               <div class="mt-3">
                 <button
                   type="button"
-                  :class="'btn ' + (store.savedRoleId === role.id ? 'btn-success' : 'btn-primary')"
+                  :class="'btn ' + (store.savedRoleId === role.id ? 'btn-success' : 'btn-admin-site')"
                   :disabled="store.savingRoleId === role.id"
                   @click="store.saveRolePermissions(role)"
                 >
@@ -186,7 +186,7 @@
 
       <!-- Custom Roles -->
       <div class="card">
-        <div class="card-header bg-success text-white">
+        <div class="card-header card-header-admin-site">
           <h5 class="mb-0"><i class="bi bi-gear-fill me-2"></i>Rôles Personnalisés</h5>
         </div>
         <div class="card-body p-0">
@@ -272,7 +272,7 @@
               <div class="mt-3">
                 <button
                   type="button"
-                  :class="'btn ' + (store.savedRoleId === role.id ? 'btn-success' : 'btn-primary')"
+                  :class="'btn ' + (store.savedRoleId === role.id ? 'btn-success' : 'btn-admin-site')"
                   :disabled="store.savingRoleId === role.id"
                   @click="store.saveRolePermissions(role)"
                 >

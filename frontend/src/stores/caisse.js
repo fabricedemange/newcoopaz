@@ -5,6 +5,7 @@ import {
   fetchCaisseModesPaiement,
   postCaisseVente,
   postCaissePaiement,
+  fetchCaisseCotisationCheck,
   fetchCaisseCommandesUtilisateur,
   fetchCaisseCommandeArticles,
 } from '@/api';
@@ -77,6 +78,7 @@ export const useCaisseStore = defineStore('caisse', {
     showModalChargerCommande: false,
     commandeACharger: null,
     selectedCommandeId: null,
+    cotisationCheck: null,
   }),
 
   getters: {
@@ -110,6 +112,10 @@ export const useCaisseStore = defineStore('caisse', {
         produitsRecherche.filter((p) => p.category_id).map((p) => p.category_id)
       );
       return state.categories.filter((c) => categoryIds.has(c.id));
+    },
+    /** true si le panier contient déjà une ligne cotisation mensuelle */
+    aPanierCotisation(state) {
+      return state.lignes.some((l) => l.is_cotisation === true);
     },
   },
 
@@ -169,6 +175,20 @@ export const useCaisseStore = defineStore('caisse', {
           is_avoir: false,
         });
       }
+    },
+
+    /** Trouve un produit par code EAN et l’ajoute au panier. Retourne { found: true, produit } ou { found: false }. */
+    ajouterProduitParEan(ean) {
+      const code = String(ean || '').trim().replace(/\s/g, '');
+      if (!code) return { found: false };
+      const produit = this.produits.find(
+        (p) => p.code_ean && String(p.code_ean).trim().replace(/\s/g, '') === code
+      );
+      if (produit) {
+        this.ajouterProduit(produit);
+        return { found: true, produit };
+      }
+      return { found: false };
     },
 
     modifierQuantite(index, nouvelleQuantite) {
@@ -265,9 +285,46 @@ export const useCaisseStore = defineStore('caisse', {
       this.avoirCommentaire = '';
     },
 
-    ouvrirPaiement() {
+    async ouvrirPaiement() {
       this.montantPaiement = this.total;
       this.showPaiementModal = true;
+      this.cotisationCheck = null;
+      if (this.selectedUtilisateur) {
+        try {
+          const data = await fetchCaisseCotisationCheck(this.selectedUtilisateur);
+          if (data.success) this.cotisationCheck = data;
+        } catch (e) {
+          console.error('Erreur vérification cotisation:', e);
+        }
+      }
+    },
+
+    /** Vérifier à nouveau si l'adhérent doit cotiser (après changement utilisateur) */
+    async checkCotisation() {
+      this.cotisationCheck = null;
+      if (!this.selectedUtilisateur) return;
+      try {
+        const data = await fetchCaisseCotisationCheck(this.selectedUtilisateur);
+        if (data.success) this.cotisationCheck = data;
+      } catch (e) {
+        console.error('Erreur vérification cotisation:', e);
+      }
+    },
+
+    /** Ajouter une ligne cotisation mensuelle (5, 10 ou 15 €) au panier */
+    ajouterCotisation(montant) {
+      const m = parseFloat(montant);
+      if (Number.isNaN(m) || m < 5 || m > 15) return;
+      if (this.lignes.some((l) => l.is_cotisation)) return;
+      this.lignes.push({
+        produit_id: null,
+        nom_produit: 'Cotisation mensuelle',
+        quantite: 1,
+        prix_unitaire: roundToCent(m),
+        is_avoir: false,
+        is_cotisation: true,
+      });
+      this.montantPaiement = this.total;
     },
 
     fermerPaiement() {
@@ -297,6 +354,10 @@ export const useCaisseStore = defineStore('caisse', {
       this.showModalChargerCommande = false;
       this.commandeACharger = null;
       try {
+        const cmd = this.commandesUtilisateur.find((c) => c.id === commandeId);
+        const catalogId = cmd?.catalog_id != null ? cmd.catalog_id : null;
+        const suffix = catalogId != null ? ` (cde #${commandeId}, cat #${catalogId})` : '';
+
         const articles = await fetchCaisseCommandeArticles(commandeId);
         const arr = Array.isArray(articles) ? articles : [];
         let count = 0;
@@ -308,10 +369,13 @@ export const useCaisseStore = defineStore('caisse', {
           const existing = this.lignes.find((l) => l.produit_id === produit.id && !l.is_avoir);
           if (existing) {
             existing.quantite += qte;
+            if (suffix && !(existing.nom_produit || '').includes('(cde ')) {
+              existing.nom_produit = (existing.nom_produit || '').trimEnd() + suffix;
+            }
           } else {
             this.lignes.push({
               produit_id: produit.id,
-              nom_produit: produit.nom,
+              nom_produit: (produit.nom || '').trimEnd() + suffix,
               quantite: qte,
               prix_unitaire: parseFloat(produit.prix) || 0,
               unite: produit.unite || 'Pièce',

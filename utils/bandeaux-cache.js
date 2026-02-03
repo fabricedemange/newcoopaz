@@ -13,7 +13,12 @@ const bandeauxCache = new NodeCache({ stdTTL: 300, checkperiod: 60 });
  * Récupère les bandeaux depuis le cache ou la DB
  */
 function getBandeaux(callback) {
-  const cacheKey = 'bandeaux';
+  // En test : pas de DB, retourner une liste vide sans requête
+  if (process.env.NODE_ENV === "test") {
+    return callback(null, []);
+  }
+
+  const cacheKey = "bandeaux";
 
   // Vérifier le cache
   const cached = bandeauxCache.get(cacheKey);

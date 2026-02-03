@@ -1,3 +1,6 @@
+# Ne pas afficher la liste des fichiers si Node ne démarre pas
+Options -Indexes
+
 # DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION BEGIN
 PassengerAppRoot "/home/coopazfr/new.coopaz.fr"
 PassengerBaseURI "/"

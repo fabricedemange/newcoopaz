@@ -109,23 +109,10 @@ router.get("/search", requirePermission('products'), (req, res) => {
 });
 
 // ============================================================================
-// Formulaire de création (Vue+Vite)
+// Formulaire de création (Vue+Vite) — redirige vers la liste avec modal
 // ============================================================================
-router.get("/new", requirePermission('products'), csrfProtection, (req, res) => {
-  const orgId = getCurrentOrgId(req);
-
-  db.query("SELECT * FROM categories WHERE organization_id = ? AND is_active = 1 ORDER BY ordre, nom", [orgId], (e1, categories) => {
-    db.query("SELECT * FROM suppliers WHERE organization_id = ? AND is_active = 1 ORDER BY nom", [orgId], (e2, suppliers) => {
-      const payload = {
-        product: null,
-        categories: categories || [],
-        suppliers: suppliers || [],
-        csrfToken: req.csrfToken(),
-        APP_VERSION: req.app.locals.APP_VERSION || Date.now(),
-      };
-      res.render("admin_product_form_vue", payload);
-    });
-  });
+router.get("/new", requirePermission('products'), (req, res) => {
+  res.redirect("/admin/products/vue?modal=new");
 });
 
 // ============================================================================

@@ -7,11 +7,12 @@
     "start": "node app.js",
     "dev": "nodemon app.js",
     "dev:frontend": "cd frontend && npm run dev",
-    "build:frontend": "cd frontend && npm run build",
+    "build:frontend": "cd frontend && npm ci && npm run build",
     "security-check": "node scripts/security-check.js",
     "extract-sql-trace": "node scripts/rebuild-trace-sql.js",
     "catalogue-auto-archive:run": "node scripts/run-catalogue-auto-archive.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "npx jest --runInBand --forceExit",
+    "test:all": "npm run test && cd frontend && npm run test"
   },
   "dependencies": {
     "axios": "^1.13.2",
@@ -49,7 +50,9 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1"
+    "jest": "^29.7.0",
+    "nodemon": "^3.0.1",
+    "supertest": "^6.3.4"
   },
   "keywords": [
     "coopérative",

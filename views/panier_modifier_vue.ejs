@@ -15,9 +15,10 @@
   </div>
 </div>
 
-<!-- Injecter le token CSRF pour les requêtes AJAX -->
+<!-- Injecter le token CSRF et l'utilisateur courant pour les requêtes AJAX -->
 <script>
 window.CSRF_TOKEN = '<%= csrfToken %>';
+window.CURRENT_USER_ID = <%= typeof currentUserId !== 'undefined' && currentUserId != null ? currentUserId : 'null' %>;
 </script>
 
 <!-- CSS pour animation spinner et responsive -->

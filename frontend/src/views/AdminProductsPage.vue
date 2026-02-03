@@ -29,9 +29,9 @@
       <div class="row">
         <div class="col-12">
           <div class="d-flex flex-column flex-sm-row gap-2 mb-3">
-            <a href="/admin/products/new" class="btn btn-success">
+            <button type="button" class="btn btn-success" @click="openNewModal">
               <i class="bi bi-plus-circle me-2"></i>Ajouter un produit
-            </a>
+            </button>
             <button
               type="button"
               class="btn btn-outline-primary"
@@ -142,14 +142,14 @@
                   <label class="form-label">Catégorie</label>
                   <select class="form-select" v-model="store.filters.categoryId">
                     <option value="">Toutes les catégories</option>
-                    <option v-for="c in store.categories" :key="c.id" :value="c.id">{{ c.nom }}</option>
+                    <option v-for="c in store.categories" :key="c.id" :value="String(c.id)">{{ c.nom }}</option>
                   </select>
                 </div>
                 <div class="col-md-2">
                   <label class="form-label">Fournisseur</label>
                   <select class="form-select" v-model="store.filters.supplierId">
                     <option value="">Tous les fournisseurs</option>
-                    <option v-for="s in store.suppliers" :key="s.id" :value="s.id">{{ s.nom }}</option>
+                    <option v-for="s in store.suppliers" :key="s.id" :value="String(s.id)">{{ s.nom }}</option>
                   </select>
                 </div>
                 <div class="col-md-2">
@@ -186,7 +186,7 @@
           <div v-if="store.filteredProducts.length === 0" class="alert alert-info text-center">
             <h4>Aucun produit trouvé</h4>
             <p>Commencez par créer votre premier produit ou modifiez les filtres.</p>
-            <a href="/admin/products/new" class="btn btn-primary">Créer un produit</a>
+            <button type="button" class="btn btn-primary" @click="openNewModal">Créer un produit</button>
           </div>
 
           <div v-else>
@@ -201,7 +201,7 @@
                 <!-- Desktop table -->
                 <div class="table-responsive d-none d-md-block">
                   <table class="table table-hover">
-                    <thead>
+                    <thead class="thead-administration">
                       <tr>
                         <th style="width: 40px">
                           <input
@@ -371,14 +371,67 @@
         </div>
       </div>
     </template>
+
+    <!-- Modal nouveau produit : hors du v-else pour être toujours monté -->
+    <Teleport to="body">
+      <div
+        v-show="showNewModal"
+        class="modal fade"
+        :class="{ show: showNewModal }"
+        :aria-hidden="!showNewModal"
+        tabindex="-1"
+        :style="showNewModal ? { display: 'flex', visibility: 'visible' } : { display: 'none', visibility: 'hidden' }"
+        @click.self="closeNewModal"
+      >
+        <div class="modal-backdrop fade" :class="{ show: showNewModal }" @click="closeNewModal"></div>
+        <div class="modal-dialog modal-lg modal-dialog-scrollable" role="document" @click.stop>
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">Créer un nouveau produit</h5>
+              <button type="button" class="btn-close" aria-label="Fermer" @click="closeNewModal"></button>
+            </div>
+            <div class="modal-body">
+              <AdminProductFormContent
+                v-if="showNewModal"
+                :categories="store.categories"
+                :suppliers="store.suppliers"
+                :product="null"
+                :product-id="null"
+                :modal="true"
+                :csrf-token="csrfToken"
+                @success="onNewProductSuccess"
+                @cancel="closeNewModal"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup>
-import { onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useAdminProductsStore } from '@/stores/adminProducts';
+import AdminProductFormContent from '@/components/AdminProductFormContent.vue';
 
 const store = useAdminProductsStore();
+const showNewModal = ref(false);
+
+const csrfToken = computed(() => typeof window !== 'undefined' ? (window.CSRF_TOKEN || '') : '');
+
+function openNewModal() {
+  showNewModal.value = true;
+}
+
+function closeNewModal() {
+  showNewModal.value = false;
+}
+
+function onNewProductSuccess() {
+  closeNewModal();
+  store.loadData();
+}
 
 function getSortIcon(column) {
   if (store.sortColumn !== column) return 'bi-arrow-down-up';
@@ -392,5 +445,12 @@ function truncate(text, maxLength = 60) {
 
 onMounted(() => {
   store.loadData();
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('modal') === 'new') {
+    showNewModal.value = true;
+    const url = new URL(window.location.href);
+    url.searchParams.delete('modal');
+    window.history.replaceState({}, '', url.toString());
+  }
 });
 </script>

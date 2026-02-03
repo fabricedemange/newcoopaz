@@ -1,15 +1,15 @@
 const express = require("express");
 const router = express.Router();
 const { db } = require("../config/config");
-const { requirePermission } = require("../middleware/rbac.middleware");
+const { requirePermission, hasPermission } = require("../middleware/rbac.middleware");
 const { getCurrentOrgId } = require("../utils/session-helpers");
 
 // ============================================================================
 // API: Liste des fournisseurs (JSON)
 // ============================================================================
-router.get("/", requirePermission('suppliers', { json: true }), (req, res) => {
+router.get("/", requirePermission('suppliers', { json: true }), async (req, res) => {
   const orgId = getCurrentOrgId(req);
-  const isSuperAdmin = req.user && req.user.role === 'superadmin';
+  const isSuperAdmin = await hasPermission(req, "organizations.view_all");
 
   const suppliersQuery = `
     SELECT
@@ -40,10 +40,10 @@ router.get("/", requirePermission('suppliers', { json: true }), (req, res) => {
 // ============================================================================
 // API: Fusionner deux fournisseurs
 // ============================================================================
-router.post("/merge", requirePermission('suppliers', { json: true }), (req, res) => {
+router.post("/merge", requirePermission('suppliers', { json: true }), async (req, res) => {
   const { sourceId, targetId } = req.body;
   const orgId = getCurrentOrgId(req);
-  const isSuperAdmin = req.user && req.user.role === 'superadmin';
+  const isSuperAdmin = await hasPermission(req, "organizations.view_all");
 
   // Validation
   if (!sourceId || !targetId) {

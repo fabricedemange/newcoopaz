@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { db } = require("../config/config");
-const { requirePermission } = require("../middleware/rbac.middleware");
+const { requirePermission, hasPermission } = require("../middleware/rbac.middleware");
 const { logger } = require("../config/logger");
 const { queryWithUser } = require("../config/db-trace-wrapper");
 const {
@@ -41,7 +41,7 @@ router.post("/article/:id/note", (req, res) => {
      JOIN paniers p ON pa.panier_id = p.id
      WHERE pa.id = ?`,
     [articleId],
-    (err, results) => {
+    async (err, results) => {
       if (err) {
         debugLog("Erreur lors de la récupération de l'article", {
           error: err,
@@ -61,19 +61,16 @@ router.post("/article/:id/note", (req, res) => {
 
       const article = results[0];
 
+      const canAdminPaniers = await hasPermission(req, "paniers.admin");
       if (
         article.user_id !== getCurrentUserId(req) &&
-        !["admin", "epicier", "referent", "SuperAdmin"].includes(
-          getCurrentUserRole(req)
-        )
+        !canAdminPaniers
       ) {
         debugLog(
           "Accès refusé: user_id du panier:",
           article.user_id,
           "user_id session:",
-          getCurrentUserId(req),
-          "role:",
-          getCurrentUserRole(req)
+          getCurrentUserId(req)
         );
         if (wantsJson) {
           return res

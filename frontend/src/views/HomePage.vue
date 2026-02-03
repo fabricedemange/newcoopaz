@@ -65,7 +65,7 @@
                 </div>
                 <div v-else class="table-responsive">
                   <table class="table table-hover mb-0">
-                    <thead class="table-light">
+                    <thead class="thead-precommandes">
                       <tr>
                         <th>ID</th><th>Catalogue</th><th>Articles</th><th>Date d'expiration</th><th>Actions</th>
                       </tr>
@@ -109,7 +109,7 @@
                 </div>
                 <div v-else class="table-responsive">
                   <table class="table table-hover mb-0">
-                    <thead class="table-light">
+                    <thead class="thead-precommandes">
                       <tr>
                         <th>ID</th><th>Catalogue</th><th>Articles</th><th>Date de livraison</th><th>Statut</th>
                       </tr>

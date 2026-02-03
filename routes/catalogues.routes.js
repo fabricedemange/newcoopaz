@@ -90,7 +90,7 @@ router.post(
 // GET /catalogues/vue - Version Vue.js des catalogues (pour test)
 router.get(
   "/vue",
-  requireAnyPermission(["catalogues", "paniers.user"]),
+  requireAnyPermission(["catalogues", "paniers.user", "catalogues.view"]),
   (req, res) => {
     res.render("catalogues_vue", {
       title: "Catalogues",
@@ -102,7 +102,7 @@ router.get(
 // GET /catalogues - Redirection vers la liste Vue+Vite
 router.get(
   "/",
-  requireAnyPermission(["catalogues", "paniers.user"]),
+  requireAnyPermission(["catalogues", "paniers.user", "catalogues.view"]),
   (req, res) => {
     res.redirect("/catalogues/vue");
   }
@@ -111,7 +111,7 @@ router.get(
 // GET /catalogues/:id - Redirection vers le détail catalogue Vue+Vite
 router.get(
   "/:id",
-  requireAnyPermission(["catalogues", "paniers.user"]),
+  requireAnyPermission(["catalogues", "paniers.user", "catalogues.view"]),
   (req, res) => {
     const qs = req.query.panier ? `?panier=${req.query.panier}` : "";
     res.redirect(`/catalogues/${req.params.id}/vue${qs}`);
@@ -121,7 +121,7 @@ router.get(
 // GET /catalogues/:id/vue - Version Vue.js du détail d'un catalogue (pour test)
 router.get(
   "/:id/vue",
-  requireAnyPermission(["catalogues", "paniers.user"]),
+  requireAnyPermission(["catalogues", "paniers.user", "catalogues.view"]),
   (req, res) => {
     res.render("catalogue_articles_vue", {
       title: "Détail du catalogue",

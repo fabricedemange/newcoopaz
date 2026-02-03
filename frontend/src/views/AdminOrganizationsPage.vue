@@ -29,7 +29,7 @@
       <div v-else class="card">
         <div class="table-responsive">
           <table class="table table-hover mb-0">
-            <thead class="table-light">
+            <thead class="thead-admin-site">
               <tr>
                 <th style="width: 5%">ID</th>
                 <th style="width: 25%">Nom</th>

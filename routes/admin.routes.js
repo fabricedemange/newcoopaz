@@ -11,7 +11,7 @@ const { google } = require("googleapis");
 const PdfPrinter = require("pdfmake");
 const sharp = require("sharp");
 const { db, queryWithTrace } = require("../config/db-trace-wrapper");
-const { requirePermission, requireAnyPermission } = require("../middleware/rbac.middleware");
+const { requirePermission, requireAnyPermission, hasPermission } = require("../middleware/rbac.middleware");
 const emailService = require("../services/email.service");
 const { logger } = require("../config/logger");
 const { queryWithUser } = require("../config/db-trace-wrapper");
@@ -38,7 +38,6 @@ const {
   getCurrentUserId,
   getCurrentUserRole,
   getCurrentUsername,
-  isSuperAdmin,
   getOriginalUser,
   isImpersonating,
 } = require("../utils/session-helpers");
@@ -367,43 +366,9 @@ router.get("/users", requirePermission('users'), (req, res) => {
   res.redirect("/admin/users/vue");
 });
 
-// Formulaire nouvel utilisateur Vue+Vite
+// Formulaire nouvel utilisateur — redirige vers la liste avec modal
 router.get("/users/new", requirePermission('users'), (req, res) => {
-  const orgId = getCurrentOrgId(req);
-
-  const rolesQuery = `
-    SELECT id, name, display_name, description
-    FROM roles
-    WHERE organization_id = ? OR organization_id IS NULL
-    ORDER BY display_name
-  `;
-
-  db.query(rolesQuery, [orgId], (err, allRoles) => {
-    if (err) {
-      console.error('Error loading roles:', err);
-      allRoles = [];
-    }
-
-    const payload = {
-      user: null,
-      error: null,
-      action: "add",
-      organizations: null,
-      allRoles: allRoles || [],
-      userRoleIds: [],
-      csrfToken: res.locals.csrfToken || "",
-      APP_VERSION: res.app.locals.APP_VERSION || Date.now(),
-    };
-
-    if (isSuperAdmin(req)) {
-      getAllOrganizations((err, orgs) => {
-        payload.organizations = orgs;
-        res.render("admin_user_form_vue", payload);
-      });
-    } else {
-      res.render("admin_user_form_vue", payload);
-    }
-  });
+  res.redirect("/admin/users/vue?modal=new");
 });
 
 // Ajout utilisateur
@@ -439,6 +404,7 @@ router.post("/users/new", requirePermission('users'), async (req, res) => {
 
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
+    const canViewAllOrgs = await hasPermission(req, "organizations.view_all");
 
     // Handle email_catalogue checkbox (can be array ["0", "1"] if both hidden and checkbox are sent)
     let emailCatalogueValue = email_catalogue;
@@ -453,7 +419,7 @@ router.post("/users/new", requirePermission('users'), async (req, res) => {
         : 0;
 
     let orgIdToUse;
-    if (isSuperAdmin(req)) {
+    if (canViewAllOrgs) {
       orgIdToUse = organization_id;
       if (orgIdToUse === "" || orgIdToUse === "Toutes") {
         orgIdToUse = null;
@@ -534,14 +500,14 @@ router.get(
   requirePermission('users'),
   async (req, res) => {
     const id = req.params.id;
-    const isSuperAdmin = getCurrentUserRole(req) === "SuperAdmin";
+    const canViewAllOrgs = await hasPermission(req, "organizations.view_all");
     const orgId = getCurrentOrgId(req);
 
     try {
-      const userQuery = isSuperAdmin
+      const userQuery = canViewAllOrgs
         ? "SELECT * FROM users WHERE id = ?"
         : "SELECT * FROM users WHERE id = ? AND organization_id = ?";
-      const userParams = isSuperAdmin ? [id] : [id, orgId];
+      const userParams = canViewAllOrgs ? [id] : [id, orgId];
 
       db.query(userQuery, userParams, async (err, results) => {
         if (err || !results || results.length === 0)
@@ -579,7 +545,7 @@ router.get(
               APP_VERSION: res.app.locals.APP_VERSION || Date.now(),
             };
 
-            if (isSuperAdmin) {
+            if (canViewAllOrgs) {
               getAllOrganizations((err, orgs) => {
                 payload.organizations = orgs;
                 res.render("admin_user_form_vue", payload);
@@ -655,10 +621,10 @@ router.post("/users/:id/edit", requirePermission('users'), async (req, res) => {
 
   try {
     // Update user basic info
-    const isSuperAdmin = getCurrentUserRole(req) === "SuperAdmin";
+    const canViewAllOrgs = await hasPermission(req, "organizations.view_all");
     let updateQuery, updateParams;
 
-    if (isSuperAdmin && organization_id) {
+    if (canViewAllOrgs && organization_id) {
       if (password) {
         const hashedPassword = await bcrypt.hash(password, 10);
         updateQuery = "UPDATE users SET username=?, password=?, email=?, description=?, email_catalogue=?, organization_id=? WHERE id=?";
@@ -904,12 +870,14 @@ router.get("/catalogues/vue", requirePermission('catalogues'), (req, res) => {
   renderAdminView(res, "admin_catalogues_vue", {});
 });
 
-// Formulaire nouveau catalogue (choix du type)
-router.get("/catalogues/new", requirePermission('catalogues'), (req, res) => {
-  renderAdminView(res, "admin_catalogue_form", {
+// Formulaire nouveau catalogue (Vue+Vite)
+router.get("/catalogues/new", requirePermission('catalogues'), csrfProtection, (req, res) => {
+  const payload = {
     error: null,
-    csrfToken: req.csrfToken()
-  });
+    csrfToken: req.csrfToken(),
+    APP_VERSION: req.app.locals.APP_VERSION || Date.now(),
+  };
+  res.render("admin_catalogue_form_vue", payload);
 });
 
 // Formulaire upload Excel
@@ -1109,27 +1077,29 @@ router.post(
   handleMulterError, // Gestion des erreurs d'upload
   csrfProtection,
   (req, res) => {
+    const wantsJson = req.xhr || (req.headers.accept && req.headers.accept.includes("application/json"));
     const file = req.file;
     const expirationDate = req.body.expiration_date;
     const description = req.body.description || "";
 
     if (!file) {
+      if (wantsJson) return res.status(400).json({ success: false, error: "Fichier Excel manquant." });
       return res.render("admin_catalogue_form", {
         error: "Fichier Excel manquant.",
         csrfToken: req.csrfToken(),
       });
     }
 
-    // Validation des données du formulaire
     if (!expirationDate || isNaN(Date.parse(expirationDate))) {
       cleanupUploadedFile(file.path);
+      if (wantsJson) return res.status(400).json({ success: false, error: "Date d'expiration invalide." });
       return res.render("admin_catalogue_form", {
         error: "Date d'expiration invalide.",
         csrfToken: req.csrfToken(),
       });
     }
 
-    insertCatalog(
+        insertCatalog(
       file,
       expirationDate,
       getCurrentUserId(req),
@@ -1139,12 +1109,12 @@ router.post(
         if (err) {
           cleanupUploadedFile(file.path);
           logger.error("Erreur DB lors de l'upload", { error: err });
+          if (wantsJson) return res.status(500).json({ success: false, error: "Erreur lors de l'upload." });
           return res.status(500).send("Erreur lors de l'upload.");
         }
 
         const catalogFileId = result.insertId;
 
-        // Lecture sécurisée du fichier Excel
         let workbook, sheet, rows;
         try {
           workbook = xlsx.readFile(file.path);
@@ -1157,13 +1127,13 @@ router.post(
             xlsxError
           );
 
-          // Supprimer l'entrée de la base de données
           queryWithUser(
             "DELETE FROM catalog_files WHERE id = ?",
             [catalogFileId],
             req
           );
 
+          if (wantsJson) return res.status(400).json({ success: false, error: "Fichier Excel corrompu ou format invalide." });
           return res.status(400).render("admin_catalogue_form", {
             error: "Fichier Excel corrompu ou format invalide.",
             csrfToken: req.csrfToken(),
@@ -1185,6 +1155,7 @@ router.post(
         });
 
         fs.unlinkSync(file.path);
+        if (wantsJson) return res.json({ success: true, redirect: `/admin/catalogues/${catalogFileId}/edit` });
         res.redirect("/admin/catalogues/vue");
       },
       req
@@ -1367,18 +1338,41 @@ router.post(
   }
 );
 
-// Mise à jour expiration et description
+// Mise à jour expiration et description (interdit si catalogue expiré depuis plus de 15 jours)
 router.post("/catalogues/:id/expiration", requirePermission('catalogues'), (req, res) => {
   const { id } = req.params;
   const { expiration_date, description } = req.body;
-  queryWithUser(
-    "UPDATE catalog_files SET expiration_date = ?, description = ? WHERE id = ?",
-    [expiration_date, description, id],
-    () => {
-      res.redirect("/admin/catalogues/vue");
-    },
+  const wantsJson = req.xhr || (req.headers.accept && req.headers.accept.includes("application/json"));
 
-    req
+  db.query(
+    "SELECT id, expiration_date FROM catalog_files WHERE id = ?",
+    [id],
+    (err, rows) => {
+      if (err || !rows || rows.length === 0) {
+        if (wantsJson) return res.status(404).json({ success: false, error: "Catalogue introuvable." });
+        return res.redirect("/admin/catalogues/vue");
+      }
+      const exp = rows[0].expiration_date;
+      if (exp) {
+        const expDate = new Date(exp);
+        const limit = new Date();
+        limit.setDate(limit.getDate() - 15);
+        if (expDate < limit) {
+          const msg = "Modification interdite : ce catalogue est expiré depuis plus de 15 jours.";
+          if (wantsJson) return res.status(403).json({ success: false, error: msg });
+          return res.redirect("/admin/catalogues/vue?error=" + encodeURIComponent(msg));
+        }
+      }
+      queryWithUser(
+        "UPDATE catalog_files SET expiration_date = ?, description = ? WHERE id = ?",
+        [expiration_date, description, id],
+        () => {
+          if (wantsJson) return res.json({ success: true });
+          res.redirect("/admin/catalogues/vue");
+        },
+        req
+      );
+    }
   );
 });
 
@@ -1432,8 +1426,9 @@ router.post("/catalogues/:id/unarchive", requirePermission('catalogues'), (req, 
 });
 
 // Suppression d'un catalogue
-router.post("/catalogues/:id/delete", requirePermission('catalogues'), (req, res) => {
+router.post("/catalogues/:id/delete", requirePermission('catalogues'), async (req, res) => {
   const catalogueId = req.params.id;
+  const canViewAllOrgs = await hasPermission(req, "organizations.view_all");
 
   db.query(
     "SELECT image_filename, organization_id FROM catalog_files WHERE id = ?",
@@ -1445,7 +1440,7 @@ router.post("/catalogues/:id/delete", requirePermission('catalogues'), (req, res
 
       const { image_filename: oldFilename, organization_id: orgId } = rows[0];
       if (
-        !isSuperAdmin(req) &&
+        !canViewAllOrgs &&
         Number(orgId) !== Number(getCurrentOrgId(req))
       ) {
         return res.status(403).send("Accès interdit");
@@ -1600,11 +1595,10 @@ router.post(
               (e3, catalogues) => {
                 const catalogue =
                   catalogues && catalogues.length > 0 ? catalogues[0] : null;
-                return renderAdminView(res, "admin_catalogue_edit_form", {
-                  catalogue,
-                  articles: articles || [],
-                  error: userMessage,
-                });
+                const catalogueId = catalogue ? catalogue.id : req.params.id;
+                return res.redirect(
+                  `/admin/catalogues/${catalogueId}/edit?error=${encodeURIComponent(userMessage)}`
+                );
               }
             );
           }
@@ -1617,6 +1611,7 @@ router.post(
   csrfProtection,
   async (req, res) => {
     const catalogueId = req.params.id;
+    const canViewAllOrgs = await hasPermission(req, "organizations.view_all");
 
     if (!req.file) {
       return res.redirect(`/admin/catalogues/${catalogueId}/edit`);
@@ -1635,7 +1630,7 @@ router.post(
 
         const { image_filename: oldFilename, organization_id: orgId } = rows[0];
         if (
-          !isSuperAdmin(req) &&
+          !canViewAllOrgs &&
           Number(orgId) !== Number(getCurrentOrgId(req))
         ) {
           cleanupTempCatalogueImage(tmpPath);
@@ -1714,16 +1709,12 @@ router.post(
                           catalogues && catalogues.length > 0
                             ? catalogues[0]
                             : null;
-                        return renderAdminView(
-                          res,
-                          "admin_catalogue_edit_form",
-                          {
-                            catalogue,
-                            articles: articles || [],
-                            error: isMissingColumn
-                              ? "La base n'est pas à jour (colonne image manquante). Appliquez la migration 20260120_add_catalogue_image.sql puis réessayez."
-                              : "Erreur lors de l'enregistrement de l'image en base.",
-                          }
+                        const id = catalogue ? catalogue.id : catalogueId;
+                        const errMsg = isMissingColumn
+                          ? "La base n'est pas à jour (colonne image manquante). Appliquez la migration 20260120_add_catalogue_image.sql puis réessayez."
+                          : "Erreur lors de l'enregistrement de l'image en base.";
+                        return res.redirect(
+                          `/admin/catalogues/${id}/edit?error=${encodeURIComponent(errMsg)}`
                         );
                       }
                     );
@@ -1748,12 +1739,10 @@ router.post(
                 (e3, catalogues) => {
                   const catalogue =
                     catalogues && catalogues.length > 0 ? catalogues[0] : null;
-                  return renderAdminView(res, "admin_catalogue_edit_form", {
-                    catalogue,
-                    articles: articles || [],
-                    error:
-                      "Impossible de traiter l'image (format non supporté ou image corrompue).",
-                  });
+                  const id = catalogue ? catalogue.id : catalogueId;
+                  return res.redirect(
+                    `/admin/catalogues/${id}/edit?error=${encodeURIComponent("Impossible de traiter l'image (format non supporté ou image corrompue).")}`
+                  );
                 }
               );
             }
@@ -1790,6 +1779,7 @@ router.post(
       return res.status(400).send("Image invalide (base64). ");
     }
 
+    const canViewAllOrgsImage = await hasPermission(req, "organizations.view_all");
     db.query(
       "SELECT image_filename, organization_id FROM catalog_files WHERE id = ?",
       [catalogueId],
@@ -1800,7 +1790,7 @@ router.post(
 
         const { image_filename: oldFilename, organization_id: orgId } = rows[0];
         if (
-          !isSuperAdmin(req) &&
+          !canViewAllOrgsImage &&
           Number(orgId) !== Number(getCurrentOrgId(req))
         ) {
           return res.status(403).send("Accès interdit");
@@ -1876,16 +1866,12 @@ router.post(
                           catalogues && catalogues.length > 0
                             ? catalogues[0]
                             : null;
-                        return renderAdminView(
-                          res,
-                          "admin_catalogue_edit_form",
-                          {
-                            catalogue,
-                            articles: articles || [],
-                            error: isMissingColumn
-                              ? "La base utilisée par l'application n'a pas la colonne image_filename. Vérifiez que la migration a été appliquée sur la bonne base (DB_NAME)."
-                              : "Erreur lors de l'enregistrement de l'image webcam en base.",
-                          }
+                        const id = catalogue ? catalogue.id : catalogueId;
+                        const errMsg = isMissingColumn
+                          ? "La base utilisée par l'application n'a pas la colonne image_filename. Vérifiez que la migration a été appliquée sur la bonne base (DB_NAME)."
+                          : "Erreur lors de l'enregistrement de l'image webcam en base.";
+                        return res.redirect(
+                          `/admin/catalogues/${id}/edit?error=${encodeURIComponent(errMsg)}`
                         );
                       }
                     );
@@ -1919,8 +1905,9 @@ router.post(
   "/catalogues/:id/image/delete",
   requirePermission('catalogues'),
   csrfProtection,
-  (req, res) => {
+  async (req, res) => {
     const catalogueId = req.params.id;
+    const canViewAllOrgs = await hasPermission(req, "organizations.view_all");
 
     db.query(
       "SELECT image_filename, organization_id FROM catalog_files WHERE id = ?",
@@ -1932,7 +1919,7 @@ router.post(
 
         const { image_filename: oldFilename, organization_id: orgId } = rows[0];
         if (
-          !isSuperAdmin(req) &&
+          !canViewAllOrgs &&
           Number(orgId) !== Number(getCurrentOrgId(req))
         ) {
           return res.status(403).send("Accès interdit");
@@ -1996,15 +1983,15 @@ router.get(
   }
 );
 
-// Afficher le formulaire d'édition d'un catalogue
+// Afficher le formulaire d'édition d'un catalogue (Vue+Vite)
 router.get(
   "/catalogues/:id/edit",
   requirePermission('catalogues'),
   validateCatalogOwnership,
+  csrfProtection,
   (req, res) => {
     const orgId = getCurrentOrgId(req);
 
-    // Récupérer les produits du catalogue
     db.query(
       GET_CATALOG_PRODUCTS_SQL,
       [req.params.id],
@@ -2014,8 +2001,6 @@ router.get(
           return res.status(500).send("Erreur lors de la récupération des produits du catalogue");
         }
 
-        // Récupérer tous les produits disponibles pour l'ajout avec leurs infos complètes
-        // et le dernier prix connu depuis catalog_products
         db.query(
           `SELECT
             p.id,
@@ -2049,7 +2034,6 @@ router.get(
               return res.status(500).send("Erreur lors de la récupération des produits");
             }
 
-            // Récupérer les fournisseurs et catégories pour les filtres
             db.query(
               "SELECT id, nom FROM suppliers WHERE organization_id = ? AND is_active = 1 ORDER BY nom",
               [orgId],
@@ -2068,7 +2052,6 @@ router.get(
                       return res.status(500).send("Erreur lors de la récupération des catégories");
                     }
 
-                    // Récupérer les autres catalogues pour l'import
                     db.query(
                       `SELECT
                         cf.id,
@@ -2090,14 +2073,26 @@ router.get(
                           return res.status(500).send("Erreur lors de la récupération des catalogues");
                         }
 
-                        renderAdminView(res, "admin_catalogue_edit_form", {
+                        let errorFromQuery = null;
+                        if (req.query.error) {
+                          try {
+                            errorFromQuery = decodeURIComponent(req.query.error);
+                          } catch (_) {
+                            errorFromQuery = req.query.error;
+                          }
+                        }
+                        const payload = {
                           catalogue: req.catalog,
                           articles: articles || [],
                           allProducts: allProducts || [],
                           suppliers: suppliers || [],
                           categories: categories || [],
                           otherCatalogs: otherCatalogs || [],
-                        });
+                          error: errorFromQuery,
+                          csrfToken: req.csrfToken(),
+                          APP_VERSION: req.app.locals.APP_VERSION || Date.now(),
+                        };
+                        res.render("admin_catalogue_edit_form_vue", payload);
                       }
                     );
                   }
@@ -2111,7 +2106,7 @@ router.get(
   }
 );
 
-// Valider le formulaire d'édition d'un catalogue
+// Valider le formulaire d'édition d'un catalogue (interdit modification des dates si expiré depuis plus de 15 jours)
 router.post(
   "/catalogues/:id/edit",
   requirePermission('catalogues'),
@@ -2130,7 +2125,30 @@ router.post(
       ? 1
       : 0;
 
-    const sql = `UPDATE catalog_files
+    const wantsJson = req.xhr || (req.headers.accept && req.headers.accept.indexOf('json') > -1);
+    const catalogueId = req.params.id;
+
+    db.query(
+      "SELECT id, expiration_date FROM catalog_files WHERE id = ?",
+      [catalogueId],
+      (err, rows) => {
+        if (err || !rows || rows.length === 0) {
+          if (wantsJson) return res.status(404).json({ success: false, error: "Catalogue introuvable." });
+          return res.redirect("/admin/catalogues/vue");
+        }
+        const exp = rows[0].expiration_date;
+        if (exp) {
+          const expDate = new Date(exp);
+          const limit = new Date();
+          limit.setDate(limit.getDate() - 15);
+          if (expDate < limit) {
+            const msg = "Modification interdite : ce catalogue est expiré depuis plus de 15 jours.";
+            if (wantsJson) return res.status(403).json({ success: false, error: msg });
+            return res.redirect(`/admin/catalogues/${catalogueId}/edit?error=${encodeURIComponent(msg)}`);
+          }
+        }
+
+        const sql = `UPDATE catalog_files
       SET originalname = ?,
           expiration_date = ?,
           description = ?,
@@ -2140,46 +2158,31 @@ router.post(
           referent_order_reminder_sent_at = referent_order_reminder_sent_at
       WHERE id = ?`;
 
-    queryWithUser(
-      sql,
-      [
-        originalname,
-        expiration_date,
-        description,
-        is_archived,
-        date_livraison,
-        referentOrderReminderEnabled,
-        req.params.id,
-      ],
-      (err) => {
-        if (err) {
-          console.error("Erreur lors de la modification du catalogue:", err);
-          // Si c'est une requête AJAX, renvoyer du JSON
-          if (req.xhr || (req.headers.accept && req.headers.accept.indexOf('json') > -1)) {
-            return res.status(500).json({ error: "Erreur lors de la modification." });
-          }
-
-          renderAdminView(res, "admin_catalogue_edit_form", {
-            catalogue: {
-              ...req.catalog,
-              ...req.body,
-              referent_order_reminder_enabled: referentOrderReminderEnabled,
-            },
-            articles: [],
-            error: "Erreur lors de la modification.",
-          });
-          return;
-        }
-
-        // Si c'est une requête AJAX (auto-save), renvoyer du JSON
-        if (req.xhr || (req.headers.accept && req.headers.accept.indexOf('json') > -1)) {
-          return res.json({ success: true, message: "Catalogue mis à jour" });
-        }
-
-        // Sinon, redirection normale
-        res.redirect(`/admin/catalogues/${req.params.id}/edit`);
-      },
-      req
+        queryWithUser(
+          sql,
+          [
+            originalname,
+            expiration_date,
+            description,
+            is_archived,
+            date_livraison,
+            referentOrderReminderEnabled,
+            catalogueId,
+          ],
+          (err) => {
+            if (err) {
+              console.error("Erreur lors de la modification du catalogue:", err);
+              if (wantsJson) return res.status(500).json({ error: "Erreur lors de la modification." });
+              return res.redirect(
+                `/admin/catalogues/${catalogueId}/edit?error=${encodeURIComponent("Erreur lors de la modification.")}`
+              );
+            }
+            if (wantsJson) return res.json({ success: true, message: "Catalogue mis à jour" });
+            res.redirect(`/admin/catalogues/${catalogueId}/edit`);
+          },
+          req
+        );
+      }
     );
   }
 );
@@ -2357,11 +2360,13 @@ router.post(
   "/catalogues/:catalogue_id/articles/:article_id/delete",
   requirePermission('catalogues'),
   (req, res) => {
+    const wantsJson = req.xhr || (req.headers.accept && req.headers.accept.includes("application/json"));
     const { catalogue_id, article_id } = req.params;
     queryWithUser(
       "DELETE FROM catalog_products WHERE id = ? AND catalog_file_id = ?",
       [article_id, catalogue_id],
       (err) => {
+        if (wantsJson) return res.json({ success: true, redirect: `/admin/catalogues/${catalogue_id}/edit` });
         res.redirect(`/admin/catalogues/${catalogue_id}/edit`);
       },
       req
@@ -2369,10 +2374,11 @@ router.post(
   }
 );
 
-// Formulaire d'édition d'un article
+// Formulaire d'édition d'un article (Vue+Vite)
 router.get(
   "/catalogues/:catalogue_id/articles/:article_id/edit",
   requirePermission('catalogues'),
+  csrfProtection,
   (req, res) => {
     db.query(
       GET_CATALOG_PRODUCT_BY_ID_SQL,
@@ -2383,11 +2389,14 @@ router.get(
             `/admin/catalogues/${req.params.catalogue_id}/edit`
           );
         const article = results[0];
-        renderAdminView(res, "admin_article_edit_form", {
+        const payload = {
           article,
           catalogue_id: req.params.catalogue_id,
           error: null,
-        });
+          csrfToken: req.csrfToken(),
+          APP_VERSION: req.app.locals.APP_VERSION || Date.now(),
+        };
+        res.render("admin_article_edit_form_vue", payload);
       }
     );
   }
@@ -2398,32 +2407,32 @@ router.post(
   "/catalogues/:catalogue_id/articles/:article_id/edit",
   requirePermission('catalogues'),
   (req, res) => {
+    const wantsJson = req.xhr || (req.headers.accept && req.headers.accept.includes("application/json"));
     const { prix, unite } = req.body;
-    // Note: produit et description ne sont plus modifiables ici, ils sont au niveau du produit global
+    const catalogueId = req.params.catalogue_id;
+    const articleId = req.params.article_id;
+
     queryWithUser(
       "UPDATE catalog_products SET prix = ?, unite = ? WHERE id = ? AND catalog_file_id = ?",
-      [
-        prix,
-        unite,
-        req.params.article_id,
-        req.params.catalogue_id,
-      ],
+      [prix, unite, articleId, catalogueId],
       function (err) {
         if (err) {
+          if (wantsJson) return res.status(500).json({ success: false, error: "Erreur lors de la modification." });
           db.query(
             GET_CATALOG_PRODUCT_BY_ID_SQL,
-            [req.params.article_id, req.params.catalogue_id],
+            [articleId, catalogueId],
             (e, results) => {
               const article = results && results.length > 0 ? results[0] : null;
               renderAdminView(res, "admin_article_edit_form", {
                 article,
-                catalogue_id: req.params.catalogue_id,
+                catalogue_id: catalogueId,
                 error: "Erreur lors de la modification.",
               });
             }
           );
         } else {
-          res.redirect(`/admin/catalogues/${req.params.catalogue_id}/edit`);
+          if (wantsJson) return res.json({ success: true, redirect: `/admin/catalogues/${catalogueId}/edit` });
+          res.redirect(`/admin/catalogues/${catalogueId}/edit`);
         }
       },
       req
@@ -2449,14 +2458,10 @@ router.post(
               (e3, catalogues) => {
                 const catalogue =
                   catalogues && catalogues.length > 0 ? catalogues[0] : null;
-                return renderAdminView(res, "admin_catalogue_edit_form", {
-                  catalogue,
-                  articles: articles || [],
-                  error:
-                    err && err.message
-                      ? err.message
-                      : "Erreur lors de l'upload de l'image.",
-                });
+                const id = catalogue ? catalogue.id : catalogueId;
+                return res.redirect(
+                  `/admin/catalogues/${id}/edit?error=${encodeURIComponent(err && err.message ? err.message : "Erreur lors de l'upload de l'image.")}`
+                );
               }
             );
           }
@@ -2469,6 +2474,7 @@ router.post(
   csrfProtection,
   async (req, res) => {
     const { catalogue_id: catalogueId, article_id: articleId } = req.params;
+    const canViewAllOrgs = await hasPermission(req, "organizations.view_all");
 
     if (!req.file) {
       return res.redirect(`/admin/catalogues/${catalogueId}/edit`);
@@ -2490,7 +2496,7 @@ router.post(
 
         const { image_filename: oldFilename, organization_id: orgId } = rows[0];
         if (
-          !isSuperAdmin(req) &&
+          !canViewAllOrgs &&
           Number(orgId) !== Number(getCurrentOrgId(req))
         ) {
           cleanupTempArticleImage(tmpPath);
@@ -2572,16 +2578,12 @@ router.post(
                           catalogues && catalogues.length > 0
                             ? catalogues[0]
                             : null;
-                        return renderAdminView(
-                          res,
-                          "admin_catalogue_edit_form",
-                          {
-                            catalogue,
-                            articles: articles || [],
-                            error: isMissingColumn
-                              ? "La base n'est pas à jour (colonne image manquante). Appliquez la migration 20260115_add_article_image.sql puis réessayez."
-                              : "Erreur lors de l'enregistrement de l'image en base.",
-                          }
+                        const id = catalogue ? catalogue.id : catalogueId;
+                        const errMsg = isMissingColumn
+                          ? "La base n'est pas à jour (colonne image manquante). Appliquez la migration 20260115_add_article_image.sql puis réessayez."
+                          : "Erreur lors de l'enregistrement de l'image en base.";
+                        return res.redirect(
+                          `/admin/catalogues/${id}/edit?error=${encodeURIComponent(errMsg)}`
                         );
                       }
                     );
@@ -2606,12 +2608,10 @@ router.post(
                 (e3, catalogues) => {
                   const catalogue =
                     catalogues && catalogues.length > 0 ? catalogues[0] : null;
-                  return renderAdminView(res, "admin_catalogue_edit_form", {
-                    catalogue,
-                    articles: articles || [],
-                    error:
-                      "Impossible de traiter l'image (format non supporté ou image corrompue).",
-                  });
+                  const id = catalogue ? catalogue.id : catalogueId;
+                  return res.redirect(
+                    `/admin/catalogues/${id}/edit?error=${encodeURIComponent("Impossible de traiter l'image (format non supporté ou image corrompue).")}`
+                  );
                 }
               );
             }
@@ -2648,6 +2648,7 @@ router.post(
       return res.status(400).send("Image invalide (base64). ");
     }
 
+    const canViewAllOrgsArticle = await hasPermission(req, "organizations.view_all");
     db.query(
       `SELECT a.image_filename, c.organization_id
        FROM articles a
@@ -2661,7 +2662,7 @@ router.post(
 
         const { image_filename: oldFilename, organization_id: orgId } = rows[0];
         if (
-          !isSuperAdmin(req) &&
+          !canViewAllOrgsArticle &&
           Number(orgId) !== Number(getCurrentOrgId(req))
         ) {
           return res.status(403).send("Accès interdit");
@@ -2739,16 +2740,12 @@ router.post(
                           catalogues && catalogues.length > 0
                             ? catalogues[0]
                             : null;
-                        return renderAdminView(
-                          res,
-                          "admin_catalogue_edit_form",
-                          {
-                            catalogue,
-                            articles: articles || [],
-                            error: isMissingColumn
-                              ? "La base utilisée par l'application n'a pas la colonne image_filename. Vérifiez que la migration a été appliquée sur la bonne base (DB_NAME)."
-                              : "Erreur lors de l'enregistrement de l'image webcam en base.",
-                          }
+                        const id = catalogue ? catalogue.id : catalogueId;
+                        const errMsg = isMissingColumn
+                          ? "La base utilisée par l'application n'a pas la colonne image_filename. Vérifiez que la migration a été appliquée sur la bonne base (DB_NAME)."
+                          : "Erreur lors de l'enregistrement de l'image webcam en base.";
+                        return res.redirect(
+                          `/admin/catalogues/${id}/edit?error=${encodeURIComponent(errMsg)}`
                         );
                       }
                     );
@@ -2783,8 +2780,9 @@ router.post(
   "/catalogues/:catalogue_id/articles/:article_id/image/delete",
   requirePermission('catalogues'),
   csrfProtection,
-  (req, res) => {
+  async (req, res) => {
     const { catalogue_id: catalogueId, article_id: articleId } = req.params;
+    const canViewAllOrgs = await hasPermission(req, "organizations.view_all");
 
     db.query(
       `SELECT a.image_filename, c.organization_id
@@ -2799,7 +2797,7 @@ router.post(
 
         const { image_filename: oldFilename, organization_id: orgId } = rows[0];
         if (
-          !isSuperAdmin(req) &&
+          !canViewAllOrgs &&
           Number(orgId) !== Number(getCurrentOrgId(req))
         ) {
           return res.status(403).send("Accès interdit");
@@ -3237,7 +3235,7 @@ router.get(
 // EXPORTS PDF
 // ============================================
 
-router.get("/catalogues/:id/synthese/export/pdf/:action", (req, res) => {
+router.get("/catalogues/:id/synthese/export/pdf/:action", requirePermission('catalogues'), (req, res) => {
   const catalogueId = req.params.id;
   const action = req.params.action;
   const { generateAndSendPdf } = require("../utils/exports");
@@ -3246,6 +3244,7 @@ router.get("/catalogues/:id/synthese/export/pdf/:action", (req, res) => {
 
 router.get(
   "/catalogues/:id/synthese-detaillee/export/pdf/:action",
+  requirePermission('catalogues'),
   (req, res) => {
     const catalogueId = req.params.id;
     const action = req.params.action;

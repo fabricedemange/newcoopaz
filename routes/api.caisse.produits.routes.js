@@ -18,6 +18,7 @@ router.get("/", requirePermission("caisse.sell", { json: true }), (req, res) => 
       p.quantite_min,
       p.image_url,
       p.category_id,
+      p.code_ean,
       c.nom as category_nom
     FROM products p
     LEFT JOIN categories c ON p.category_id = c.id

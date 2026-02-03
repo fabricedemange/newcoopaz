@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const crypto = require("crypto");
 const { db } = require("../config/config");
-const { requirePermission, requireAnyPermission } = require("../middleware/rbac.middleware");
+const { requirePermission, requireAnyPermission, hasPermission } = require("../middleware/rbac.middleware");
 const emailService = require("../services/email.service");
 const { logger } = require("../config/logger");
 const { queryWithUser } = require("../config/db-trace-wrapper");
@@ -127,7 +127,7 @@ function lienunique(newUserId, chemin, baseUrl) {
 }
 
 // GET /panier/vue - Version Vue.js de la liste des paniers
-router.get("/vue", requireAnyPermission(['paniers.user', 'paniers.admin']), (req, res) => {
+router.get("/vue", requireAnyPermission(['paniers.user', 'paniers.admin', 'paniers.own']), (req, res) => {
   res.render("paniers_vue", {
     title: "Mes paniers en cours",
     hideSidebar: false,
@@ -135,17 +135,17 @@ router.get("/vue", requireAnyPermission(['paniers.user', 'paniers.admin']), (req
 });
 
 // GET /panier - Redirection vers la liste des paniers Vue+Vite
-router.get("/", requireAnyPermission(['paniers.user', 'paniers.admin']), (req, res) => {
+router.get("/", requireAnyPermission(['paniers.user', 'paniers.admin', 'paniers.own']), (req, res) => {
   return res.redirect("/panier/vue");
 });
 
 // GET /panier/legacy - Redirection vers Vue+Vite
-router.get("/legacy", requireAnyPermission(['paniers.user', 'paniers.admin']), (req, res) => {
+router.get("/legacy", requireAnyPermission(['paniers.user', 'paniers.admin', 'paniers.own']), (req, res) => {
   res.redirect("/panier/vue");
 });
 
 // GET /panier/new/:id - Créer un nouveau panier pour un catalogue
-router.get("/new/:id", requireAnyPermission(['paniers.user', 'paniers.admin']), (req, res) => {
+router.get("/new/:id", requireAnyPermission(['paniers.user', 'paniers.admin', 'paniers.own']), (req, res) => {
   const catalogFileId = req.params.id;
   const userId = getCurrentUserId(req);
 
@@ -196,7 +196,7 @@ router.get("/new/:id", requireAnyPermission(['paniers.user', 'paniers.admin']), 
 // GET /panier/:id/modifier - Redirection vers Vue+Vite
 router.get(
   "/:id/modifier",
-  requireAnyPermission(['paniers.user', 'paniers.admin']),
+  requireAnyPermission(['paniers.user', 'paniers.admin', 'paniers.own']),
   (req, res) => {
     res.redirect("/panier/" + req.params.id + "/modifier/vue");
   }
@@ -205,11 +205,12 @@ router.get(
 // GET /panier/:id/modifier/vue - Version Vue.js de la modification du panier
 router.get(
   "/:id/modifier/vue",
-  requireAnyPermission(['paniers.user', 'paniers.admin']),
+  requireAnyPermission(['paniers.user', 'paniers.admin', 'paniers.own']),
   (req, res) => {
     res.render("panier_modifier_vue", {
       title: "Mon panier",
       hideSidebar: false,
+      currentUserId: req.session?.userId ?? null,
     });
   }
 );
@@ -217,7 +218,7 @@ router.get(
 // POST /panier/add - Ajouter/modifier un article dans un panier
 router.post(
   "/add",
-  requireAnyPermission(['paniers.user', 'paniers.admin']),
+  requireAnyPermission(['paniers.user', 'paniers.admin', 'paniers.own']),
   (req, res) => {
     const catalog_product_id = req.body.catalog_product_id;
     const panier = req.body.panier_id;
@@ -259,7 +260,7 @@ router.post(
       referer: req.get("Referer"),
     });
 
-    db.query("SELECT * FROM paniers WHERE id = ?", [panier], (err, results) => {
+    db.query("SELECT * FROM paniers WHERE id = ?", [panier], async (err, results) => {
       if (err) {
         debugLog("Erreur lors de la vérification du panier", {
           error: err,
@@ -282,16 +283,14 @@ router.post(
 
       const panierData = results[0];
 
+      const canAdminPaniers = await hasPermission(req, "paniers.admin");
       if (
         panierData.user_id !== getCurrentUserId(req) &&
-        !["admin", "epicier", "referent", "SuperAdmin"].includes(
-          getCurrentUserRole(req)
-        )
+        !canAdminPaniers
       ) {
         debugLog("Accès refusé à un panier", {
           panierUserId: panierData.user_id,
           sessionUserId: getCurrentUserId(req),
-          role: getCurrentUserRole(req),
         });
         return respondError(403, "Accès interdit à ce panier");
       }
@@ -361,7 +360,7 @@ router.post(
 // POST /panier/remove - Supprimer un article du panier
 router.post(
   "/remove",
-  requireAnyPermission(['paniers.user', 'paniers.admin']),
+  requireAnyPermission(['paniers.user', 'paniers.admin', 'paniers.own']),
   (req, res) => {
     const { panier_catalog_product_id } = req.body;
     queryWithUser(
@@ -378,7 +377,7 @@ router.post(
 // POST /panier/:id/note - Modifier la note d'un panier (AJAX)
 router.post(
   "/:id/note",
-  requireAnyPermission(['paniers.user', 'paniers.admin']),
+  requireAnyPermission(['paniers.user', 'paniers.admin', 'paniers.own']),
   (req, res) => {
     const panierId = req.params.id;
     const { note } = req.body;
@@ -388,7 +387,7 @@ router.post(
     db.query(
       "SELECT * FROM paniers WHERE id = ?",
       [panierId],
-      (err, results) => {
+      async (err, results) => {
         if (err) {
           console.error("Erreur lors de la récupération du panier:", err);
           if (req.xhr || req.headers["x-requested-with"] === "XMLHttpRequest") {
@@ -406,11 +405,10 @@ router.post(
 
         const panier = results[0];
 
+        const canAdminPaniers = await hasPermission(req, "paniers.admin");
         if (
           panier.user_id !== getCurrentUserId(req) &&
-          !["admin", "epicier", "referent", "SuperAdmin"].includes(
-            getCurrentUserRole(req)
-          )
+          !canAdminPaniers
         ) {
           if (req.xhr || req.headers["x-requested-with"] === "XMLHttpRequest") {
             return res.status(403).json({ error: "Non autorisé" });
@@ -463,7 +461,7 @@ router.post(
 // POST /panier/:id/:source/change-owner - Changer le propriétaire d'un panier
 router.post(
   "/:id/:source/change-owner",
-  requireAnyPermission(['paniers.user', 'paniers.admin']),
+  requireAnyPermission(['paniers.user', 'paniers.admin', 'paniers.own']),
   (req, res) => {
     const cartId = req.params.id;
     const source = req.params.source;
@@ -521,7 +519,7 @@ router.post(
 // POST /panier/submit - Soumettre un panier (transformer en commande)
 router.post(
   "/submit",
-  requireAnyPermission(['paniers.user', 'paniers.admin']),
+  requireAnyPermission(['paniers.user', 'paniers.admin', 'paniers.own']),
   (req, res) => {
     const panierId = req.body.panier_id;
     const note = req.body.note;
@@ -580,7 +578,7 @@ router.post(
 // POST /panier/:id/submit - Soumettre un panier (pour Vue.js - ID dans l'URL)
 router.post(
   "/:id/submit",
-  requireAnyPermission(['paniers.user', 'paniers.admin']),
+  requireAnyPermission(['paniers.user', 'paniers.admin', 'paniers.own']),
   (req, res) => {
     const panierId = req.params.id;
     const userId = getCurrentUserId(req);
@@ -652,7 +650,7 @@ router.post(
 // POST /panier/:id/supprimer - Supprimer un panier
 router.post(
   "/:id/supprimer",
-  requireAnyPermission(['paniers.user', 'paniers.admin']),
+  requireAnyPermission(['paniers.user', 'paniers.admin', 'paniers.own']),
   (req, res) => {
     const panierId = req.params.id;
     const userId = getCurrentUserId(req);
@@ -757,7 +755,7 @@ router.get("/access-carts/:token", (req, res) => {
 });
 
 // POST /panier/auto-fill - Préremplir le panier avec les commandes passées
-router.post("/auto-fill", requireAnyPermission(['paniers.user', 'paniers.admin']), (req, res) => {
+router.post("/auto-fill", requireAnyPermission(['paniers.user', 'paniers.admin', 'paniers.own']), (req, res) => {
   const { panierId, catalogId } = req.body;
   const userId = getCurrentUserId(req);
 
@@ -804,9 +802,9 @@ router.post("/auto-fill", requireAnyPermission(['paniers.user', 'paniers.admin']
 // POST /panier/update-quantity - Mettre à jour la quantité d'un produit (pour Vue.js)
 router.post(
   "/update-quantity",
-  requireAnyPermission(['paniers.user', 'paniers.admin']),
+  requireAnyPermission(['paniers.user', 'paniers.admin', 'paniers.own']),
   async (req, res) => {
-    const { catalog_file_id, catalog_product_id, quantity, nouveau_panier } = req.body;
+    const { catalog_file_id, catalog_product_id, quantity, nouveau_panier, panier_id: bodyPanierId } = req.body;
     const userId = getCurrentUserId(req);
     const orgId = req.session?.organization_id;
 
@@ -821,14 +819,52 @@ router.post(
         });
       }
 
+      let panierIdForUpdate;
+      const runQuantityUpdate = () => {
+        const pid = panierIdForUpdate;
+        if (qty === 0) {
+          queryWithUser(
+            "DELETE FROM panier_articles WHERE panier_id = ? AND catalog_product_id = ?",
+            [pid, catalog_product_id],
+            (err) => {
+              if (err) return res.status(500).json({ success: false, error: "Erreur serveur" });
+              res.json({ success: true, panier_id: pid, quantity: 0 });
+            },
+            req
+          );
+        } else {
+          db.query(
+            "SELECT id FROM panier_articles WHERE panier_id = ? AND catalog_product_id = ?",
+            [pid, catalog_product_id],
+            (err, articleResults) => {
+              if (err) return res.status(500).json({ success: false, error: "Erreur serveur" });
+              if (articleResults && articleResults.length > 0) {
+                queryWithUser(
+                  "UPDATE panier_articles SET quantity = ? WHERE id = ?",
+                  [qty, articleResults[0].id],
+                  (err) => {
+                    if (err) return res.status(500).json({ success: false, error: "Erreur serveur" });
+                    res.json({ success: true, panier_id: pid, quantity: qty });
+                  },
+                  req
+                );
+              } else {
+                insertPanierArticle(pid, catalog_product_id, qty, req, (err) => {
+                  if (err) return res.status(500).json({ success: false, error: "Erreur serveur" });
+                  res.json({ success: true, panier_id: pid, quantity: qty });
+                });
+              }
+            }
+          );
+        }
+      };
+
       // Si nouveau_panier=true, forcer la création d'un nouveau panier
       // Sinon, chercher un panier existant
       const handlePanier = (callback) => {
         if (nouveau_panier === true) {
-          // Créer directement un nouveau panier sans chercher
           callback(null, []);
         } else {
-          // Chercher un panier existant
           const findPanierQuery = `
             SELECT id FROM paniers
             WHERE user_id = ? AND catalog_file_id = ? AND is_submitted = 0
@@ -847,99 +883,10 @@ router.post(
           });
         }
 
-        let panierId;
-
-        const handleQuantityUpdate = (pid) => {
-          if (qty === 0) {
-            // Supprimer l'article
-            queryWithUser(
-              "DELETE FROM panier_articles WHERE panier_id = ? AND catalog_product_id = ?",
-              [pid, catalog_product_id],
-              (err) => {
-                if (err) {
-                  console.error("Erreur suppression article:", err);
-                  return res.status(500).json({
-                    success: false,
-                    error: "Erreur serveur"
-                  });
-                }
-                return res.json({
-                  success: true,
-                  panier_id: pid,
-                  quantity: 0
-                });
-              },
-              req
-            );
-          } else {
-            // Vérifier si l'article existe déjà
-            db.query(
-              "SELECT id FROM panier_articles WHERE panier_id = ? AND catalog_product_id = ?",
-              [pid, catalog_product_id],
-              (err, articleResults) => {
-                if (err) {
-                  console.error("Erreur recherche article:", err);
-                  return res.status(500).json({
-                    success: false,
-                    error: "Erreur serveur"
-                  });
-                }
-
-                if (articleResults && articleResults.length > 0) {
-                  // Mettre à jour
-                  queryWithUser(
-                    "UPDATE panier_articles SET quantity = ? WHERE id = ?",
-                    [qty, articleResults[0].id],
-                    (err) => {
-                      if (err) {
-                        console.error("Erreur mise à jour article:", err);
-                        return res.status(500).json({
-                          success: false,
-                          error: "Erreur serveur"
-                        });
-                      }
-                      return res.json({
-                        success: true,
-                        panier_id: pid,
-                        quantity: qty
-                      });
-                    },
-                    req
-                  );
-                } else {
-                  // Insérer
-                  insertPanierArticle(
-                    pid,
-                    catalog_product_id,
-                    qty,
-                    req,
-                    (err) => {
-                      if (err) {
-                        console.error("Erreur insertion article:", err);
-                        return res.status(500).json({
-                          success: false,
-                          error: "Erreur serveur"
-                        });
-                      }
-                      return res.json({
-                        success: true,
-                        panier_id: pid,
-                        quantity: qty
-                      });
-                    }
-                  );
-                }
-              }
-            );
-          }
-        };
-
         if (panierResults && panierResults.length > 0) {
-          // Panier existe
-          panierId = panierResults[0].id;
-          handleQuantityUpdate(panierId);
+          panierIdForUpdate = panierResults[0].id;
+          runQuantityUpdate();
         } else {
-          // Créer un nouveau panier
           insertPanier(
             userId,
             catalog_file_id,
@@ -952,8 +899,8 @@ router.post(
                   error: "Erreur serveur"
                 });
               }
-              panierId = result.insertId;
-              handleQuantityUpdate(panierId);
+              panierIdForUpdate = result.insertId;
+              runQuantityUpdate();
             }
           );
         }
@@ -971,14 +918,13 @@ router.post(
 // POST /panier/update-note - Mettre à jour la note d'un produit (pour Vue.js)
 router.post(
   "/update-note",
-  requireAnyPermission(['paniers.user', 'paniers.admin']),
+  requireAnyPermission(['paniers.user', 'paniers.admin', 'paniers.own']),
   async (req, res) => {
-    const { catalog_file_id, catalog_product_id, note } = req.body;
+    const { catalog_file_id, catalog_product_id, note, panier_id: bodyPanierId } = req.body;
     const userId = getCurrentUserId(req);
     const orgId = req.session?.organization_id;
 
     try {
-      // Vérifier que les paramètres sont présents
       if (!catalog_file_id || !catalog_product_id) {
         return res.status(400).json({
           success: false,
@@ -986,7 +932,7 @@ router.post(
         });
       }
 
-      // Chercher le panier
+      // Chercher le panier (propriétaire)
       const findPanierQuery = `
         SELECT id FROM paniers
         WHERE user_id = ? AND catalog_file_id = ? AND is_submitted = 0

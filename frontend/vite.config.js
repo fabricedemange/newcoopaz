@@ -14,6 +14,8 @@ export default defineConfig(({ mode }) => ({
   build: {
     outDir: path.resolve(__dirname, '../public/dist'),
     emptyOutDir: true,
+    sourcemap: false,
+    minify: 'esbuild',
     rollupOptions: {
       input: {
         'auth-login': path.resolve(__dirname, 'src/entries/auth-login.js'),
@@ -24,6 +26,7 @@ export default defineConfig(({ mode }) => ({
         home: path.resolve(__dirname, 'src/entries/home.js'),
         'admin-dashboard': path.resolve(__dirname, 'src/entries/admin-dashboard.js'),
         commandes: path.resolve(__dirname, 'src/entries/commandes.js'),
+        'commandes-cotisation': path.resolve(__dirname, 'src/entries/commandes-cotisation.js'),
         catalogues: path.resolve(__dirname, 'src/entries/catalogues.js'),
         paniers: path.resolve(__dirname, 'src/entries/paniers.js'),
         'commande-detail': path.resolve(__dirname, 'src/entries/commande-detail.js'),
@@ -31,6 +34,7 @@ export default defineConfig(({ mode }) => ({
         'panier-detail': path.resolve(__dirname, 'src/entries/panier-detail.js'),
         'caisse-historique': path.resolve(__dirname, 'src/entries/caisse-historique.js'),
         caisse: path.resolve(__dirname, 'src/entries/caisse.js'),
+        'caisse-inventaire': path.resolve(__dirname, 'src/entries/caisse-inventaire.js'),
         'admin-trace': path.resolve(__dirname, 'src/entries/admin-trace.js'),
         'admin-bandeaux': path.resolve(__dirname, 'src/entries/admin-bandeaux.js'),
         'admin-organizations': path.resolve(__dirname, 'src/entries/admin-organizations.js'),
@@ -51,6 +55,9 @@ export default defineConfig(({ mode }) => ({
         'admin-supplier-detail': path.resolve(__dirname, 'src/entries/admin-supplier-detail.js'),
         'admin-product-form': path.resolve(__dirname, 'src/entries/admin-product-form.js'),
         'admin-product-detail': path.resolve(__dirname, 'src/entries/admin-product-detail.js'),
+        'admin-catalogue-new': path.resolve(__dirname, 'src/entries/admin-catalogue-new.js'),
+        'admin-article-edit': path.resolve(__dirname, 'src/entries/admin-article-edit.js'),
+        'admin-catalogue-edit': path.resolve(__dirname, 'src/entries/admin-catalogue-edit.js'),
       },
       output: {
         entryFileNames: '[name].js',
@@ -79,5 +86,10 @@ export default defineConfig(({ mode }) => ({
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
+  },
+  test: {
+    environment: 'happy-dom',
+    globals: true,
+    include: ['src/**/*.spec.js', 'src/**/*.spec.ts'],
   },
 }));

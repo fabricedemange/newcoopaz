@@ -28,16 +28,18 @@ TRUNCATE TABLE catalog_files;
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- ================================================================
--- ÉTAPE 2: IMPORT CATALOG_FILES
+-- ÉTAPE 2: IMPORT CATALOG_FILES (structure : 20260201_catalog_files_from_import_baseprod.sql)
+-- image_filename : NULL si baseprod n'a pas la colonne, sinon elle peut être ajoutée au SELECT.
 -- ================================================================
 INSERT INTO coopazfr_commandes.catalog_files
   (id, filename, originalname, upload_date, expiration_date, uploader_id,
    description, is_archived, date_livraison, organization_id,
-   referent_order_reminder_enabled, referent_order_reminder_sent_at)
+   referent_order_reminder_enabled, referent_order_reminder_sent_at, image_filename)
 SELECT
   id, filename, originalname, upload_date, expiration_date, uploader_id,
   description, is_archived, date_livraison, organization_id,
-  referent_order_reminder_enabled, referent_order_reminder_sent_at
+  referent_order_reminder_enabled, referent_order_reminder_sent_at,
+  NULL AS image_filename
 FROM baseprod.catalog_files;
 
 -- ================================================================

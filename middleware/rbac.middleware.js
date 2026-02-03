@@ -9,7 +9,7 @@
  * - Audit logging for denied permissions
  */
 
-const { getCurrentUserId, getCurrentUserRole, isSuperAdmin } = require('../utils/session-helpers');
+const { getCurrentUserId, getCurrentUserRole } = require('../utils/session-helpers');
 const { db } = require('../config/db-trace-wrapper');
 
 // L1 Cache: In-memory JavaScript Map (ultra-fast, <1ms)
@@ -215,7 +215,18 @@ async function logPermissionDenial(req, permissionName) {
  */
 function requirePermission(permissionName, options = {}) {
   return async (req, res, next) => {
-    const userId = getCurrentUserId(req);
+    let userId;
+    try {
+      userId = getCurrentUserId(req);
+    } catch {
+      if (options.json) {
+        return res.status(401).json({
+          success: false,
+          error: 'Non authentifié'
+        });
+      }
+      return res.redirect('/login');
+    }
 
     if (!userId) {
       if (options.json) {
@@ -275,7 +286,18 @@ function requirePermission(permissionName, options = {}) {
  */
 function requireAnyPermission(permissionNames, options = {}) {
   return async (req, res, next) => {
-    const userId = getCurrentUserId(req);
+    let userId;
+    try {
+      userId = getCurrentUserId(req);
+    } catch {
+      if (options.json) {
+        return res.status(401).json({
+          success: false,
+          error: 'Non authentifié'
+        });
+      }
+      return res.redirect('/login');
+    }
 
     if (!userId) {
       if (options.json) {
@@ -333,7 +355,18 @@ function requireAnyPermission(permissionNames, options = {}) {
  */
 function requireAllPermissions(permissionNames, options = {}) {
   return async (req, res, next) => {
-    const userId = getCurrentUserId(req);
+    let userId;
+    try {
+      userId = getCurrentUserId(req);
+    } catch {
+      if (options.json) {
+        return res.status(401).json({
+          success: false,
+          error: 'Non authentifié'
+        });
+      }
+      return res.redirect('/login');
+    }
 
     if (!userId) {
       if (options.json) {

@@ -21,6 +21,18 @@
         <button type="button" class="btn-close" @click="store.error = null"></button>
       </div>
 
+      <!-- Retour scan lecteur (toast léger, auto-masqué) -->
+      <Transition name="scan-toast">
+        <div
+          v-if="scanToastMessage"
+          :class="['alert mb-2 py-2', scanToastType === 'success' ? 'alert-success' : 'alert-warning']"
+          role="status"
+        >
+          <i :class="scanToastType === 'success' ? 'bi bi-check-circle me-2' : 'bi bi-upc-scan me-2'"></i>
+          {{ scanToastMessage }}
+        </div>
+      </Transition>
+
       <div class="row">
         <!-- Colonne Produits -->
         <div class="col-lg-7 col-md-7 mb-4">
@@ -113,8 +125,20 @@
             <div class="card-body" style="flex: 1">
               <!-- Charger une commande catalogue -->
               <div v-if="store.selectedUtilisateur" class="mb-3 border-bottom pb-3">
-                <label class="form-label fw-bold small mb-2">
+                <label class="form-label fw-bold small mb-2 d-flex align-items-center gap-1">
                   <i class="bi bi-basket me-1"></i>Charger une commande catalogue
+                  <span
+                    ref="infobulleCommandesRef"
+                    class="d-inline-flex align-items-center text-muted ms-1"
+                    style="cursor: help"
+                    :title="infobulleReglesCommandesCatalogue"
+                    data-bs-toggle="tooltip"
+                    data-bs-placement="top"
+                    data-bs-trigger="hover focus"
+                    :data-bs-title="infobulleReglesCommandesCatalogue"
+                  >
+                    <i class="bi bi-info-circle" style="font-size: 1rem"></i>
+                  </span>
                 </label>
                 <button
                   type="button"
@@ -171,19 +195,20 @@
                   <div
                     v-for="(ligne, index) in store.lignes"
                     :key="index"
-                    :class="['border-bottom pb-2 mb-2', (ligne.is_avoir || !ligne.produit_id) ? 'bg-warning bg-opacity-10' : '']"
+                    :class="['border-bottom pb-2 mb-2', ligne.is_cotisation ? 'bg-info bg-opacity-10' : (ligne.is_avoir || !ligne.produit_id) ? 'bg-warning bg-opacity-10' : '']"
                   >
                     <div class="d-flex justify-content-between align-items-start mb-1">
-                      <strong :class="[(ligne.is_avoir || !ligne.produit_id) ? 'text-warning' : '']" style="font-size: 0.9rem">
-                        <i v-if="ligne.is_avoir || !ligne.produit_id" class="bi bi-receipt me-1"></i>
+                      <strong :class="[ligne.is_cotisation ? 'text-info' : (ligne.is_avoir || !ligne.produit_id) ? 'text-warning' : '']" style="font-size: 0.9rem">
+                        <i v-if="ligne.is_cotisation" class="bi bi-coin me-1"></i>
+                        <i v-else-if="ligne.is_avoir || !ligne.produit_id" class="bi bi-receipt me-1"></i>
                         {{ ligne.nom_produit }}
                       </strong>
                       <button class="btn btn-sm btn-outline-danger" @click="store.supprimerLigne(index)">
                         <i class="bi bi-x-lg"></i>
                       </button>
                     </div>
-                    <div v-if="ligne.is_avoir || !ligne.produit_id" class="d-flex justify-content-end">
-                      <strong class="text-warning">{{ ligne.prix_unitaire.toFixed(2) }} €</strong>
+                    <div v-if="ligne.is_cotisation || ligne.is_avoir || !ligne.produit_id" class="d-flex justify-content-end">
+                      <strong :class="ligne.is_cotisation ? 'text-info' : 'text-warning'">{{ ligne.prix_unitaire.toFixed(2) }} €</strong>
                     </div>
                     <div v-else class="d-flex justify-content-between align-items-center">
                       <div class="d-flex align-items-center gap-1">
@@ -311,6 +336,18 @@
             <button type="button" class="btn-close" @click="store.fermerPaiement()"></button>
           </div>
           <div class="modal-body">
+            <div
+              v-if="store.cotisationCheck?.doit_cotiser && !store.aPanierCotisation"
+              class="alert alert-warning mb-3"
+            >
+              <strong><i class="bi bi-info-circle me-1"></i>Cotisation mensuelle</strong>
+              <p class="mb-2 small">Pour ce mois ({{ store.cotisationCheck.mois_courant }}), une cotisation entre 5 et 15 € est requise. Choisissez le montant :</p>
+              <div class="d-flex gap-2 flex-wrap">
+                <button type="button" class="btn btn-outline-primary" @click="store.ajouterCotisation(5)">5 €</button>
+                <button type="button" class="btn btn-outline-primary" @click="store.ajouterCotisation(10)">10 €</button>
+                <button type="button" class="btn btn-outline-primary" @click="store.ajouterCotisation(15)">15 €</button>
+              </div>
+            </div>
             <div class="alert alert-success">
               Total à payer: <strong>{{ store.total.toFixed(2) }} €</strong>
             </div>
@@ -406,10 +443,84 @@
 </template>
 
 <script setup>
-import { computed, onMounted, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch, nextTick } from 'vue';
 import { useCaisseStore } from '@/stores/caisse';
 
 const store = useCaisseStore();
+const infobulleCommandesRef = ref(null);
+
+// Toast scan lecteur (léger, dynamique)
+const scanToastMessage = ref('');
+const scanToastType = ref('success');
+let scanToastTimer = null;
+
+function showScanToast(message, type = 'success') {
+  scanToastMessage.value = message;
+  scanToastType.value = type;
+  clearTimeout(scanToastTimer);
+  scanToastTimer = setTimeout(() => {
+    scanToastMessage.value = '';
+  }, 2500);
+}
+
+// Lecteur code-barres : buffer global + Enter
+const BARCODE_MIN_LENGTH = 4;
+const BARCODE_IDLE_MS = 200;
+let scanBuffer = '';
+let scanBufferTimer = null;
+
+function clearScanBuffer() {
+  scanBuffer = '';
+}
+
+function flushScanBuffer() {
+  const code = scanBuffer.trim().replace(/\s/g, '');
+  clearScanBuffer();
+  if (code.length >= BARCODE_MIN_LENGTH && /^\d+$/.test(code)) {
+    const result = store.ajouterProduitParEan(code);
+    if (result.found) {
+      showScanToast(`Ajouté : ${result.produit.nom}`, 'success');
+    } else {
+      showScanToast('Code non reconnu', 'warning');
+    }
+  }
+}
+
+function onKeydownScan(e) {
+  const inInput = e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable);
+  if (e.key === 'Enter') {
+    if (inInput) {
+      const val = (e.target.value || '').trim().replace(/\s/g, '');
+      if (val.length >= BARCODE_MIN_LENGTH && /^\d+$/.test(val)) {
+        e.preventDefault();
+        const result = store.ajouterProduitParEan(val);
+        if (result.found) {
+          showScanToast(`Ajouté : ${result.produit.nom}`, 'success');
+        } else {
+          showScanToast('Code non reconnu', 'warning');
+        }
+        e.target.value = '';
+      }
+    } else {
+      if (scanBuffer.length >= BARCODE_MIN_LENGTH && /^\d+$/.test(scanBuffer)) {
+        e.preventDefault();
+        flushScanBuffer();
+      } else {
+        clearScanBuffer();
+      }
+    }
+    return;
+  }
+  if (!inInput && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    scanBuffer += e.key;
+    clearTimeout(scanBufferTimer);
+    scanBufferTimer = setTimeout(clearScanBuffer, BARCODE_IDLE_MS);
+  }
+}
+
+/** Infobulle : règles d'affichage des commandes catalogue dans la caisse */
+const infobulleReglesCommandesCatalogue =
+  "Règles d'affichage : sont listées uniquement les commandes dont le catalogue a une date d'expiration dépassée et dont le catalogue est masqué (invisible) pour l'utilisateur. Les commandes déjà transformées en vente caisse n'apparaissent pas.";
 
 const totalProduitsPanier = computed(() => {
   return store.lignes
@@ -430,19 +541,53 @@ onMounted(() => {
   store.chargerProduits();
   store.chargerUtilisateurs();
   store.chargerModesPaiement();
+  nextTick(() => initTooltipCommandes());
+  document.addEventListener('keydown', onKeydownScan);
+});
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', onKeydownScan);
+  if (scanBufferTimer) clearTimeout(scanBufferTimer);
+  if (scanToastTimer) clearTimeout(scanToastTimer);
 });
 
 watch(() => store.selectedUtilisateur, (userId) => {
-  if (userId) store.chargerCommandesUtilisateur();
-  else {
+  if (userId) {
+    store.chargerCommandesUtilisateur();
+    nextTick(() => initTooltipCommandes());
+  } else {
     store.commandesUtilisateur = [];
     store.commandeSelectionnee = null;
     store.selectedCommandeId = null;
   }
 });
+
+function initTooltipCommandes() {
+  setTimeout(() => {
+    const el = infobulleCommandesRef.value;
+    if (!el || typeof window === 'undefined') return;
+    if (window.bootstrap?.Tooltip) {
+      try {
+        const existing = window.bootstrap.Tooltip.getInstance(el);
+        if (existing) existing.dispose();
+        new window.bootstrap.Tooltip(el, { trigger: 'hover focus', placement: 'top' });
+      } catch (_) {
+        // Fallback: native title is already sur l'élément
+      }
+    }
+  }, 150);
+}
 </script>
 
 <style scoped>
+.scan-toast-enter-active,
+.scan-toast-leave-active {
+  transition: opacity 0.25s ease;
+}
+.scan-toast-enter-from,
+.scan-toast-leave-to {
+  opacity: 0;
+}
 .produit-card {
   transition: transform 0.15s ease, box-shadow 0.15s ease;
   border: 1px solid #dee2e6;

@@ -83,7 +83,7 @@
             <template v-else>
               <div class="d-none d-md-block table-responsive">
                 <table class="table table-striped table-hover">
-                  <thead class="table-dark">
+                  <thead class="thead-administration">
                     <tr>
                       <th>N°</th><th>Nom</th><th>Description</th><th>Expiration</th><th>Livraison</th><th>Actions</th>
                     </tr>
@@ -132,13 +132,20 @@
             <template v-else>
               <div class="d-none d-md-block table-responsive">
                 <table class="table table-striped table-hover">
-                  <thead class="table-dark">
+                  <thead class="thead-administration">
                     <tr>
-                      <th>N°</th><th>Utilisateur</th><th>Catalogue</th><th>Date commande</th><th>Livraison</th><th class="text-center">Nb produits</th><th class="text-end">Montant</th><th>Actions</th>
+                      <th style="cursor: pointer" class="user-select-none" @click="store.setCommandesSort('id')">N° <i :class="'bi ms-1 ' + getCommandesSortIcon('id')"></i></th>
+                      <th style="cursor: pointer" class="user-select-none" @click="store.setCommandesSort('username')">Utilisateur <i :class="'bi ms-1 ' + getCommandesSortIcon('username')"></i></th>
+                      <th style="cursor: pointer" class="user-select-none" @click="store.setCommandesSort('catalogue')">Catalogue <i :class="'bi ms-1 ' + getCommandesSortIcon('catalogue')"></i></th>
+                      <th style="cursor: pointer" class="user-select-none" @click="store.setCommandesSort('created_at')">Date commande <i :class="'bi ms-1 ' + getCommandesSortIcon('created_at')"></i></th>
+                      <th style="cursor: pointer" class="user-select-none" @click="store.setCommandesSort('date_livraison')">Livraison <i :class="'bi ms-1 ' + getCommandesSortIcon('date_livraison')"></i></th>
+                      <th style="cursor: pointer" class="user-select-none text-center" @click="store.setCommandesSort('nb_produits')">Nb produits <i :class="'bi ms-1 ' + getCommandesSortIcon('nb_produits')"></i></th>
+                      <th style="cursor: pointer" class="user-select-none text-end" @click="store.setCommandesSort('montant_total')">Montant <i :class="'bi ms-1 ' + getCommandesSortIcon('montant_total')"></i></th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="cmd in store.commandes" :key="cmd.id">
+                    <tr v-for="cmd in store.sortedCommandes" :key="cmd.id">
                       <td><strong>{{ cmd.id }}</strong></td>
                       <td><i class="bi bi-person-circle"></i> {{ cmd.username }} <small v-if="cmd.note" class="badge bg-info">📝 {{ cmd.note }}</small></td>
                       <td>{{ cmd.catalogue }} <br><small class="text-muted">N°{{ cmd.catalog_file_id }}</small></td>
@@ -152,7 +159,7 @@
                 </table>
               </div>
               <div class="d-md-none">
-                <div v-for="cmd in store.commandes" :key="cmd.id" class="card mb-2 shadow-sm">
+                <div v-for="cmd in store.sortedCommandes" :key="cmd.id" class="card mb-2 shadow-sm">
                   <div class="card-body p-2" style="font-size: 0.7rem;">
                     <strong>Cde #{{ cmd.id }}</strong> le <strong>{{ cmd.created_formatted }}</strong>
                     <div style="font-size: 0.65rem;"><i class="bi bi-person-circle"></i> {{ cmd.username }}</div>
@@ -175,7 +182,7 @@
             <template v-else>
               <div class="d-none d-md-block table-responsive">
                 <table class="table table-striped table-hover">
-                  <thead class="table-dark">
+                  <thead class="thead-administration">
                     <tr>
                       <th>N°</th><th>Utilisateur</th><th>Catalogue</th><th>Date création</th><th>Expiration</th><th>Actions</th>
                     </tr>
@@ -225,6 +232,11 @@ function truncate(str, len) {
 
 function goBack() {
   window.history.back();
+}
+
+function getCommandesSortIcon(column) {
+  if (store.commandesSortColumn !== column) return 'bi-arrow-down-up text-secondary opacity-50';
+  return store.commandesSortDirection === 'asc' ? 'bi-arrow-up' : 'bi-arrow-down';
 }
 
 onMounted(() => {

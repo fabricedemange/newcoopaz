@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { requireLogin } = require("../middleware/middleware");
+const { hasAnyPermission, hasPermission } = require("../middleware/rbac.middleware");
 const { queryWithUser } = require("../config/db-trace-wrapper");
 const { getCurrentUserId } = require("../utils/session-helpers");
 
@@ -94,7 +95,9 @@ router.get("/commandes/caisse", requireLogin, async (req, res) => {
          FROM lignes_vente lv
          WHERE lv.vente_id = v.id
          LIMIT 3) as produits_preview,
-        mp.nom as mode_paiement
+        mp.nom as mode_paiement,
+        (SELECT MAX(CASE WHEN lv2.nom_produit LIKE '%(cde #%' AND lv2.nom_produit LIKE '%cat #%' THEN 1 ELSE 0 END)
+         FROM lignes_vente lv2 WHERE lv2.vente_id = v.id) AS avec_precommandes
       FROM ventes v
       LEFT JOIN paiements p ON p.vente_id = v.id
       LEFT JOIN modes_paiement mp ON p.mode_paiement_id = mp.id
@@ -119,15 +122,16 @@ router.get("/commandes/caisse", requireLogin, async (req, res) => {
   }
 });
 
-// GET /api/commandes/:id - Détail d'une commande
+// GET /api/commandes/:id - Détail d'une commande (propre ou toute commande si admin)
 router.get("/commandes/:id", requireLogin, async (req, res) => {
   const userId = req.session?.userId;
   const commandeId = req.params.id;
+  const canViewAny = await hasAnyPermission(req, ["commandes.admin", "catalogues", "paniers.admin"]);
 
-  console.log(`📋 Chargement commande ${commandeId} pour user ${userId}`);
+  console.log(`📋 Chargement commande ${commandeId} pour user ${userId} (admin: ${canViewAny})`);
 
   try {
-    // Récupérer la commande
+    // Récupérer la commande (filtre user_id sauf si admin)
     const commandeQuery = `
       SELECT
         p.*,
@@ -144,10 +148,11 @@ router.get("/commandes/:id", requireLogin, async (req, res) => {
       FROM paniers p
       JOIN catalog_files cf ON p.catalog_file_id = cf.id
       JOIN users u ON p.user_id = u.id
-      WHERE p.id = ? AND p.user_id = ? AND p.is_submitted = 1
+      WHERE p.id = ? AND p.is_submitted = 1
+      ${canViewAny ? "" : "AND p.user_id = ?"}
     `;
-
-    const commandes = await queryPromise(commandeQuery, [commandeId, userId], req);
+    const commandeParams = canViewAny ? [commandeId] : [commandeId, userId];
+    const commandes = await queryPromise(commandeQuery, commandeParams, req);
     console.log(`✅ Commandes trouvées:`, commandes?.length || 0);
 
     if (!commandes || commandes.length === 0) {
@@ -167,8 +172,9 @@ router.get("/commandes/:id", requireLogin, async (req, res) => {
     commande.modifiable = commande.expiration_date && new Date(commande.expiration_date) >= hier && !commande.is_archived;
     commande.isExpired = commande.expiration_date && new Date(commande.expiration_date) < hier;
 
-    // Récupérer les articles de la commande
-    const articlesQuery = `
+    // Récupérer les articles : nouveau modèle (catalog_products) ou ancien (articles import baseprod)
+    let articles = [];
+    const articlesQueryNew = `
       SELECT
         pa.id,
         pa.catalog_product_id,
@@ -191,8 +197,31 @@ router.get("/commandes/:id", requireLogin, async (req, res) => {
       WHERE pa.panier_id = ?
       ORDER BY c.ordre, p.nom
     `;
+    articles = await queryPromise(articlesQueryNew, [commandeId], req);
 
-    const articles = await queryPromise(articlesQuery, [commandeId], req);
+    if (!articles || articles.length === 0) {
+      const articlesQueryOld = `
+        SELECT
+          pa.id,
+          pa.article_id as catalog_product_id,
+          pa.quantity,
+          pa.note,
+          a.prix,
+          a.unite,
+          a.produit,
+          a.description,
+          a.image_filename,
+          NULL as categorie,
+          NULL as categorie_couleur,
+          NULL as categorie_ordre,
+          NULL as fournisseur
+        FROM panier_articles pa
+        INNER JOIN articles a ON pa.article_id = a.id
+        WHERE pa.panier_id = ?
+        ORDER BY a.produit
+      `;
+      articles = await queryPromise(articlesQueryOld, [commandeId], req);
+    }
     console.log(`✅ Articles trouvés:`, articles?.length || 0);
 
     res.json({
@@ -230,10 +259,10 @@ router.post("/commandes/:id/note", requireLogin, async (req, res) => {
 
     const commande = commandes[0];
 
-    // Vérifier les droits d'accès
+    const canAdminCommandes = await hasPermission(req, "commandes.admin");
     if (
       commande.user_id !== userId &&
-      !["admin", "epicier", "referent", "SuperAdmin"].includes(userRole)
+      !canAdminCommandes
     ) {
       return res.status(403).json({
         success: false,
@@ -327,6 +356,34 @@ async function getUserEmail(userId, db) {
     );
   });
 }
+
+// GET /api/commandes/:id/pdf - Télécharger le PDF détail de la vente (identique à la modale)
+router.get("/:id/pdf", requireLogin, async (req, res) => {
+  const venteId = parseInt(req.params.id);
+  const userId = getCurrentUserId(req);
+  const orgId = req.session?.organizationId;
+  const { db } = require('../config/config');
+  const { generateTicketPdf } = require('../utils/ticket-pdf');
+
+  try {
+    const venteDetails = await getVenteDetails(venteId, orgId, db);
+    if (!venteDetails) {
+      return res.status(404).json({ success: false, error: 'Vente non trouvée' });
+    }
+    if (venteDetails.vente.adherent_id !== userId) {
+      return res.status(403).json({ success: false, error: 'Accès non autorisé' });
+    }
+
+    const pdfBuffer = await generateTicketPdf(venteDetails);
+    const filename = `ticket-${venteDetails.vente.numero_ticket || venteId}.pdf`.replace(/\s/g, '-');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error('Erreur génération PDF:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 // GET /api/commandes/:id/send-pdf - Envoyer le ticket par email en PDF
 router.get("/:id/send-pdf", requireLogin, async (req, res) => {

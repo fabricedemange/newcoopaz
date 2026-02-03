@@ -1,8 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const { requireAnyPermission, requirePermission } = require("../middleware/rbac.middleware");
+const { requireAnyPermission, requirePermission, hasPermission } = require("../middleware/rbac.middleware");
 const { queryWithUser } = require("../config/db-trace-wrapper");
-const { getCurrentUserId, getCurrentUserRole, getCurrentOrgId } = require("../utils/session-helpers");
+const { getCurrentUserId, getCurrentOrgId } = require("../utils/session-helpers");
 
 // Convertir queryWithUser en promesse
 const queryPromise = (sql, params, req) => {
@@ -16,8 +16,7 @@ const queryPromise = (sql, params, req) => {
 
 // GET /api/admin/dashboard - Données du dashboard admin
 router.get("/admin/dashboard", requireAnyPermission(["paniers.admin", "commandes.admin"], { json: true }), async (req, res) => {
-  const role = getCurrentUserRole(req);
-  const isSuperAdmin = role === "SuperAdmin";
+  const isSuperAdmin = await hasPermission(req, "organizations.view_all");
   const scopeToggleAvailable = !isSuperAdmin;
   const showAllScope = !scopeToggleAvailable || req.query.scope === "all";
   const orgId = getCurrentOrgId(req);

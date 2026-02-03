@@ -52,7 +52,7 @@
             <div class="card-body">
               <div class="table-responsive">
                 <table class="table table-hover align-middle">
-                  <thead class="table-light">
+                  <thead class="thead-precommandes">
                     <tr>
                       <th style="cursor: pointer;" @click="store.sortBy('id')"># <i class="bi" :class="'bi-' + store.sortIcon('id') + ' ms-1'"></i></th>
                       <th style="cursor: pointer;" @click="store.sortBy('catalogue')">Catalogue <i class="bi" :class="'bi-' + store.sortIcon('catalogue') + ' ms-1'"></i></th>

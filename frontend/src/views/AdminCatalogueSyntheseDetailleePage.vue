@@ -96,7 +96,7 @@
         <div class="card-body p-0">
           <div class="table-responsive">
             <table class="table table-striped table-hover mb-0">
-              <thead class="table-light">
+              <thead class="thead-administration">
                 <tr>
                   <th>Utilisateur (panier)</th>
                   <th>Produit</th>

@@ -22,15 +22,10 @@ router.get("/", requirePermission('suppliers'), (req, res) => {
 });
 
 // ============================================================================
-// Formulaire de création (Vue+Vite)
+// Formulaire de création (Vue+Vite) — redirige vers la liste avec modal
 // ============================================================================
-router.get("/new", requirePermission('suppliers'), csrfProtection, (req, res) => {
-  const payload = {
-    supplier: null,
-    csrfToken: req.csrfToken(),
-    APP_VERSION: req.app.locals.APP_VERSION || Date.now(),
-  };
-  res.render("admin_supplier_form_vue", payload);
+router.get("/new", requirePermission('suppliers'), (req, res) => {
+  res.redirect("/admin/suppliers/vue?modal=new");
 });
 
 // ============================================================================

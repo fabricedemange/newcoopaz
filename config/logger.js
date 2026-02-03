@@ -248,4 +248,5 @@ module.exports = {
   logger: safeLogger,
   httpLogger,
   sanitizeData,
+  logsDir,
 };
