@@ -9,12 +9,12 @@ ON DUPLICATE KEY UPDATE
   module = VALUES(module),
   is_active = VALUES(is_active);
 
--- Optionnel: donner la permission au rôle admin (pour les orgs qui utilisent déjà l'inventaire)
+-- Donner la permission aux rôles admin et super_admin
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id
 FROM roles r
 CROSS JOIN permissions p
-WHERE r.name = 'admin' AND p.name = 'inventory_stock'
+WHERE r.name IN ('admin', 'super_admin') AND p.name = 'inventory_stock'
 ON DUPLICATE KEY UPDATE role_id = role_id;
 
 TRUNCATE TABLE permission_cache;

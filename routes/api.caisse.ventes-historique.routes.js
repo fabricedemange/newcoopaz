@@ -225,6 +225,48 @@ router.get("/:id/pdf", requirePermission("caisse.sell", { json: true }), async (
 });
 
 /**
+ * POST /api/caisse/ventes-historique/:id/envoyer-facture
+ * Envoie la facture PDF par email (client anonyme ou autre)
+ * Body: { email: string }
+ */
+router.post("/:id/envoyer-facture", requirePermission("caisse.sell", { json: true }), async (req, res) => {
+  try {
+    const venteId = parseInt(req.params.id);
+    const email = (req.body && req.body.email) ? String(req.body.email).trim() : '';
+    const orgId = getCurrentOrgId(req);
+
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'Adresse email requise' });
+    }
+
+    const detail = await getVenteDetailForPdf(venteId, orgId);
+    if (!detail) {
+      return res.status(404).json({ success: false, error: 'Vente non trouvée' });
+    }
+
+    const { generateTicketPdf } = require('../utils/ticket-pdf');
+    const pdfBuffer = await generateTicketPdf(detail);
+    const filename = `ticket-${detail.vente.numero_ticket || venteId}.pdf`.replace(/\s/g, '-');
+
+    const { enqueueEmail } = require('../services/email-queue.service');
+    await enqueueEmail({
+      to: email,
+      subject: `Votre facture - Ticket ${detail.vente.numero_ticket || venteId}`,
+      html: `<p>Veuillez trouver ci-joint votre facture (Ticket ${detail.vente.numero_ticket || venteId}).</p>`,
+      attachments: [
+        { filename, content: pdfBuffer, contentType: 'application/pdf' },
+      ],
+      initiatedBy: 'caisse-envoyer-facture',
+    });
+
+    return res.json({ success: true, message: 'Facture mise en envoi par email' });
+  } catch (error) {
+    console.error('Error envoyer-facture:', error);
+    return res.status(500).json({ success: false, error: error.message || 'Erreur lors de l\'envoi' });
+  }
+});
+
+/**
  * GET /api/caisse/ventes-historique/:id
  * Détail complet d'une vente (lignes, paiements, panier source)
  */

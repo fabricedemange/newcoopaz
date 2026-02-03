@@ -5,6 +5,7 @@ import {
   fetchCaisseModesPaiement,
   postCaisseVente,
   postCaissePaiement,
+  postCaisseEnvoyerFacture,
   fetchCaisseCotisationCheck,
   fetchCaisseCommandesUtilisateur,
   fetchCaisseCommandeArticles,
@@ -417,10 +418,11 @@ export const useCaisseStore = defineStore('caisse', {
       }
       this.error = null;
       try {
-        const nomClient =
-          this.utilisateurs.find((u) => u.id === this.selectedUtilisateur)?.username || 'Anonyme';
+        const selectedUser = this.utilisateurs.find((u) => u.id === this.selectedUtilisateur);
+        const nomClient = selectedUser?.username || 'Anonyme';
+        const estAnonyme = selectedUser && (selectedUser.username || '').toLowerCase() === 'anonyme';
         const venteData = await postCaisseVente({
-          adherent_id: this.selectedUtilisateur || null,
+          adherent_id: estAnonyme ? null : (this.selectedUtilisateur || null),
           nom_client: nomClient,
           lignes: this.lignes,
           montant_ttc: this.total,

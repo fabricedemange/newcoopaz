@@ -441,6 +441,26 @@ export async function fetchVentesHistoriqueStats(params = {}) {
   return response.json();
 }
 
+/** POST /api/caisse/ventes-historique/:id/envoyer-facture - Envoyer la facture PDF par email (client anonyme) */
+export async function postCaisseEnvoyerFacture(venteId, email) {
+  const response = await fetch(`/api/caisse/ventes-historique/${venteId}/envoyer-facture`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'csrf-token': typeof window !== 'undefined' && window.CSRF_TOKEN ? window.CSRF_TOKEN : '',
+    },
+    credentials: 'include',
+    body: JSON.stringify({ email: String(email || '').trim() }),
+  });
+  checkAuth(response);
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
 export async function sendTicketPDF(venteId) {
   const response = await fetch(`/api/commandes/${venteId}/send-pdf`, {
     method: 'GET',
@@ -1014,6 +1034,21 @@ export async function fetchAdminCatalogueSyntheseDetaillee(catalogueId) {
 export async function fetchAdminCatalogues(scope) {
   const url = scope ? `/api/admin/catalogues?scope=${encodeURIComponent(scope)}` : '/api/admin/catalogues';
   const response = await fetch(url, {
+    method: 'GET',
+    headers: { Accept: 'application/json', 'csrf-token': typeof window !== 'undefined' && window.CSRF_TOKEN ? window.CSRF_TOKEN : '' },
+    credentials: 'include',
+  });
+  checkAuth(response);
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+/** GET /api/admin/catalogues/:id/alerte-recipients-count - Nombre de destinataires (personnes ayant commandé ce catalogue) */
+export async function fetchAdminCataloguesAlerteRecipientsCount(catalogueId) {
+  const response = await fetch(`/api/admin/catalogues/${catalogueId}/alerte-recipients-count`, {
     method: 'GET',
     headers: { Accept: 'application/json', 'csrf-token': typeof window !== 'undefined' && window.CSRF_TOKEN ? window.CSRF_TOKEN : '' },
     credentials: 'include',

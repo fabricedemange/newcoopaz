@@ -3,6 +3,11 @@ const { debugLog } = require("../utils/logger-helpers");
 const { logger } = require("../config/logger");
 const { sendEmailNow } = require("./email.service");
 
+/** En dev : désactiver pour ne pas envoyer de vrais emails. Mettre à "true" en prod ou pour tester l'envoi. */
+const MAIL_QUEUE_SEND_ENABLED =
+  process.env.MAIL_QUEUE_SEND_ENABLED === "true" ||
+  process.env.MAIL_QUEUE_SEND_ENABLED === "1";
+
 const MAX_DAILY_EMAILS = Number(process.env.MAIL_DAILY_LIMIT || 2000);
 const QUEUE_INTERVAL_MS = Number(process.env.MAIL_QUEUE_INTERVAL_MS || 30000);
 const MAX_ATTEMPTS = Number(process.env.MAIL_QUEUE_MAX_ATTEMPTS || 3);
@@ -410,6 +415,13 @@ async function processEmailQueueOnce() {
 let queueTimer = null;
 
 function startEmailQueueWorker() {
+  if (!MAIL_QUEUE_SEND_ENABLED) {
+    logger.info("File email : envoi désactivé (MAIL_QUEUE_SEND_ENABLED != true). Les emails restent en file.", {
+      hint: "En production, définir MAIL_QUEUE_SEND_ENABLED=true pour envoyer les emails.",
+    });
+    return;
+  }
+
   if (queueTimer) {
     return;
   }

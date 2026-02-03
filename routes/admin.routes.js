@@ -1489,15 +1489,22 @@ router.post("/catalogues/:id/alerte", requirePermission('catalogues'), async (re
 
         const catalogue = rows[0];
 
-        // Récupérer tous les utilisateurs actifs
+        // Récupérer les utilisateurs ayant soumis un panier pour ce catalogue
         db.query(
-          "SELECT email, username FROM users WHERE role = 'utilisateur' AND is_validated = 1",
+          `SELECT DISTINCT u.email, u.username
+           FROM paniers p
+           INNER JOIN users u ON u.id = p.user_id
+           WHERE p.catalog_file_id = ? AND p.is_submitted = 1 AND u.is_validated = 1 AND u.email IS NOT NULL AND u.email != ''`,
+          [catalogueId],
           async (err, users) => {
-            if (err || !users || users.length === 0) {
-              return res.status(500).json({ success: false, error: "Aucun utilisateur trouvé" });
+            if (err) {
+              return res.status(500).json({ success: false, error: err.message });
+            }
+            if (!users || users.length === 0) {
+              return res.status(400).json({ success: false, error: "Aucune personne n'a commandé ce catalogue" });
             }
 
-            // Envoyer un email à chaque utilisateur
+            // Envoyer un email à chaque personne concernée
             const emailPromises = users.map(user =>
               emailService.sendEmail({
                 to: user.email,
