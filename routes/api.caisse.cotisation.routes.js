@@ -148,10 +148,12 @@ router.get("/historique", requirePermission("caisse.sell", { json: true }), (req
       v.numero_ticket,
       v.adherent_id,
       v.nom_client,
+      u.username AS adherent_username,
       v.created_at AS date_cotisation,
       l.montant_ttc AS montant_cotisation
     FROM ventes v
     INNER JOIN lignes_vente l ON l.vente_id = v.id
+    LEFT JOIN users u ON v.adherent_id = u.id
     WHERE v.organization_id = ?
       AND v.statut = 'complete'
       AND l.produit_id IS NULL
@@ -185,6 +187,7 @@ router.get("/historique", requirePermission("caisse.sell", { json: true }), (req
       numero_ticket: r.numero_ticket,
       adherent_id: r.adherent_id,
       nom_client: r.nom_client,
+      adherent_username: r.adherent_username || null,
       date_cotisation: r.date_cotisation,
       montant_cotisation: parseFloat(r.montant_cotisation) || 0,
     }));

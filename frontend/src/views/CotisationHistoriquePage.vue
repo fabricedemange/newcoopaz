@@ -1,11 +1,10 @@
 <template>
   <div class="admin-content-wrapper">
     <div class="container-fluid mt-4">
-      <button class="btn btn-outline-secondary d-md-none mb-3" @click="history.back()">
-        <i class="bi bi-arrow-left me-2"></i>Retour
-      </button>
-
-      <h2 class="mb-4 text-precommandes"><i class="bi bi-coin me-2"></i>Mon historique de cotisation</h2>
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+        <h2 class="mb-0 text-precommandes"><i class="bi bi-coin me-2"></i>Mon historique de cotisation</h2>
+        <BackButton />
+      </div>
 
       <div v-if="error" class="alert alert-danger alert-dismissible fade show">
         <i class="bi bi-exclamation-triangle me-2"></i><strong>Erreur :</strong> {{ error }}
@@ -49,6 +48,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue';
+import BackButton from '@/components/BackButton.vue';
 import { fetchMonHistoriqueCotisation } from '@/api';
 
 const loading = ref(true);

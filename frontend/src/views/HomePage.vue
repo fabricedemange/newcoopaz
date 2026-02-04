@@ -1,9 +1,11 @@
 <template>
-  <div class="admin-content-wrapper">
+  <div class="admin-content-wrapper home-page">
     <div class="container mt-5">
-      <h2 class="mb-4">
-        <i class="bi bi-house-door me-2"></i>Tableau de bord
-      </h2>
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+        <h2 class="mb-0">
+          <i class="bi bi-house-door me-2"></i>Tableau de bord
+        </h2>
+      </div>
 
       <div v-if="store.authRequired" class="alert alert-warning">
         <i class="bi bi-lock me-2"></i>
@@ -24,31 +26,37 @@
       <template v-else>
         <div class="row mb-5">
           <div class="col-md-4 mb-3">
-            <div class="card border-0 shadow-sm h-100">
-              <div class="card-body text-center p-4">
-                <div class="mb-3"><i class="bi bi-cart3 fs-1 text-primary"></i></div>
-                <h3 class="display-4 fw-bold mb-2">{{ store.stats.paniers }}</h3>
-                <p class="text-muted mb-0">Paniers en cours</p>
+            <a href="/panier/vue" class="text-decoration-none text-reset d-block h-100 card-link-block">
+              <div class="card border-0 shadow-sm h-100">
+                <div class="card-body text-center p-4">
+                  <div class="mb-3"><i class="bi bi-cart3 fs-1 text-primary"></i></div>
+                  <h3 class="display-4 fw-bold mb-2">{{ store.stats.paniers }}</h3>
+                  <p class="text-muted mb-0">Paniers en cours</p>
+                </div>
               </div>
-            </div>
+            </a>
           </div>
           <div class="col-md-4 mb-3">
-            <div class="card border-0 shadow-sm h-100">
-              <div class="card-body text-center p-4">
-                <div class="mb-3"><i class="bi bi-truck fs-1 text-success"></i></div>
-                <h3 class="display-4 fw-bold mb-2">{{ store.stats.commandes }}</h3>
-                <p class="text-muted mb-0">Commandes en attente</p>
+            <a href="/commandes/vue" class="text-decoration-none text-reset d-block h-100 card-link-block">
+              <div class="card border-0 shadow-sm h-100">
+                <div class="card-body text-center p-4">
+                  <div class="mb-3"><i class="bi bi-truck fs-1 text-success"></i></div>
+                  <h3 class="display-4 fw-bold mb-2">{{ store.stats.commandes }}</h3>
+                  <p class="text-muted mb-0">Commandes en attente</p>
+                </div>
               </div>
-            </div>
+            </a>
           </div>
           <div class="col-md-4 mb-3">
-            <div class="card border-0 shadow-sm h-100">
-              <div class="card-body text-center p-4">
-                <div class="mb-3"><i class="bi bi-book fs-1 text-info"></i></div>
-                <h3 class="display-4 fw-bold mb-2">{{ store.stats.catalogues }}</h3>
-                <p class="text-muted mb-0">Catalogues disponibles</p>
+            <a href="/catalogues/vue" class="text-decoration-none text-reset d-block h-100 card-link-block">
+              <div class="card border-0 shadow-sm h-100">
+                <div class="card-body text-center p-4">
+                  <div class="mb-3"><i class="bi bi-book fs-1 text-info"></i></div>
+                  <h3 class="display-4 fw-bold mb-2">{{ store.stats.catalogues }}</h3>
+                  <p class="text-muted mb-0">Catalogues disponibles</p>
+                </div>
               </div>
-            </div>
+            </a>
           </div>
         </div>
 
@@ -56,7 +64,9 @@
           <div class="col-12 mb-4">
             <div class="card border-0 shadow-sm">
               <div class="card-header bg-white border-bottom">
-                <h5 class="mb-0"><i class="bi bi-cart3 me-2"></i>Mes paniers en cours</h5>
+                <h5 class="mb-0">
+                  <a href="/panier/vue" class="text-decoration-none text-dark"><i class="bi bi-cart3 me-2"></i>Mes paniers en cours</a>
+                </h5>
               </div>
               <div class="card-body p-0">
                 <div v-if="!store.hasPaniers" class="p-4 text-center text-muted">
@@ -100,7 +110,9 @@
           <div class="col-12 mb-4">
             <div class="card border-0 shadow-sm">
               <div class="card-header bg-white border-bottom">
-                <h5 class="mb-0"><i class="bi bi-truck me-2"></i>Mes commandes en attente de livraison</h5>
+                <h5 class="mb-0">
+                  <a href="/commandes/vue" class="text-decoration-none text-dark"><i class="bi bi-truck me-2"></i>Mes commandes en attente de livraison</a>
+                </h5>
               </div>
               <div class="card-body p-0">
                 <div v-if="!store.hasCommandes" class="p-4 text-center text-muted">
@@ -132,7 +144,9 @@
           <div class="col-12 mb-4">
             <div class="card border-0 shadow-sm">
               <div class="card-header bg-white border-bottom">
-                <h5 class="mb-0"><i class="bi bi-star me-2"></i>Nouveaux catalogues disponibles</h5>
+                <h5 class="mb-0">
+                  <a href="/catalogues/vue" class="text-decoration-none text-dark"><i class="bi bi-star me-2"></i>Nouveaux catalogues disponibles</a>
+                </h5>
               </div>
               <div class="card-body">
                 <div v-if="!store.hasNouveauxCatalogues" class="text-center text-muted">
@@ -200,3 +214,17 @@ onMounted(() => {
   store.loadHomeData();
 });
 </script>
+
+<style scoped>
+.home-page .card-link-block:hover .card {
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.12) !important;
+  transform: translateY(-2px);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+.home-page .card-link-block .card {
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+.home-page .card-header a:hover {
+  color: var(--bs-primary) !important;
+}
+</style>

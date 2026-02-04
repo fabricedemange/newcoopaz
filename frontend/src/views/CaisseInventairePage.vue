@@ -5,6 +5,7 @@
           <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
             <h2 class="mb-0"><i class="bi bi-upc-scan me-2"></i>Inventaire</h2>
             <div class="d-flex gap-2">
+              <BackButton />
               <a href="/caisse/inventaires-historique" class="btn btn-outline-secondary">Historique inventaires</a>
               <a href="/caisse/stock-mouvements" class="btn btn-outline-secondary">Mouvements stock</a>
               <a href="/caisse" class="btn btn-outline-primary">
@@ -215,10 +216,75 @@
                 class="form-control"
               />
               <p class="small text-muted mt-2 mb-0">Stock théorique actuel : {{ produitPourQuantite?.stock ?? 0 }} {{ produitPourQuantite?.unite || 'pièce' }}</p>
+
+              <hr class="my-3" />
+              <label class="form-label small text-muted">Corriger le code-barres</label>
+              <div class="input-group">
+                <input
+                  v-model="codeEanQuantiteModal"
+                  type="text"
+                  class="form-control"
+                  placeholder="Code EAN / code-barres"
+                  @keydown.enter.prevent="mettreAJourCodeEanQuantite"
+                />
+                <button
+                  type="button"
+                  class="btn btn-outline-secondary"
+                  title="Mettre à jour le code-barres du produit"
+                  @click="mettreAJourCodeEanQuantite"
+                >
+                  Mettre à jour
+                </button>
+              </div>
+              <p v-if="codeEanQuantiteError" class="text-danger small mt-1 mb-0">{{ codeEanQuantiteError }}</p>
             </div>
             <div class="modal-footer">
               <button type="button" class="btn btn-secondary" @click="showQuantiteModal = false">Annuler</button>
               <button type="button" class="btn btn-primary" @click="validerQuantiteProduit">Ajouter</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modale : code-barres non trouvé → recherche produit et mise à jour du code -->
+      <div v-if="showCodeNotFoundModal" class="modal d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">Code non trouvé : {{ scannedCodeNotFound }}</h5>
+              <button type="button" class="btn-close" @click="fermerCodeNotFoundModal" aria-label="Fermer"></button>
+            </div>
+            <div class="modal-body">
+              <p class="text-muted mb-3">
+                Recherchez le produit correspondant et associez ce code-barres pour les prochains scans.
+              </p>
+              <div class="mb-2">
+                <input
+                  v-model="searchQueryCodeNotFound"
+                  type="text"
+                  class="form-control"
+                  placeholder="Rechercher par nom..."
+                />
+              </div>
+              <div class="list-group" style="max-height: 280px; overflow-y: auto;">
+                <button
+                  v-for="p in produitsFiltresCodeNotFound"
+                  :key="p.id"
+                  type="button"
+                  class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                  @click="associerCodeAuProduit(p)"
+                >
+                  <span>{{ p.nom }}</span>
+                  <span class="badge bg-secondary">EAN : {{ p.code_ean || '—' }}</span>
+                </button>
+                <div v-if="produitsFiltresCodeNotFound.length === 0" class="list-group-item text-muted text-center">
+                  Aucun produit
+                </div>
+              </div>
+              <p v-if="codeNotFoundError" class="text-danger small mt-2 mb-0">{{ codeNotFoundError }}</p>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" @click="fermerCodeNotFoundModal">Fermer</button>
             </div>
           </div>
         </div>
@@ -228,12 +294,14 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
+import BackButton from '@/components/BackButton.vue';
 import {
   fetchCaisseProduits,
   createInventaire,
   addInventaireLigne,
   appliquerInventaire,
   fetchInventaireDetail,
+  updateProductCodeEan,
 } from '@/api';
 
 const videoEl = ref(null);
@@ -257,6 +325,12 @@ const showQuantiteModal = ref(false);
 const produitPourQuantite = ref(null);
 const quantiteSaisie = ref(0);
 const zxingControls = ref(null);
+const showCodeNotFoundModal = ref(false);
+const scannedCodeNotFound = ref('');
+const searchQueryCodeNotFound = ref('');
+const codeNotFoundError = ref('');
+const codeEanQuantiteModal = ref('');
+const codeEanQuantiteError = ref('');
 
 const SCAN_COOLDOWN_MS = 1500;
 
@@ -280,6 +354,13 @@ const produitsFiltres = computed(() => {
   return list.slice(0, 50);
 });
 
+const produitsFiltresCodeNotFound = computed(() => {
+  let list = [...products.value];
+  const q = (searchQueryCodeNotFound.value || '').toLowerCase();
+  if (q) list = list.filter((p) => (p.nom || '').toLowerCase().includes(q));
+  return list.slice(0, 80);
+});
+
 function normalizeEan(str) {
   return String(str || '').trim().replace(/\s/g, '');
 }
@@ -298,6 +379,10 @@ function addScanned(code) {
       product_id: null,
       time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }),
     });
+    scannedCodeNotFound.value = code;
+    searchQueryCodeNotFound.value = '';
+    codeNotFoundError.value = '';
+    showCodeNotFoundModal.value = true;
     return;
   }
   scanned.value.unshift({
@@ -308,6 +393,30 @@ function addScanned(code) {
   });
   if (inventaireId.value) {
     ouvrirQuantiteProduit(product);
+  }
+}
+
+function fermerCodeNotFoundModal() {
+  showCodeNotFoundModal.value = false;
+  scannedCodeNotFound.value = '';
+  searchQueryCodeNotFound.value = '';
+  codeNotFoundError.value = '';
+}
+
+async function associerCodeAuProduit(p) {
+  codeNotFoundError.value = '';
+  try {
+    await updateProductCodeEan(p.id, scannedCodeNotFound.value);
+    const idx = products.value.findIndex((x) => x.id === p.id);
+    if (idx >= 0) products.value[idx] = { ...p, code_ean: scannedCodeNotFound.value };
+    fermerCodeNotFoundModal();
+    if (inventaireId.value) {
+      ouvrirQuantiteProduit({ ...p, code_ean: scannedCodeNotFound.value });
+    } else if (typeof window !== 'undefined') {
+      window.alert('Code-barres associé au produit « ' + p.nom + ' ». Vous pouvez rescanner pour l\'ajouter à l\'inventaire.');
+    }
+  } catch (e) {
+    codeNotFoundError.value = e.message || 'Erreur lors de la mise à jour';
   }
 }
 
@@ -361,7 +470,23 @@ function reinitSession() {
 function ouvrirQuantiteProduit(p) {
   produitPourQuantite.value = p;
   quantiteSaisie.value = Number(p.stock) ?? 0;
+  codeEanQuantiteModal.value = p.code_ean != null ? String(p.code_ean).trim() : '';
+  codeEanQuantiteError.value = '';
   showQuantiteModal.value = true;
+}
+
+async function mettreAJourCodeEanQuantite() {
+  if (!produitPourQuantite.value) return;
+  codeEanQuantiteError.value = '';
+  const newCode = (codeEanQuantiteModal.value || '').trim() || null;
+  try {
+    await updateProductCodeEan(produitPourQuantite.value.id, newCode);
+    const idx = products.value.findIndex((x) => x.id === produitPourQuantite.value.id);
+    if (idx >= 0) products.value[idx] = { ...products.value[idx], code_ean: newCode };
+    produitPourQuantite.value = { ...produitPourQuantite.value, code_ean: newCode };
+  } catch (e) {
+    codeEanQuantiteError.value = e.message || 'Erreur lors de la mise à jour';
+  }
 }
 
 async function validerQuantiteProduit() {

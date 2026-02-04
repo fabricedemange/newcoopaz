@@ -301,4 +301,31 @@ router.get("/stock-mouvements", requireInventoryStock, async (req, res) => {
   }
 });
 
+/**
+ * PATCH /api/caisse/products/:id/code-ean
+ * Mise à jour du code-barres d'un produit (contexte inventaire, droit inventory_stock).
+ */
+router.patch("/products/:id/code-ean", requireInventoryStock, async (req, res) => {
+  try {
+    const orgId = getCurrentOrgId(req);
+    const productId = parseInt(req.params.id, 10);
+    const { code_ean } = req.body || {};
+    if (!productId || isNaN(productId)) {
+      return res.status(400).json({ success: false, error: "ID produit invalide" });
+    }
+    const codeEan = code_ean != null ? String(code_ean).trim() || null : null;
+    const result = await queryPromise(
+      "UPDATE products SET code_ean = ?, updated_at = NOW() WHERE id = ? AND organization_id = ?",
+      [codeEan, productId, orgId]
+    );
+    if (!result || result.affectedRows === 0) {
+      return res.status(404).json({ success: false, error: "Produit non trouvé" });
+    }
+    res.json({ success: true, message: "Code-barres mis à jour" });
+  } catch (error) {
+    console.error("Erreur PATCH code-ean:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 module.exports = router;

@@ -1,13 +1,12 @@
 <template>
   <div class="admin-content-wrapper">
     <div class="container-fluid mt-4">
-      <button class="btn btn-outline-secondary d-md-none mb-3" @click="$router?.back?.() || history.back()">
-        <i class="bi bi-arrow-left me-2"></i>Retour
-      </button>
-
       <div class="row mb-4">
         <div class="col-12">
-          <h2 class="mb-4"><i class="bi bi-list-check me-2"></i>Historique de mes achats</h2>
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+            <h2 class="mb-0"><i class="bi bi-list-check me-2"></i>Historique de mes achats</h2>
+            <BackButton />
+          </div>
 
           <ul class="nav nav-tabs mb-4" role="tablist">
             <li class="nav-item" role="presentation">
@@ -337,6 +336,7 @@
 <script setup>
 import { useCommandesStore } from '@/stores/commandes';
 import { onMounted } from 'vue';
+import BackButton from '@/components/BackButton.vue';
 
 const store = useCommandesStore();
 

@@ -7,10 +7,13 @@
     <div v-else-if="store.error" class="alert alert-danger">{{ store.error }}</div>
     <div v-else>
       <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="bi bi-envelope-paper me-2"></i>File d'attente email</h2>
-        <button @click="store.loadEmailQueue()" class="btn btn-outline-primary">
+        <h2 class="mb-0"><i class="bi bi-envelope-paper me-2"></i>File d'attente email</h2>
+        <div class="d-flex gap-2">
+          <BackButton />
+          <button @click="store.loadEmailQueue()" class="btn btn-outline-primary">
           <i class="bi bi-arrow-clockwise me-2"></i>Actualiser
         </button>
+        </div>
       </div>
       <div class="row g-3 mb-4">
         <div class="col-md-3">
@@ -175,6 +178,7 @@
 
 <script setup>
 import { onMounted } from 'vue';
+import BackButton from '@/components/BackButton.vue';
 import { useAdminEmailQueueStore } from '@/stores/adminEmailQueue';
 
 const store = useAdminEmailQueueStore();

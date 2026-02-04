@@ -19,6 +19,7 @@
       <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
         <h2>Gestion des catalogues</h2>
         <div class="d-flex gap-2 align-items-center">
+          <BackButton />
           <a href="/admin/catalogues/new" class="btn btn-success">
             <i class="bi bi-plus-circle me-1"></i>Nouveau catalogue
           </a>
@@ -192,6 +193,7 @@
 
 <script setup>
 import { onMounted } from 'vue';
+import BackButton from '@/components/BackButton.vue';
 import { useAdminCataloguesStore } from '@/stores/adminCatalogues';
 
 const store = useAdminCataloguesStore();

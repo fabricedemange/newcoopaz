@@ -21,9 +21,7 @@
             <i class="bi bi-building me-1"></i>{{ store.organizationName }}
           </p>
         </div>
-        <a href="/admin/catalogues/vue" class="btn btn-outline-secondary">
-          <i class="bi bi-arrow-left me-1"></i>Retour
-        </a>
+        <BackButton />
       </div>
 
       <div class="card mb-4">
@@ -142,6 +140,7 @@
 
 <script setup>
 import { onMounted } from 'vue';
+import BackButton from '@/components/BackButton.vue';
 import { useAdminCatalogueSyntheseStore } from '@/stores/adminCatalogueSynthese';
 
 const store = useAdminCatalogueSyntheseStore();

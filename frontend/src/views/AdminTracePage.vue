@@ -7,10 +7,13 @@
     <div v-else-if="store.error" class="alert alert-danger">{{ store.error }}</div>
     <div v-else>
       <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="bi bi-activity me-2"></i>Traces de MAJ</h2>
-        <button @click="store.loadTraces()" class="btn btn-outline-primary">
-          <i class="bi bi-arrow-clockwise me-2"></i>Actualiser
-        </button>
+        <h2 class="mb-0"><i class="bi bi-activity me-2"></i>Traces de MAJ</h2>
+        <div class="d-flex gap-2">
+          <BackButton />
+          <button @click="store.loadTraces()" class="btn btn-outline-primary">
+            <i class="bi bi-arrow-clockwise me-2"></i>Actualiser
+          </button>
+        </div>
       </div>
       <div class="mb-4">
         <input
@@ -52,20 +55,18 @@
                 <th @click="store.sortBy('username')" style="cursor: pointer; width: 120px">
                   Username <i :class="'bi ms-1 ' + store.getSortIcon('username')"></i>
                 </th>
-                <th style="width: 50%">Query</th>
-                <th style="width: 150px">Params</th>
+                <th>Requête (avec paramètres)</th>
               </tr>
             </thead>
             <tbody>
               <tr v-if="store.paginatedTraces.length === 0">
-                <td colspan="5" class="text-center text-muted py-4">Aucune trace trouvée</td>
+                <td colspan="4" class="text-center text-muted py-4">Aucune trace trouvée</td>
               </tr>
               <tr v-for="trace in store.paginatedTraces" :key="trace.id">
                 <td>{{ trace.id }}</td>
                 <td>{{ store.formatDate(trace.created_at) }}</td>
                 <td><span class="badge bg-primary">{{ trace.username || '—' }}</span></td>
-                <td><code class="text-wrap" style="font-size: 0.85rem">{{ trace.query }}</code></td>
-                <td><code class="text-wrap" style="font-size: 0.85rem">{{ store.truncate(trace.params, 80) }}</code></td>
+                <td><code class="text-wrap" style="font-size: 0.85rem">{{ store.traceQueryDisplay(trace) }}</code></td>
               </tr>
             </tbody>
           </table>
@@ -115,6 +116,7 @@
 
 <script setup>
 import { onMounted } from 'vue';
+import BackButton from '@/components/BackButton.vue';
 import { useAdminTraceStore } from '@/stores/adminTrace';
 
 const store = useAdminTraceStore();

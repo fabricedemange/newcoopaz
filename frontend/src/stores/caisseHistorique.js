@@ -3,6 +3,7 @@ import {
   fetchVentesHistorique,
   fetchVentesHistoriqueStats,
   fetchVenteDetail,
+  annulerVente as apiAnnulerVente,
 } from '@/api';
 
 export const useCaisseHistoriqueStore = defineStore('caisseHistorique', {
@@ -14,7 +15,7 @@ export const useCaisseHistoriqueStore = defineStore('caisseHistorique', {
     showDetailModal: false,
     dateDebut: '',
     dateFin: '',
-    numeroTicket: '',
+    recherche: '',
     caissier_id: null,
     total: 0,
     limit: 50,
@@ -39,7 +40,7 @@ export const useCaisseHistoriqueStore = defineStore('caisseHistorique', {
         const params = { limit: this.limit, offset: this.offset };
         if (this.dateDebut) params.date_debut = this.dateDebut;
         if (this.dateFin) params.date_fin = this.dateFin;
-        if (this.numeroTicket) params.numero_ticket = this.numeroTicket;
+        if (this.recherche) params.recherche = this.recherche;
         if (this.caissier_id != null) params.caissier_id = this.caissier_id;
         const data = await fetchVentesHistorique(params);
         if (data.success) {
@@ -87,6 +88,22 @@ export const useCaisseHistoriqueStore = defineStore('caisseHistorique', {
       this.selectedVente = null;
     },
 
+    async annulerVente(venteId) {
+      this.error = null;
+      try {
+        const data = await apiAnnulerVente(venteId);
+        if (data.success) {
+          this.fermerDetail();
+          await Promise.all([this.chargerVentes(), this.chargerStats()]);
+          return true;
+        }
+        throw new Error(data.error);
+      } catch (e) {
+        this.error = e.message;
+        throw e;
+      }
+    },
+
     rechercher() {
       this.offset = 0;
       return Promise.all([this.chargerVentes(), this.chargerStats()]);
@@ -95,7 +112,7 @@ export const useCaisseHistoriqueStore = defineStore('caisseHistorique', {
     resetFiltres() {
       this.dateDebut = '';
       this.dateFin = '';
-      this.numeroTicket = '';
+      this.recherche = '';
       this.caissier_id = null;
       this.offset = 0;
       return Promise.all([this.chargerVentes(), this.chargerStats()]);

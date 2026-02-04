@@ -1,0 +1,232 @@
+<%- include('partials/header', { title: typeof title !== 'undefined' ? title : 'Gestion de la Caisse', user, role }) %>
+
+<style>
+.caisse-accueil-hero {
+  background: linear-gradient(135deg, rgba(144, 238, 144, 0.35) 0%, rgba(144, 238, 144, 0.12) 50%, rgba(200, 255, 200, 0.2) 100%);
+  border-radius: 1rem;
+  border: 1px solid rgba(92, 184, 92, 0.3);
+  padding: 2rem;
+  margin-bottom: 2rem;
+}
+.caisse-accueil-zone {
+  background: #fff;
+  border-radius: 1rem;
+  border: 1px solid rgba(92, 184, 92, 0.2);
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  height: 100%;
+}
+.caisse-accueil-zone:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+}
+.caisse-accueil-zone .zone-header {
+  background: linear-gradient(90deg, rgba(144, 238, 144, 0.5), rgba(200, 255, 200, 0.35));
+  color: #2d6a2d;
+  font-weight: 600;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid rgba(92, 184, 92, 0.2);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.caisse-accueil-zone .zone-header i { font-size: 1.5rem; opacity: 0.9; }
+.caisse-accueil-zone .zone-body { padding: 1.25rem; }
+.caisse-accueil-zone .zone-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  color: #495057;
+  text-decoration: none;
+  border-radius: 0.5rem;
+  transition: background 0.15s ease, color 0.15s ease;
+  margin-bottom: 0.35rem;
+}
+.caisse-accueil-zone .zone-link:last-child { margin-bottom: 0; }
+.caisse-accueil-zone .zone-link:hover {
+  background: rgba(144, 238, 144, 0.25);
+  color: #1e4d1e;
+}
+.caisse-accueil-zone .zone-link i {
+  width: 1.5rem;
+  text-align: center;
+  font-size: 1.1rem;
+  color: #3d7a3d;
+}
+.caisse-stats-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.caisse-stat-card {
+  background: #fff;
+  border: 1px solid rgba(92, 184, 92, 0.25);
+  border-radius: 0.75rem;
+  padding: 1rem 1.25rem;
+  min-width: 140px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+.caisse-stat-card .stat-value { font-size: 1.5rem; font-weight: 700; color: #2d6a2d; }
+.caisse-stat-card .stat-label { font-size: 0.8rem; color: #6c757d; margin-top: 0.25rem; }
+</style>
+
+<div class="admin-content-wrapper">
+  <div class="container-fluid mt-4">
+    <div class="caisse-accueil-hero">
+      <h1 class="mb-2 text-caisse"><i class="bi bi-cart-fill me-2"></i>Gestion de la Caisse</h1>
+      <p class="text-muted mb-0">Vue d’ensemble caisse, chiffres du jour et du mois.</p>
+    </div>
+
+    <div class="row g-4">
+      <div class="col-12 col-md-6 col-lg-4">
+        <div class="caisse-accueil-zone">
+          <div class="zone-header">
+            <i class="bi bi-cart-fill"></i>
+            <span>Caisse & Historique</span>
+          </div>
+          <div class="zone-body">
+            <a href="/caisse" class="zone-link">
+              <i class="bi bi-cart-fill"></i>
+              <span>Caisse</span>
+            </a>
+            <a href="/caisse/historique" class="zone-link">
+              <i class="bi bi-clock-history"></i>
+              <span>Historique Caisse</span>
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 col-md-6 col-lg-4">
+        <div class="caisse-accueil-zone">
+          <div class="zone-header">
+            <i class="bi bi-graph-up"></i>
+            <span>Chiffres du jour</span>
+          </div>
+          <div class="zone-body">
+            <div id="caisse-stats-loading" class="text-muted small">
+              <span class="spinner-border spinner-border-sm me-1" role="status"></span> Chargement…
+            </div>
+            <div id="caisse-stats-content" class="caisse-stats-row d-none"></div>
+            <div id="caisse-stats-error" class="text-danger small d-none"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 col-md-6 col-lg-4">
+        <div class="caisse-accueil-zone">
+          <div class="zone-header">
+            <i class="bi bi-calendar-month"></i>
+            <span>Chiffres du mois</span>
+          </div>
+          <div class="zone-body">
+            <div id="caisse-stats-mois-loading" class="text-muted small">
+              <span class="spinner-border spinner-border-sm me-1" role="status"></span> Chargement…
+            </div>
+            <div id="caisse-stats-mois-content" class="caisse-stats-row d-none"></div>
+            <div id="caisse-stats-mois-error" class="text-danger small d-none"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  var today = new Date().toISOString().split('T')[0];
+  var params = new URLSearchParams();
+  params.set('date_debut', today);
+  params.set('date_fin', today);
+
+  fetch('/api/caisse/ventes-historique/stats/resume?' + params.toString(), {
+    method: 'GET',
+    headers: { 'Accept': 'application/json' },
+    credentials: 'include'
+  })
+    .then(function(res) {
+      if (!res.ok) throw new Error('Erreur ' + res.status);
+      return res.json();
+    })
+    .then(function(data) {
+      var loading = document.getElementById('caisse-stats-loading');
+      var content = document.getElementById('caisse-stats-content');
+      var errEl = document.getElementById('caisse-stats-error');
+      if (loading) loading.classList.add('d-none');
+      if (!data.success || !data.stats) {
+        if (errEl) { errEl.textContent = data.error || 'Données indisponibles'; errEl.classList.remove('d-none'); }
+        return;
+      }
+      var s = data.stats;
+      var nb = Number(s.nb_ventes) || 0;
+      var ca = Number(s.ca_total) || 0;
+      var moy = Number(s.ticket_moyen) || 0;
+      if (content) {
+        content.innerHTML =
+          '<div class="caisse-stat-card"><div class="stat-value">' + nb + '</div><div class="stat-label">Ventes</div></div>' +
+          '<div class="caisse-stat-card"><div class="stat-value">' + ca.toFixed(2) + ' €</div><div class="stat-label">CA total</div></div>' +
+          '<div class="caisse-stat-card"><div class="stat-value">' + moy.toFixed(2) + ' €</div><div class="stat-label">Ticket moyen</div></div>';
+        content.classList.remove('d-none');
+      }
+    })
+    .catch(function(e) {
+      var loading = document.getElementById('caisse-stats-loading');
+      var errEl = document.getElementById('caisse-stats-error');
+      if (loading) loading.classList.add('d-none');
+      if (errEl) { errEl.textContent = e.message || 'Erreur de chargement'; errEl.classList.remove('d-none'); }
+    });
+
+  // Chiffres du mois (1er au dernier jour du mois en cours)
+  var now = new Date();
+  var firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+  var lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  var dateDebutMois = firstDay.toISOString().split('T')[0];
+  var dateFinMois = lastDay.toISOString().split('T')[0];
+  var paramsMois = new URLSearchParams();
+  paramsMois.set('date_debut', dateDebutMois);
+  paramsMois.set('date_fin', dateFinMois);
+
+  fetch('/api/caisse/ventes-historique/stats/resume?' + paramsMois.toString(), {
+    method: 'GET',
+    headers: { 'Accept': 'application/json' },
+    credentials: 'include'
+  })
+    .then(function(res) {
+      if (!res.ok) throw new Error('Erreur ' + res.status);
+      return res.json();
+    })
+    .then(function(data) {
+      var loading = document.getElementById('caisse-stats-mois-loading');
+      var content = document.getElementById('caisse-stats-mois-content');
+      var errEl = document.getElementById('caisse-stats-mois-error');
+      if (loading) loading.classList.add('d-none');
+      if (!data.success || !data.stats) {
+        if (errEl) { errEl.textContent = data.error || 'Données indisponibles'; errEl.classList.remove('d-none'); }
+        return;
+      }
+      var s = data.stats;
+      var nb = Number(s.nb_ventes) || 0;
+      var ca = Number(s.ca_total) || 0;
+      var moy = Number(s.ticket_moyen) || 0;
+      if (content) {
+        content.innerHTML =
+          '<div class="caisse-stat-card"><div class="stat-value">' + nb + '</div><div class="stat-label">Ventes</div></div>' +
+          '<div class="caisse-stat-card"><div class="stat-value">' + ca.toFixed(2) + ' €</div><div class="stat-label">CA total</div></div>' +
+          '<div class="caisse-stat-card"><div class="stat-value">' + moy.toFixed(2) + ' €</div><div class="stat-label">Ticket moyen</div></div>';
+        content.classList.remove('d-none');
+      }
+    })
+    .catch(function(e) {
+      var loading = document.getElementById('caisse-stats-mois-loading');
+      var errEl = document.getElementById('caisse-stats-mois-error');
+      if (loading) loading.classList.add('d-none');
+      if (errEl) { errEl.textContent = e.message || 'Erreur de chargement'; errEl.classList.remove('d-none'); }
+    });
+})();
+</script>
+
+<%- include('partials/footer') %>

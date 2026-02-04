@@ -7,8 +7,9 @@
     <div v-else-if="store.error" class="alert alert-danger">{{ store.error }}</div>
     <div v-else>
       <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="bi bi-building me-2"></i>Organisations</h2>
+        <h2 class="mb-0"><i class="bi bi-building me-2"></i>Organisations</h2>
         <div class="d-flex gap-2">
+          <BackButton />
           <button @click="store.loadOrganizations()" class="btn btn-outline-primary">
             <i class="bi bi-arrow-clockwise me-2"></i>Actualiser
           </button>
@@ -124,6 +125,7 @@
 
 <script setup>
 import { onMounted } from 'vue';
+import BackButton from '@/components/BackButton.vue';
 import { useAdminOrganizationsStore } from '@/stores/adminOrganizations';
 
 const store = useAdminOrganizationsStore();

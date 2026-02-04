@@ -17,10 +17,13 @@
     <div v-else>
       <!-- Header -->
       <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="text-admin-site"><i class="bi bi-shield-lock me-2"></i>Gestion des Rôles</h2>
-        <button type="button" class="btn btn-admin-site" @click="store.showCreateForm = !store.showCreateForm">
-          <i class="bi bi-plus-lg me-2"></i>Nouveau rôle
-        </button>
+        <h2 class="text-admin-site mb-0"><i class="bi bi-shield-lock me-2"></i>Gestion des Rôles</h2>
+        <div class="d-flex gap-2">
+          <BackButton />
+          <button type="button" class="btn btn-admin-site" @click="store.showCreateForm = !store.showCreateForm">
+            <i class="bi bi-plus-lg me-2"></i>Nouveau rôle
+          </button>
+        </div>
       </div>
 
       <!-- Create Form -->
@@ -298,6 +301,7 @@
 
 <script setup>
 import { onMounted } from 'vue';
+import BackButton from '@/components/BackButton.vue';
 import { useAdminRolesStore } from '@/stores/adminRoles';
 
 const store = useAdminRolesStore();

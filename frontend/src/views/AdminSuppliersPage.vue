@@ -21,7 +21,10 @@
     <template v-else>
       <div class="row">
         <div class="col-12">
-          <h2 class="mb-4">Gestion des fournisseurs</h2>
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+            <h2 class="mb-0">Gestion des fournisseurs</h2>
+            <BackButton />
+          </div>
           <p class="text-muted mb-4">Gérer les fournisseurs de produits</p>
         </div>
       </div>
@@ -300,6 +303,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { useAdminSuppliersStore } from '@/stores/adminSuppliers';
+import BackButton from '@/components/BackButton.vue';
 import AdminSupplierFormContent from '@/components/AdminSupplierFormContent.vue';
 
 const store = useAdminSuppliersStore();

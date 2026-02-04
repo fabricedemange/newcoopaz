@@ -3,10 +3,13 @@
     <div class="row mb-4">
       <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-3">
-          <h2 class="text-caisse"><i class="bi bi-clock-history me-2"></i>Historique des ventes</h2>
-          <a href="/caisse" class="btn btn-outline-caisse">
-            <i class="bi bi-arrow-left me-2"></i>Retour à la caisse
-          </a>
+          <h2 class="text-caisse mb-0"><i class="bi bi-clock-history me-2"></i>Historique des ventes</h2>
+          <div class="d-flex gap-2 flex-wrap">
+            <BackButton />
+            <a href="/caisse" class="btn btn-outline-caisse">
+              <i class="bi bi-arrow-left me-2"></i>Retour à la caisse
+            </a>
+          </div>
         </div>
 
         <div class="row g-3" v-if="store.stats">
@@ -61,12 +64,12 @@
             <input type="date" class="form-control" v-model="store.dateFin" />
           </div>
           <div class="col-md-4">
-            <label class="form-label">Numéro ticket</label>
+            <label class="form-label">Recherche</label>
             <input
               type="text"
               class="form-control"
-              v-model="store.numeroTicket"
-              placeholder="Ex: CAISSE-1738272840"
+              v-model="store.recherche"
+              placeholder="Ticket, date, caissier, client, montant..."
             />
           </div>
           <div class="col-md-2 d-flex align-items-end gap-2">
@@ -112,7 +115,7 @@
                 <th>Client</th>
                 <th>Nb articles</th>
                 <th>Montant</th>
-                <th>PréCde</th>
+                <th>Détails</th>
                 <th>Statut</th>
                 <th>Actions</th>
               </tr>
@@ -126,8 +129,10 @@
                 <td>{{ vente.nb_lignes }}</td>
                 <td><strong class="text-primary">{{ vente.montant_ttc.toFixed(2) }} €</strong></td>
                 <td>
-                  <span v-if="vente.catalogues_oui" class="badge bg-secondary">Oui</span>
-                  <span v-else class="text-muted">—</span>
+                  <span v-if="vente.catalogues_oui" class="badge bg-secondary me-1" title="Précommande">PC</span>
+                  <span v-if="vente.cotisation_oui" class="badge bg-info me-1" title="Cotisation">CT</span>
+                  <span v-if="vente.avoir_oui" class="badge bg-warning text-dark me-1" title="Avoir">AV</span>
+                  <span v-if="!vente.catalogues_oui && !vente.cotisation_oui && !vente.avoir_oui" class="text-muted">—</span>
                 </td>
                 <td>
                   <span :class="['badge', vente.statut === 'complete' ? 'bg-success' : 'bg-warning']">
@@ -135,9 +140,18 @@
                   </span>
                 </td>
                 <td>
-                  <button class="btn btn-sm btn-outline-caisse" @click="store.ouvrirDetail(vente.id)">
-                    <i class="bi bi-eye me-1"></i>Détails
-                  </button>
+                  <div class="d-flex gap-1 flex-wrap">
+                    <button class="btn btn-sm btn-outline-caisse" @click="store.ouvrirDetail(vente.id)">
+                      <i class="bi bi-eye me-1"></i>Détails
+                    </button>
+                    <button
+                      class="btn btn-sm btn-outline-danger"
+                      title="Annuler la vente (remet le stock)"
+                      @click="confirmerAnnuler(vente.id, vente.numero_ticket)"
+                    >
+                      <i class="bi bi-x-circle me-1"></i>Annuler
+                    </button>
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -274,6 +288,14 @@
             >
               <i class="bi bi-file-earmark-pdf me-1"></i>Télécharger PDF
             </a>
+            <button
+              type="button"
+              class="btn btn-outline-danger"
+              title="Annuler la vente (remet le stock)"
+              @click="confirmerAnnuler(store.selectedVente?.vente?.id, store.selectedVente?.vente?.numero_ticket)"
+            >
+              <i class="bi bi-x-circle me-1"></i>Annuler la vente
+            </button>
             <button type="button" class="btn btn-secondary" @click="store.fermerDetail()">Fermer</button>
           </div>
         </div>
@@ -284,9 +306,24 @@
 
 <script setup>
 import { onMounted } from 'vue';
+import BackButton from '@/components/BackButton.vue';
 import { useCaisseHistoriqueStore } from '@/stores/caisseHistorique';
 
 const store = useCaisseHistoriqueStore();
+
+async function confirmerAnnuler(venteId, numeroTicket) {
+  if (!venteId) return;
+  const msg = numeroTicket
+    ? `Annuler la vente ${numeroTicket} ? Les quantités seront remises en stock. Cette action est irréversible.`
+    : 'Annuler cette vente ? Les quantités seront remises en stock. Cette action est irréversible.';
+  if (!confirm(msg)) return;
+  try {
+    await store.annulerVente(venteId);
+    alert('Vente annulée. Les quantités ont été remises en stock.');
+  } catch (e) {
+    alert('Erreur : ' + (e.message || 'Impossible d\'annuler la vente.'));
+  }
+}
 
 onMounted(async () => {
   const today = new Date().toISOString().split('T')[0];

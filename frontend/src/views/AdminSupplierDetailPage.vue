@@ -4,23 +4,18 @@
     <template v-else>
       <div class="row">
         <div class="col-12">
-          <h2 class="mb-4">
-            {{ supplier.nom }}
-            <span v-if="supplier.is_active" class="badge bg-success">Actif</span>
-            <span v-else class="badge bg-secondary">Inactif</span>
-          </h2>
-        </div>
-      </div>
-
-      <div class="row">
-        <div class="col-12 mb-3">
-          <div class="d-flex gap-2">
-            <a :href="`/admin/suppliers/${supplier.id}/edit`" class="btn btn-primary">
-              <i class="bi bi-pencil me-2"></i>Modifier
-            </a>
-            <a href="/admin/suppliers" class="btn btn-outline-secondary">
-              <i class="bi bi-arrow-left me-2"></i>Retour à la liste
-            </a>
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+            <h2 class="mb-0">
+              {{ supplier.nom }}
+              <span v-if="supplier.is_active" class="badge bg-success">Actif</span>
+              <span v-else class="badge bg-secondary">Inactif</span>
+            </h2>
+            <div class="d-flex gap-2">
+              <BackButton />
+              <a :href="`/admin/suppliers/${supplier.id}/edit`" class="btn btn-primary">
+                <i class="bi bi-pencil me-2"></i>Modifier
+              </a>
+            </div>
           </div>
         </div>
       </div>
@@ -135,6 +130,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue';
+import BackButton from '@/components/BackButton.vue';
 
 const supplier = ref(null);
 const products = ref([]);

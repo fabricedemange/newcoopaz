@@ -1,17 +1,16 @@
 <template>
   <div class="admin-content-wrapper">
     <div class="container-fluid px-3 mt-4">
-      <button class="btn btn-outline-secondary d-md-none mb-3" @click="history.back()">
-        <i class="bi bi-arrow-left me-2"></i>Retour
-      </button>
-
       <div class="row mb-4">
         <div class="col-12">
           <div class="d-flex justify-content-between align-items-center">
             <h2 class="mb-0"><i class="bi bi-cart-fill me-2"></i>Caisse</h2>
-            <a href="/caisse/historique" class="btn btn-outline-primary">
+            <div class="d-flex gap-2">
+              <BackButton />
+              <a href="/caisse/historique" class="btn btn-outline-primary">
               <i class="bi bi-clock-history me-2"></i>Historique des ventes
             </a>
+            </div>
           </div>
         </div>
       </div>
@@ -460,6 +459,7 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch, nextTick } from 'vue';
+import BackButton from '@/components/BackButton.vue';
 import { useCaisseStore } from '@/stores/caisse';
 
 const store = useCaisseStore();

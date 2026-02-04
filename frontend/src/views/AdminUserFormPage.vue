@@ -1,6 +1,9 @@
 <template>
   <div class="container">
-    <h2>{{ isAdd ? 'Ajouter un utilisateur' : 'Éditer un utilisateur' }}</h2>
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+      <h2 class="mb-0">{{ isAdd ? 'Ajouter un utilisateur' : 'Éditer un utilisateur' }}</h2>
+      <BackButton />
+    </div>
     <div v-if="error" class="alert alert-danger">{{ error }}</div>
 
     <form @submit.prevent="submit">
@@ -67,6 +70,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue';
+import BackButton from '@/components/BackButton.vue';
 
 const form = ref({
   username: '',

@@ -155,7 +155,68 @@
 
 ### 6.4 Idées fonctionnelles (hors bilan technique)
 
-- Notifications temps réel (WebSocket ou SSE) pour nouvelles commandes, rappels, etc.
+#### Savoir qui est connecté (avant ou sans WebSocket/SSE)
+
+**Objectif** : afficher en admin la liste des utilisateurs « actuellement connectés » (ont une session active ou ont eu une activité récente).
+
+**Oui, c’est possible**, avec votre stack actuelle (sessions en MySQL via `express-mysql-session`). Deux approches :
+
+**1. Utiliser la table des sessions (déjà en place)**  
+Le store MySQL crée une table (souvent `sessions`) avec `session_id`, `expires`, `data` (contenu de la session sérialisé).  
+- « Connecté » = session dont `expires` > maintenant.  
+- Pour avoir *qui* : il faut lire le champ `data` (souvent JSON) et en extraire `userId` / `username` (et éventuellement `organization_id`).  
+- **Limites** : format de `data` dépend du store ; exposer la liste des connectés nécessite une route admin protégée (ex. `requirePermission('users')`) qui fait un `sessionStore.all()` ou une requête SQL sur `sessions` puis parse `data` pour n’afficher que user_id, username, org.  
+- **Attention** : ne pas exposer le contenu brut des sessions (cookies, tokens, etc.), seulement des infos d’affichage (qui est connecté).
+
+**2. Table « présence » (last_seen)**  
+- Créer une table ex. `user_presence` : `user_id`, `session_id`, `last_seen_at`, optionnellement `ip`, `user_agent`.  
+- Dans un middleware (sur chaque requête authentifiée, ou sur une route `/api/ping` appelée toutes les 30 s par le front), faire `UPDATE user_presence SET last_seen_at = NOW() WHERE user_id = ? AND session_id = ?` (ou INSERT si absent).  
+- « Connecté » = `last_seen_at` dans les dernières 5–15 minutes.  
+- **Avantage** : requête simple, pas de parsing de session ; on peut ajouter page courante, org, etc.  
+- **Inconvénient** : une migration + un peu de code (middleware ou route ping + route admin qui lit `user_presence`).
+
+**Recommandation** :  
+- Pour un premier pas **sans migration** : utiliser la table `sessions` (option 1) et une route admin « Utilisateurs connectés » qui lit les sessions actives et extrait userId/username.  
+- Pour un affichage plus propre et évolutif (dernière page, durée, etc.) : ajouter la table présence (option 2) et un ping côté front.
+
+Une fois les **notifications temps réel (WebSocket/SSE)** en place, « qui est connecté » peut aussi être dérivé des connexions SSE/WebSocket ouvertes (liste des user_id ayant un flux actif).
+
+#### Notifications temps réel (WebSocket ou SSE)
+
+**Objectif** : informer les utilisateurs sans recharger la page (nouvelle commande reçue, rappel catalogue, message admin, etc.).
+
+**Fonctionnement général :**
+
+1. **Connexion persistante**  
+   Le navigateur ouvre une connexion longue vers le serveur (WebSocket ou SSE). Tant que la page reste ouverte, cette connexion reste active.
+
+2. **Événements côté serveur**  
+   Quand un événement se produit (ex. un client soumet un panier → nouvelle commande, ou le cron envoie un rappel catalogue), le backend **pousse** un message vers les clients connectés au lieu d’attendre qu’ils fassent une requête.
+
+3. **Réception côté frontend**  
+   Le client reçoit le message et met à jour l’interface : badge « Nouvelles commandes », toast « Rappel envoyé pour le catalogue X », mise à jour du compteur, etc.
+
+**Exemples de flux :**
+
+- **Nouvelle commande** : un utilisateur valide son panier → le serveur enregistre la commande et envoie un événement `command.created` (avec id, catalogue, etc.) → les écrans « Commandes » ouverts (admin, référent) reçoivent l’événement et mettent à jour la liste ou un badge.
+- **Rappel catalogue** : le worker envoie un email de rappel → le serveur émet `catalogue.reminder_sent` → les admins/referents connectés voient une notification.
+- **Message admin** : un admin envoie un bandeau ou un message → événement `message.broadcast` → tous les clients connectés (ou par org) affichent une alerte.
+
+**WebSocket vs SSE (Server-Sent Events) :**
+
+| Critère | SSE | WebSocket |
+|--------|-----|-----------|
+| Sens | Serveur → client uniquement | Bidirectionnel |
+| Complexité | Plus simple (HTTP, EventSource en JS) | Plus lourd (protocole dédié, Socket.io ou ws) |
+| Cas d’usage ici | Suffisant si on envoie seulement des notifications (commandes, rappels) | Utile si le client doit aussi envoyer des messages en temps réel (chat, formulaire collaboratif) |
+
+Pour des **notifications** (serveur → client), **SSE** est souvent suffisant et plus simple à intégrer (route GET qui garde la connexion ouverte, `EventSource` en frontend). WebSocket devient pertinent si on ajoute du temps réel bidirectionnel (chat, édition collaborative).
+
+**Intégration possible dans l’app actuelle :**
+
+- **Backend** : une route protégée (ex. `GET /api/notifications/stream`) qui, après `requireLogin`, garde la connexion ouverte et envoie des événements (SSE : `Content-Type: text/event-stream`, messages au format `data: {...}\n\n`). Un module « event bus » côté serveur reçoit les émissions des routes (création commande, worker rappel, etc.) et les renvoie aux streams ouverts (filtrés par org / rôle si besoin).
+- **Frontend** : sur les pages concernées (dashboard admin, liste commandes, caisse), création d’un `EventSource` (SSE) ou d’un client WebSocket qui écoute les événements et met à jour le store Pinia (ex. `commandesStore.addNewCommand(payload)`) ou affiche un toast.
+
 - Export / rapports avancés (stats, commandes, cotisation) avec planification.
 - Application mobile ou PWA pour la caisse / les commandes.
 - Intégration comptable ou facturation (export, pièces jointes).

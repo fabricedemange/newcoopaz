@@ -138,6 +138,25 @@ export async function fetchVenteDetail(venteId) {
   return response.json();
 }
 
+/** POST /api/caisse/ventes-historique/:id/annuler - Annuler une vente (remet le stock) */
+export async function annulerVente(venteId) {
+  const csrfToken = typeof window !== 'undefined' && window.CSRF_TOKEN ? window.CSRF_TOKEN : '';
+  const response = await fetch(`/api/caisse/ventes-historique/${venteId}/annuler`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'x-csrf-token': csrfToken,
+    },
+    credentials: 'include',
+    body: JSON.stringify({ _csrf: csrfToken }),
+  });
+  checkAuth(response);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+  return data;
+}
+
 // --- Caisse Historique (liste ventes + stats) ---
 /** GET /api/caisse/ventes-historique - Liste ventes avec filtres et pagination */
 export async function fetchVentesHistorique(params = {}) {
@@ -146,7 +165,7 @@ export async function fetchVentesHistorique(params = {}) {
   if (params.offset != null) search.set('offset', params.offset);
   if (params.date_debut) search.set('date_debut', params.date_debut);
   if (params.date_fin) search.set('date_fin', params.date_fin);
-  if (params.numero_ticket) search.set('numero_ticket', params.numero_ticket);
+  if (params.recherche) search.set('recherche', params.recherche);
   if (params.caissier_id != null) search.set('caissier_id', params.caissier_id);
   const response = await fetch(`/api/caisse/ventes-historique?${search}`, {
     method: 'GET',
@@ -328,6 +347,26 @@ export async function fetchStockMouvements(params = {}) {
     method: 'GET',
     headers: { Accept: 'application/json' },
     credentials: 'include',
+  });
+  checkAuth(response);
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+/** PATCH /api/caisse/products/:id/code-ean - Mise à jour du code-barres (contexte inventaire) */
+export async function updateProductCodeEan(productId, codeEan) {
+  const response = await fetch(`/api/caisse/products/${productId}/code-ean`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'csrf-token': typeof window !== 'undefined' && window.CSRF_TOKEN ? window.CSRF_TOKEN : '',
+    },
+    credentials: 'include',
+    body: JSON.stringify({ code_ean: codeEan || null }),
   });
   checkAuth(response);
   if (!response.ok) {

@@ -16,11 +16,14 @@
     <!-- Main Content -->
     <div v-else>
       <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2>Gestion des Utilisateurs</h2>
-        <button type="button" class="btn btn-success" @click="store.openCreateModal()">
-          <i class="bi bi-person-plus-fill"></i>
-          Ajouter un utilisateur
-        </button>
+        <h2 class="mb-0">Gestion des Utilisateurs</h2>
+        <div class="d-flex gap-2">
+          <BackButton />
+          <button type="button" class="btn btn-success" @click="store.openCreateModal()">
+            <i class="bi bi-person-plus-fill"></i>
+            Ajouter un utilisateur
+          </button>
+        </div>
       </div>
 
       <div class="row mb-4">
@@ -433,6 +436,7 @@
 
 <script setup>
 import { onMounted } from 'vue';
+import BackButton from '@/components/BackButton.vue';
 import { useAdminUsersStore } from '@/stores/adminUsers';
 
 const store = useAdminUsersStore();

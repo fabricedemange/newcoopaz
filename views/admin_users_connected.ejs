@@ -1,0 +1,119 @@
+<%- include('partials/header', { title: typeof title !== 'undefined' ? title : 'Utilisateurs connectés', user, role }) %>
+
+<div class="admin-content-wrapper">
+  <div class="container-fluid px-3 mt-4">
+    <div class="row">
+      <div class="col-12">
+        <h2 class="mb-2">Utilisateurs connectés</h2>
+        <p class="text-muted mb-4">Liste des utilisateurs ayant une session active (lecture de la table des sessions).</p>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-12">
+        <a href="/admin/users/vue" class="btn btn-outline-secondary mb-3">
+          <i class="bi bi-arrow-left me-2"></i>Retour à la liste des utilisateurs
+        </a>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-12">
+        <div id="connected-users-empty" class="alert alert-info" style="<%= (connectedUsers && connectedUsers.length > 0) ? 'display:none' : '' %>">
+          <i class="bi bi-info-circle me-2"></i>
+          Aucun utilisateur connecté pour le moment, ou la table des sessions n'est pas disponible.
+        </div>
+        <div id="connected-users-card" class="card" style="<%= (!connectedUsers || connectedUsers.length === 0) ? 'display:none' : '' %>">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">
+              <i class="bi bi-people-fill me-2"></i>
+              <span id="connected-users-count"><%= (connectedUsers && connectedUsers.length) || 0 %></span> utilisateur(s) connecté(s)
+            </h5>
+            <span id="sse-status" class="badge bg-success" title="Mise à jour automatique toutes les 10 s">Temps réel</span>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-hover mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Utilisateur</th>
+                    <th>Organisation</th>
+                    <th>Nb sessions</th>
+                    <th>Session active jusqu'à</th>
+                  </tr>
+                </thead>
+                <tbody id="connected-users-tbody">
+                  <% if (connectedUsers && connectedUsers.length > 0) { connectedUsers.forEach(function(u) { %>
+                    <tr>
+                      <td>
+                        <span class="fw-bold"><%= u.username %></span>
+                        <span class="text-muted small">#<%= u.userId %></span>
+                      </td>
+                      <td><%= u.organizationName || (u.organization_id ? '#' + u.organization_id : '–') %></td>
+                      <td><%= u.sessionCount %></td>
+                      <td>
+                        <% if (u.maxExpires) { %>
+                          <span class="small"><%= u.maxExpires.toLocaleString('fr-FR') %></span>
+                        <% } else { %>
+                          –
+                        <% } %>
+                      </td>
+                    </tr>
+                  <% }); } %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  var tbody = document.getElementById('connected-users-tbody');
+  var emptyEl = document.getElementById('connected-users-empty');
+  var cardEl = document.getElementById('connected-users-card');
+  var countEl = document.getElementById('connected-users-count');
+  var statusEl = document.getElementById('sse-status');
+  if (!tbody || !emptyEl || !cardEl) return;
+
+  function formatExpires(ts) {
+    if (!ts) return '–';
+    try {
+      var d = typeof ts === 'string' ? new Date(ts) : (ts && ts.getTime ? ts : null);
+      return d ? d.toLocaleString('fr-FR') : '–';
+    } catch (e) { return '–'; }
+  }
+
+  function render(list) {
+    var has = list && list.length > 0;
+    emptyEl.style.display = has ? 'none' : '';
+    cardEl.style.display = has ? '' : 'none';
+    if (countEl) countEl.textContent = (list && list.length) || 0;
+    if (!has) { tbody.innerHTML = ''; return; }
+    tbody.innerHTML = list.map(function(u) {
+      var org = u.organizationName || (u.organization_id ? '#' + u.organization_id : '–');
+      var exp = formatExpires(u.maxExpires);
+      return '<tr><td><span class="fw-bold">' + (u.username || '') + '</span> <span class="text-muted small">#' + (u.userId || '') + '</span></td><td>' + org + '</td><td>' + (u.sessionCount || 0) + '</td><td><span class="small">' + exp + '</span></td></tr>';
+    }).join('');
+  }
+
+  try {
+    var es = new EventSource('/admin/connected-users/stream');
+    es.onmessage = function(ev) {
+      try {
+        var data = JSON.parse(ev.data);
+        render(Array.isArray(data) ? data : []);
+      } catch (e) {}
+      if (statusEl) { statusEl.classList.remove('bg-warning'); statusEl.classList.add('bg-success'); statusEl.textContent = 'Temps réel'; }
+    };
+    es.onerror = function() {
+      if (statusEl) { statusEl.classList.remove('bg-success'); statusEl.classList.add('bg-warning'); statusEl.textContent = 'Reconnexion…'; }
+    };
+  } catch (e) {}
+})();
+</script>
+
+<%- include('partials/footer') %>

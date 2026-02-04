@@ -6,10 +6,13 @@
       </button>
 
       <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="bi bi-cart me-2"></i>Mes paniers en cours</h2>
-        <a href="/catalogues/vue" class="btn btn-primary">
+        <h2 class="mb-0"><i class="bi bi-cart me-2"></i>Mes paniers en cours</h2>
+        <div class="d-flex gap-2">
+          <BackButton />
+          <a href="/catalogues/vue" class="btn btn-primary">
           <i class="bi bi-plus-circle me-1"></i>Nouveau panier
         </a>
+        </div>
       </div>
 
       <div v-if="store.error" class="alert alert-danger alert-dismissible fade show">
@@ -151,6 +154,7 @@
 <script setup>
 import { usePaniersStore } from '@/stores/paniers';
 import { onMounted } from 'vue';
+import BackButton from '@/components/BackButton.vue';
 
 const store = usePaniersStore();
 

@@ -8,10 +8,13 @@
       <div v-else-if="store.error" class="alert alert-danger">{{ store.error }}</div>
       <div v-else>
         <div class="d-flex justify-content-between align-items-center mb-4">
-          <h2><i class="bi bi-person-badge me-2"></i>Rôles de l'utilisateur</h2>
-          <button @click="store.openAddModal()" class="btn btn-primary">
-            <i class="bi bi-plus-lg me-2"></i>Ajouter un rôle
-          </button>
+          <h2 class="mb-0"><i class="bi bi-person-badge me-2"></i>Rôles de l'utilisateur</h2>
+          <div class="d-flex gap-2">
+            <BackButton />
+            <button @click="store.openAddModal()" class="btn btn-primary">
+              <i class="bi bi-plus-lg me-2"></i>Ajouter un rôle
+            </button>
+          </div>
         </div>
         <div class="card mb-4">
           <div class="card-header">
@@ -122,6 +125,7 @@
 
 <script setup>
 import { onMounted } from 'vue';
+import BackButton from '@/components/BackButton.vue';
 import { useAdminUserRolesStore } from '@/stores/adminUserRoles';
 
 const store = useAdminUserRolesStore();

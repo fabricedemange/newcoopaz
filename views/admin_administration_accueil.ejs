@@ -1,0 +1,187 @@
+<%- include('partials/header', { title: typeof title !== 'undefined' ? title : 'Administration', user, role }) %>
+
+<%
+function hasAccess(requiredPermissions) {
+  if (role === 'SuperAdmin') return true;
+  if (!userPermissions || userPermissions.length === 0) return false;
+  return requiredPermissions.some(function(perm) { return userPermissions.includes(perm); });
+}
+var showGestionPanierCatalogue = hasAccess(['catalogues', 'paniers.admin', 'commandes.admin', 'catalogues.manage', 'paniers.manage', 'commandes.manage']);
+var showProduits = hasAccess(['products', 'products.manage']);
+var showCategories = hasAccess(['categories', 'categories.manage']);
+var showFournisseurs = hasAccess(['suppliers', 'suppliers.manage']);
+var showInventaire = hasAccess(['inventory_stock']);
+var showCotisations = hasAccess(['caisse.sell']);
+%>
+
+<style>
+.admin-accueil-hero {
+  background: linear-gradient(135deg, rgba(255, 235, 156, 0.4) 0%, rgba(255, 235, 156, 0.15) 50%, rgba(255, 248, 220, 0.3) 100%);
+  border-radius: 1rem;
+  border: 1px solid rgba(212, 166, 23, 0.25);
+  padding: 2rem;
+  margin-bottom: 2rem;
+}
+.admin-accueil-zone {
+  background: #fff;
+  border-radius: 1rem;
+  border: 1px solid rgba(212, 166, 23, 0.2);
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  height: 100%;
+}
+.admin-accueil-zone:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+}
+.admin-accueil-zone .zone-header {
+  background: linear-gradient(90deg, rgba(255, 235, 156, 0.5), rgba(255, 248, 220, 0.4));
+  color: #7a5e12;
+  font-weight: 600;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid rgba(212, 166, 23, 0.2);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.admin-accueil-zone .zone-header i {
+  font-size: 1.5rem;
+  opacity: 0.9;
+}
+.admin-accueil-zone .zone-body {
+  padding: 1.25rem;
+}
+.admin-accueil-zone .zone-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  color: #495057;
+  text-decoration: none;
+  border-radius: 0.5rem;
+  transition: background 0.15s ease, color 0.15s ease;
+  margin-bottom: 0.35rem;
+}
+.admin-accueil-zone .zone-link:last-child { margin-bottom: 0; }
+.admin-accueil-zone .zone-link:hover {
+  background: rgba(255, 235, 156, 0.25);
+  color: #5c4610;
+}
+.admin-accueil-zone .zone-link i {
+  width: 1.5rem;
+  text-align: center;
+  font-size: 1.1rem;
+  color: #9a7b1a;
+}
+</style>
+
+<div class="admin-content-wrapper">
+  <div class="container-fluid mt-4">
+    <div class="admin-accueil-hero">
+      <h1 class="mb-2" style="color: #7a5e12;"><i class="bi bi-gear-wide-connected me-2"></i>Administration</h1>
+      <p class="text-muted mb-0">Vue d’ensemble des outils d’administration. Accédez aux différentes zones selon vos droits.</p>
+    </div>
+
+    <div class="row g-4">
+      <!-- Zone 1 : Gestion panier & catalogue -->
+      <% if (showGestionPanierCatalogue) { %>
+      <div class="col-12 col-md-6 col-lg-4">
+        <div class="admin-accueil-zone">
+          <div class="zone-header">
+            <i class="bi bi-cart-check"></i>
+            <span>Gestion panier & catalogue</span>
+          </div>
+          <div class="zone-body">
+            <a href="/admin/dashboard/vue" class="zone-link">
+              <i class="bi bi-speedometer2"></i>
+              <span>Gestion Cdes & Paniers</span>
+            </a>
+            <a href="/admin/catalogues/vue" class="zone-link">
+              <i class="bi bi-folder"></i>
+              <span>Gestion catalogues</span>
+            </a>
+          </div>
+        </div>
+      </div>
+      <% } %>
+
+      <!-- Zone 2 : Produits, catégories, fournisseurs -->
+      <% if (showProduits || showCategories || showFournisseurs) { %>
+      <div class="col-12 col-md-6 col-lg-4">
+        <div class="admin-accueil-zone">
+          <div class="zone-header">
+            <i class="bi bi-box-seam"></i>
+            <span>Produits & référentiel</span>
+          </div>
+          <div class="zone-body">
+            <% if (showProduits) { %>
+            <a href="/admin/products/vue" class="zone-link">
+              <i class="bi bi-box-seam"></i>
+              <span>Produits</span>
+            </a>
+            <% } %>
+            <% if (showCategories) { %>
+            <a href="/admin/categories/vue" class="zone-link">
+              <i class="bi bi-tags"></i>
+              <span>Catégories</span>
+            </a>
+            <% } %>
+            <% if (showFournisseurs) { %>
+            <a href="/admin/suppliers/vue" class="zone-link">
+              <i class="bi bi-truck"></i>
+              <span>Fournisseurs</span>
+            </a>
+            <% } %>
+          </div>
+        </div>
+      </div>
+      <% } %>
+
+      <!-- Zone 3 : Inventaire -->
+      <% if (showInventaire) { %>
+      <div class="col-12 col-md-6 col-lg-4">
+        <div class="admin-accueil-zone">
+          <div class="zone-header">
+            <i class="bi bi-upc-scan"></i>
+            <span>Inventaire</span>
+          </div>
+          <div class="zone-body">
+            <a href="/caisse/inventaire" class="zone-link">
+              <i class="bi bi-upc-scan"></i>
+              <span>Inventaire & stock</span>
+            </a>
+          </div>
+        </div>
+      </div>
+      <% } %>
+
+      <!-- Zone 4 : Cotisations -->
+      <% if (showCotisations) { %>
+      <div class="col-12 col-md-6 col-lg-4">
+        <div class="admin-accueil-zone">
+          <div class="zone-header">
+            <i class="bi bi-wallet2"></i>
+            <span>Cotisations</span>
+          </div>
+          <div class="zone-body">
+            <a href="/caisse/cotisations-historique" class="zone-link">
+              <i class="bi bi-wallet2"></i>
+              <span>Historique des cotisations</span>
+            </a>
+          </div>
+        </div>
+      </div>
+      <% } %>
+    </div>
+
+    <% if (!showGestionPanierCatalogue && !showProduits && !showCategories && !showFournisseurs && !showInventaire && !showCotisations) { %>
+    <div class="alert alert-warning mt-4">
+      <i class="bi bi-exclamation-triangle me-2"></i>
+      Vous n’avez accès à aucune zone d’administration pour le moment. Contactez un administrateur pour obtenir les droits.
+    </div>
+    <% } %>
+  </div>
+</div>
+
+<%- include('partials/footer') %>

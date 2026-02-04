@@ -18,7 +18,10 @@
       <template v-else-if="store.catalogue">
         <!-- En-tête du catalogue : une colonne, titre + libellé puis ID, référent et dates avec icônes -->
         <div class="mb-4">
-          <h2 class="mb-1"><i class="bi bi-book me-2"></i>{{ store.catalogue.originalname }}</h2>
+          <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+            <h2 class="mb-1"><i class="bi bi-book me-2"></i>{{ store.catalogue.originalname }}</h2>
+            <BackButton />
+          </div>
           <p v-if="store.catalogue.description" class="text-muted mb-2">{{ store.catalogue.description }}</p>
           <div class="d-flex flex-wrap gap-3 align-items-center small text-muted">
             <span><i class="bi bi-hash me-1" title="ID catalogue"></i>ID catalogue : <strong>{{ store.catalogue.id }}</strong></span>
@@ -342,6 +345,7 @@
 <script setup>
 import { useCatalogueDetailStore } from '@/stores/catalogueDetail';
 import { onMounted, ref } from 'vue';
+import BackButton from '@/components/BackButton.vue';
 
 const store = useCatalogueDetailStore();
 const catalogueIdRef = ref(null);

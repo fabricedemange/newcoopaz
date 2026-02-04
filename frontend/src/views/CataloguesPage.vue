@@ -1,12 +1,9 @@
 <template>
   <div class="admin-content-wrapper">
     <div class="container-fluid mt-4">
-      <button class="btn btn-outline-precommandes d-md-none mb-3" @click="history.back()">
-        <i class="bi bi-arrow-left me-2"></i>Retour
-      </button>
-
       <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="text-precommandes"><i class="bi bi-book me-2"></i>Catalogues disponibles</h2>
+        <h2 class="text-precommandes mb-0"><i class="bi bi-book me-2"></i>Catalogues disponibles</h2>
+        <BackButton />
       </div>
 
       <div v-if="store.error" class="alert alert-danger alert-dismissible fade show">
@@ -183,6 +180,7 @@
 <script setup>
 import { useCataloguesStore } from '@/stores/catalogues';
 import { onMounted } from 'vue';
+import BackButton from '@/components/BackButton.vue';
 
 const store = useCataloguesStore();
 

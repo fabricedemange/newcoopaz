@@ -79,6 +79,78 @@
     transform: rotate(-90deg);
   }
 
+  /* Section avec lien dans le titre (ex. Administration → accueil) ou texte + chevron */
+  .sidebar-section-title-with-link {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .sidebar-section-title-text {
+    flex: 1;
+    min-width: 0;
+  }
+  .sidebar-section-title-link {
+    flex: 1;
+    min-width: 0;
+    text-decoration: none;
+    color: inherit;
+    padding: 0.5rem 0;
+    display: flex;
+    align-items: center;
+  }
+  .sidebar-section-title-link:hover {
+    color: inherit;
+  }
+  .sidebar-section-precommandes .sidebar-section-title-link:hover {
+    color: #1a4a7a;
+  }
+  .sidebar-section-caisse .sidebar-section-title-link:hover {
+    color: #1e4d1e;
+  }
+  .sidebar-section-administration .sidebar-section-title-link:hover {
+    color: #5c4610;
+  }
+  .sidebar-section-admin-site .sidebar-section-title-link:hover {
+    color: #6b2e00;
+  }
+  .sidebar-section-title-link.active {
+    font-weight: 600;
+  }
+  .sidebar-section-toggle {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    padding: 0.35rem;
+    cursor: pointer;
+    color: inherit;
+    border-radius: 0.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .sidebar-section-toggle:hover {
+    background: rgba(0, 0, 0, 0.06);
+  }
+  .sidebar-section-precommandes .sidebar-section-toggle:hover {
+    background: rgba(135, 206, 250, 0.25);
+  }
+  .sidebar-section-caisse .sidebar-section-toggle:hover {
+    background: rgba(144, 238, 144, 0.3);
+  }
+  .sidebar-section-administration .sidebar-section-toggle:hover {
+    background: rgba(255, 235, 156, 0.4);
+  }
+  .sidebar-section-admin-site .sidebar-section-toggle:hover {
+    background: rgba(255, 183, 77, 0.35);
+  }
+  .sidebar-section-toggle .toggle-icon {
+    font-size: 0.75rem;
+    transition: transform 0.2s ease;
+  }
+  .sidebar-section-toggle.collapsed .toggle-icon {
+    transform: rotate(-90deg);
+  }
+
   .sidebar-section-content {
     max-height: 1000px;
     overflow: hidden;
@@ -95,6 +167,46 @@
     height: 1px;
     background: linear-gradient(90deg, transparent, #dee2e6, transparent);
     margin: 0.5rem 1rem;
+  }
+
+  /* Sous-section repliable (ex. Administration > Outils) */
+  .sidebar-subsection-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #7a5e12;
+    padding: 0.4rem 1rem 0.4rem 1.25rem;
+    margin-top: 0.25rem;
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-radius: 0.35rem;
+    transition: background 0.2s ease;
+  }
+  .sidebar-subsection-title:hover {
+    background: rgba(255, 235, 156, 0.3);
+  }
+  .sidebar-subsection-title .toggle-icon {
+    font-size: 0.7rem;
+    transition: transform 0.2s ease;
+  }
+  .sidebar-subsection-title.collapsed .toggle-icon {
+    transform: rotate(-90deg);
+  }
+  .sidebar-subsection-content {
+    max-height: 800px;
+    overflow: hidden;
+    transition: max-height 0.3s ease, opacity 0.2s ease;
+    opacity: 1;
+  }
+  .sidebar-subsection-content.collapsed {
+    max-height: 0 !important;
+    opacity: 0;
+  }
+  .sidebar-subsection-content .sidebar-menu-item {
+    padding-left: 1.5rem;
+    font-size: 0.85rem;
   }
 
   .sidebar-menu-item {
@@ -441,18 +553,12 @@ function hasAccess(requiredPermissions) {
 
 <!-- Sidebar -->
 <nav class="admin-sidebar" id="adminSidebar">
-  <!-- Accueil (lien direct, pas de section) -->
-  <a href="/vue" class="sidebar-menu-item" data-path="/vue" style="border-bottom: 1px solid #dee2e6; margin-bottom: 0.25rem;">
-    <i class="bi bi-house"></i>
-    <span>Accueil</span>
-  </a>
-
-  <!-- Mon Espace : visible pour tout rôle ayant au moins une permission "utilisateur" (catalogues, paniers, commandes) -->
+  <!-- Mon Espace : lien vers accueil (/vue) + section repliable -->
   <% if (hasAccess(['catalogues.view', 'paniers.view', 'commandes.view', 'catalogues', 'paniers.admin', 'commandes.admin', 'paniers.user', 'commandes.user', 'paniers.own', 'commandes.own'])) { %>
   <div class="sidebar-section sidebar-section-precommandes">
-    <div class="sidebar-section-title" data-section="precommandes">
-      <span>Mon Espace</span>
-      <i class="bi bi-chevron-down toggle-icon"></i>
+    <div class="sidebar-section-title sidebar-section-title-with-link">
+      <a href="/vue" class="sidebar-section-title-link sidebar-menu-item" data-path="/vue">Mon Espace</a>
+      <button type="button" class="sidebar-section-toggle" data-section="precommandes" aria-label="Ouvrir/Fermer le menu"><i class="bi bi-chevron-down toggle-icon"></i></button>
     </div>
     <div class="sidebar-section-content" data-section-content="precommandes">
       <% if (hasAccess(['catalogues.view', 'catalogues', 'paniers.admin', 'commandes.admin', 'paniers.user'])) { %>
@@ -484,9 +590,9 @@ function hasAccess(requiredPermissions) {
   <!-- Gestion de la Caisse -->
   <% if (hasAccess(['caisse.sell'])) { %>
   <div class="sidebar-section sidebar-section-caisse">
-    <div class="sidebar-section-title" data-section="gestion-caisse">
-      <span>Gestion de la Caisse</span>
-      <i class="bi bi-chevron-down toggle-icon"></i>
+    <div class="sidebar-section-title sidebar-section-title-with-link">
+      <a href="/caisse/accueil" class="sidebar-section-title-link sidebar-menu-item" data-path="/caisse/accueil">Gestion de la Caisse</a>
+      <button type="button" class="sidebar-section-toggle" data-section="gestion-caisse" aria-label="Ouvrir/Fermer le menu"><i class="bi bi-chevron-down toggle-icon"></i></button>
     </div>
     <div class="sidebar-section-content" data-section-content="gestion-caisse">
       <a href="/caisse" class="sidebar-menu-item" data-path="/caisse">
@@ -504,19 +610,23 @@ function hasAccess(requiredPermissions) {
   <!-- Administration : gestion complète (catalogues/paniers/commandes admin, produits, catégories, fournisseurs, inventaire et stock) -->
   <% if (hasAccess(['catalogues', 'paniers.admin', 'commandes.admin', 'catalogues.manage', 'paniers.manage', 'commandes.manage', 'products', 'categories', 'suppliers', 'products.manage', 'categories.manage', 'suppliers.manage', 'inventory_stock'])) { %>
   <div class="sidebar-section sidebar-section-administration">
-    <div class="sidebar-section-title collapsed" data-section="administration">
-      <span>Administration</span>
-      <i class="bi bi-chevron-down toggle-icon"></i>
+    <div class="sidebar-section-title sidebar-section-title-with-link">
+      <a href="/admin/administration" class="sidebar-section-title-link sidebar-menu-item" data-path="/admin/administration">Administration</a>
+      <button type="button" class="sidebar-section-toggle collapsed" data-section="administration" aria-label="Ouvrir/Fermer le menu"><i class="bi bi-chevron-down toggle-icon"></i></button>
     </div>
     <div class="sidebar-section-content collapsed" data-section-content="administration">
-      <!-- Inventaire et stock -->
+      <% if (hasAccess(['caisse.sell'])) { %>
+      <a href="/caisse/cotisations-historique" class="sidebar-menu-item" data-path="/caisse/cotisations-historique">
+        <i class="bi bi-wallet2"></i>
+        <span>Historique des cotisations</span>
+      </a>
+      <% } %>
       <% if (hasAccess(['inventory_stock'])) { %>
       <a href="/caisse/inventaire" class="sidebar-menu-item" data-path="/caisse/inventaire">
         <i class="bi bi-upc-scan"></i>
         <span>Inventaire</span>
       </a>
       <% } %>
-      <!-- Gestion Cdes & Paniers (en tête) -->
       <% if (hasAccess(['catalogues', 'paniers.admin', 'commandes.admin', 'catalogues.manage', 'paniers.manage', 'commandes.manage'])) { %>
       <a href="/admin/dashboard/vue" class="sidebar-menu-item sidebar-menu-admin" data-path="/admin/dashboard/vue">
         <i class="bi bi-speedometer2"></i>
@@ -527,7 +637,6 @@ function hasAccess(requiredPermissions) {
         <span>Gestion catalogues</span>
       </a>
       <% } %>
-      <!-- Produits -->
       <% if (hasAccess(['products'])) { %>
       <a href="/admin/products/vue" class="sidebar-menu-item" data-path="/admin/products">
         <i class="bi bi-box-seam"></i>
@@ -553,16 +662,19 @@ function hasAccess(requiredPermissions) {
   <!-- Admin Site : réservé aux vrais admins (pas reports.view_dashboard / rôle Utilisateur) -->
   <% if (hasAccess(['users', 'roles', 'bandeaux', 'organizations', 'admin']) || hasAccess(['reports', 'reports.view_analytics', 'reports.export'])) { %>
   <div class="sidebar-section sidebar-section-admin-site">
-    <div class="sidebar-section-title collapsed" data-section="admin-site">
-      <span>Admin Site</span>
-      <i class="bi bi-chevron-down toggle-icon"></i>
+    <div class="sidebar-section-title sidebar-section-title-with-link">
+      <a href="/admin/site" class="sidebar-section-title-link sidebar-menu-item" data-path="/admin/site">Admin Site</a>
+      <button type="button" class="sidebar-section-toggle collapsed" data-section="admin-site" aria-label="Ouvrir/Fermer le menu"><i class="bi bi-chevron-down toggle-icon"></i></button>
     </div>
     <div class="sidebar-section-content collapsed" data-section-content="admin-site">
-      <!-- Utilisateurs & Rôles -->
       <% if (hasAccess(['users', 'roles'])) { %>
       <a href="/admin/users/vue" class="sidebar-menu-item" data-path="/admin/users/vue">
         <i class="bi bi-people"></i>
         <span>Utilisateurs</span>
+      </a>
+      <a href="/admin/connected-users" class="sidebar-menu-item" data-path="/admin/connected-users">
+        <i class="bi bi-person-check"></i>
+        <span>Utilisateurs connectés</span>
       </a>
       <a href="/admin/roles/vue" class="sidebar-menu-item" data-path="/admin/roles">
         <i class="bi bi-shield-check"></i>
@@ -574,6 +686,12 @@ function hasAccess(requiredPermissions) {
       <a href="/admin/stats" class="sidebar-menu-item" data-path="/admin/stats">
         <i class="bi bi-bar-chart-line"></i>
         <span>Statistiques</span>
+      </a>
+      <% } %>
+      <% if (hasAccess(['catalogues', 'paniers.admin', 'commandes.admin'])) { %>
+      <a href="/admin/dashboard-temps-reel" class="sidebar-menu-item" data-path="/admin/dashboard-temps-reel">
+        <i class="bi bi-broadcast"></i>
+        <span>Tableau de bord temps réel</span>
       </a>
       <% } %>
       <% if (hasAccess(['audit_logs'])) { %>
@@ -772,9 +890,11 @@ function hasAccess(requiredPermissions) {
     });
   });
 
-  // Auto-expand section containing active item
+  // Auto-expand section containing active item (uniquement si l'actif est un lien du contenu, pas le lien-titre accueil)
   const activeItem = document.querySelector('.sidebar-menu-item.active');
   if (activeItem) {
+    const isTitleLink = activeItem.classList.contains('sidebar-section-title-link');
+    if (isTitleLink) return;
     const section = activeItem.closest('.sidebar-section');
     if (section) {
       const title = section.querySelector('[data-section]');

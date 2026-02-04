@@ -118,5 +118,31 @@ export const useAdminTraceStore = defineStore('adminTrace', {
       if (this.sortColumn !== column) return '';
       return this.sortDirection === 'asc' ? 'bi-arrow-up' : 'bi-arrow-down';
     },
+    /**
+     * Affiche la requête avec les paramètres substitués.
+     * - Si params vide : query contient déjà la requête complète (nouveau format).
+     * - Si params non vide : on remplace chaque ? dans query par la valeur correspondante (ancien format).
+     */
+    traceQueryDisplay(trace) {
+      const q = String(trace?.query || '').trim();
+      const p = String(trace?.params || '').trim();
+      if (!p) return q;
+      const paramList = p.split(/\s*\/\/\s*/);
+      let out = q;
+      for (let i = 0; i < paramList.length; i++) {
+        const pos = out.indexOf('?');
+        if (pos === -1) break;
+        const raw = paramList[i];
+        const lower = (raw || '').toString().toLowerCase();
+        let val;
+        if (lower === 'null' || raw === '') val = 'NULL';
+        else if (lower === 'true') val = '1';
+        else if (lower === 'false') val = '0';
+        else if (/^-?\d+(\.\d+)?$/.test(String(raw).trim())) val = String(raw).trim();
+        else val = "'" + String(raw).replace(/'/g, "''") + "'";
+        out = out.slice(0, pos) + val + out.slice(pos + 1);
+      }
+      return out;
+    },
   },
 });

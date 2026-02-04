@@ -28,6 +28,83 @@ const {
 } = require("../utils/db-helpers");
 const { renderAdminView } = require("../utils/view-helpers");
 const { validateCatalogOwnership } = require("../middleware/middleware");
+const { getConnectedUsers } = require("../utils/connected-users");
+
+/** Données pour le dashboard temps réel (commandes récentes, ventes du jour, file email). Réservé aux droits catalogues + admin pour email. */
+async function getDashboardReelData(req) {
+  const orgId = getCurrentOrgId(req);
+  const viewAllOrgs = await hasPermission(req, "organizations.view_all");
+  const canSeeEmail = await hasPermission(req, "admin");
+
+  const commandeFilter = viewAllOrgs ? "" : " AND u.organization_id = ?";
+  const commandeParams = viewAllOrgs ? [] : [orgId];
+  const commandesSql = `
+    SELECT p.id, p.user_id, p.created_at, p.note,
+      u.username, u.organization_id, o.name AS organization_name,
+      cf.originalname AS catalogue_nom, cf.date_livraison
+    FROM paniers p
+    JOIN users u ON p.user_id = u.id
+    LEFT JOIN organizations o ON u.organization_id = o.id
+    JOIN catalog_files cf ON p.catalog_file_id = cf.id
+    WHERE p.is_submitted = 1 AND cf.is_archived IN (0,2)
+      AND p.created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)${commandeFilter}
+    ORDER BY p.created_at DESC
+    LIMIT 50
+  `;
+
+  const ventesSql = `
+    SELECT COUNT(*) AS nb, COALESCE(SUM(v.montant_ttc), 0) AS total
+    FROM ventes v
+    WHERE v.organization_id = ? AND v.statut = 'complete'
+      AND DATE(v.created_at) = CURDATE()
+  `;
+
+  const emailSql = `
+    SELECT status, COUNT(*) AS cnt FROM email_queue GROUP BY status
+  `;
+
+  return new Promise((resolve, reject) => {
+    db.query(commandesSql, commandeParams, (err1, commandesRows) => {
+      if (err1) {
+        logger.warn("Dashboard reel commandes", { error: err1.message });
+      }
+      const commandes = (commandesRows || []).map((r) => ({
+        id: r.id,
+        username: r.username,
+        organization_name: r.organization_name,
+        catalogue_nom: r.catalogue_nom,
+        date_livraison: r.date_livraison,
+        created_at: r.created_at,
+      }));
+
+      db.query(ventesSql, [orgId], (err2, ventesRows) => {
+        if (err2) logger.warn("Dashboard reel ventes", { error: err2.message });
+        const row = (ventesRows && ventesRows[0]) || {};
+        const ventes = {
+          count: Number(row.nb) || 0,
+          total: parseFloat(row.total) || 0,
+        };
+
+        if (!canSeeEmail) {
+          return resolve({ commandes, ventes, email: null });
+        }
+        db.query(emailSql, [], (err3, emailRows) => {
+          if (err3) logger.warn("Dashboard reel email", { error: err3.message });
+          const byStatus = {};
+          (emailRows || []).forEach((r) => { byStatus[r.status] = Number(r.cnt) || 0; });
+          const email = {
+            pending: byStatus.pending || 0,
+            sending: byStatus.sending || 0,
+            sent: byStatus.sent || 0,
+            error: byStatus.error || 0,
+          };
+          resolve({ commandes, ventes, email });
+        });
+      });
+    });
+  });
+}
+
 const {
   handleDatabaseError,
   handleQueryError,
@@ -364,6 +441,130 @@ router.post("/impersonate/stop", requireActiveImpersonation, (req, res) => {
 // Liste utilisateurs - Redirection vers Vue+Vite
 router.get("/users", requirePermission('users'), (req, res) => {
   res.redirect("/admin/users/vue");
+});
+
+// Redirection ancienne URL → nouvelle (évite 404 si lien en cache / favori)
+router.get("/users/connected", requirePermission('users'), (req, res) => {
+  res.redirect(301, "/admin/connected-users");
+});
+
+// Stream SSE : mise à jour en temps réel de la liste des utilisateurs connectés
+router.get("/connected-users/stream", requirePermission('users'), (req, res, next) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders();
+
+  const send = (data) => {
+    try {
+      res.write("data: " + JSON.stringify(data) + "\n\n");
+      if (typeof res.flush === "function") res.flush();
+    } catch (e) {
+      logger.warn("SSE write error", { error: e.message });
+    }
+  };
+
+  const intervalMs = 10000; // 10 secondes
+  const tick = () => {
+    if (process.env.NODE_ENV === "test") return send([]);
+    getConnectedUsers((err, list) => {
+      if (err) {
+        logger.warn("SSE getConnectedUsers error", { error: err.message });
+        send([]);
+      } else {
+        send(list);
+      }
+    });
+  };
+
+  tick();
+  const interval = setInterval(tick, intervalMs);
+
+  req.on("close", () => {
+    clearInterval(interval);
+    res.end();
+  });
+});
+
+// Utilisateurs actuellement connectés (sessions actives en base)
+// Chemin /connected-users pour éviter tout conflit avec /users/:id
+router.get("/connected-users", requirePermission('users'), (req, res, next) => {
+  const render = (connectedUsers = []) => {
+    renderAdminView(res, "admin_users_connected", {
+      title: "Utilisateurs connectés",
+      connectedUsers,
+      hideSidebar: false,
+    });
+  };
+  if (process.env.NODE_ENV === "test") return render([]);
+  getConnectedUsers((err, list) => {
+    if (err) logger.warn("Sessions table not available for connected users", { error: err.message });
+    render(err ? [] : list);
+  });
+});
+
+// ========== Dashboard temps réel (commandes, ventes, email) ==========
+// Stream SSE : mise à jour toutes les 10 s
+router.get("/dashboard-temps-reel/stream", requirePermission('catalogues'), async (req, res, next) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders();
+
+  const send = (data) => {
+    try {
+      res.write("data: " + JSON.stringify(data) + "\n\n");
+      if (typeof res.flush === "function") res.flush();
+    } catch (e) {
+      logger.warn("SSE dashboard stream write error", { error: e.message });
+    }
+  };
+
+  const intervalMs = 10000;
+  const tick = async () => {
+    if (process.env.NODE_ENV === "test") return send({ commandes: [], ventes: { count: 0, total: 0 }, email: null });
+    try {
+      const data = await getDashboardReelData(req);
+      send(data);
+    } catch (err) {
+      logger.warn("Dashboard reel data error", { error: err.message });
+      send({ commandes: [], ventes: { count: 0, total: 0 }, email: null });
+    }
+  };
+
+  tick();
+  const interval = setInterval(tick, intervalMs);
+  req.on("close", () => {
+    clearInterval(interval);
+    res.end();
+  });
+});
+
+// Page dashboard temps réel
+router.get("/dashboard-temps-reel", requirePermission('catalogues'), async (req, res, next) => {
+  try {
+    const data = process.env.NODE_ENV === "test"
+      ? { commandes: [], ventes: { count: 0, total: 0 }, email: null }
+      : await getDashboardReelData(req);
+    renderAdminView(res, "admin_dashboard_temps_reel", {
+      title: "Tableau de bord temps réel",
+      commandes: data.commandes || [],
+      ventes: data.ventes || { count: 0, total: 0 },
+      email: data.email,
+      hideSidebar: false,
+    });
+  } catch (err) {
+    logger.warn("Dashboard temps reel page error", { error: err.message });
+    renderAdminView(res, "admin_dashboard_temps_reel", {
+      title: "Tableau de bord temps réel",
+      commandes: [],
+      ventes: { count: 0, total: 0 },
+      email: null,
+      hideSidebar: false,
+    });
+  }
 });
 
 // Formulaire nouvel utilisateur — redirige vers la liste avec modal
@@ -3104,6 +3305,31 @@ router.get("/bandeaux", requirePermission('users'), (req, res) => {
 // ============================================
 // MENU ADMIN
 // ============================================
+
+// Accueil Administration - page par zones (gestion panier/catalogue, produits, inventaire, cotisations)
+router.get(
+  "/administration",
+  requireAnyPermission([
+    "catalogues", "paniers.admin", "commandes.admin", "catalogues.manage", "paniers.manage", "commandes.manage",
+    "products", "categories", "suppliers", "products.manage", "categories.manage", "suppliers.manage",
+    "inventory_stock", "caisse.sell"
+  ]),
+  (req, res) => {
+    renderAdminView(res, "admin_administration_accueil", { title: "Administration" });
+  }
+);
+
+// Accueil Admin Site - page par zones (utilisateurs/rôles, temps réel & monitoring, bandeaux/orga)
+router.get(
+  "/site",
+  requireAnyPermission([
+    "users", "roles", "bandeaux", "organizations", "admin",
+    "reports", "reports.view_analytics", "reports.export"
+  ]),
+  (req, res) => {
+    renderAdminView(res, "admin_site_accueil", { title: "Admin Site" });
+  }
+);
 
 // Menu admin - Redirection vers dashboard Vue+Vite
 router.get("/menu", requirePermission('catalogues'), (req, res) => {

@@ -16,10 +16,13 @@
     <!-- Main Content -->
     <div v-else>
       <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="bi bi-bar-chart-fill me-2"></i>Statistiques générales</h2>
-        <button type="button" class="btn btn-outline-primary" @click="store.loadStats()">
+        <h2 class="mb-0"><i class="bi bi-bar-chart-fill me-2"></i>Statistiques générales</h2>
+        <div class="d-flex gap-2">
+          <BackButton />
+          <button type="button" class="btn btn-outline-primary" @click="store.loadStats()">
           <i class="bi bi-arrow-clockwise me-2"></i>Actualiser
         </button>
+        </div>
       </div>
 
       <!-- Stats Cards (toujours visibles) -->
@@ -339,6 +342,7 @@
 
 <script setup>
 import { onMounted, computed } from 'vue';
+import BackButton from '@/components/BackButton.vue';
 import { useAdminStatsStore } from '@/stores/adminStats';
 
 const store = useAdminStatsStore();

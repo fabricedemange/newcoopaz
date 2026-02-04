@@ -88,10 +88,13 @@ router.get("/", requirePermission("caisse.sell", { json: true }), async (req, re
       date_debut,
       date_fin,
       numero_ticket,
+      recherche,
       caissier_id,
       limit = 50,
       offset = 0
     } = req.query;
+
+    const searchTerm = (recherche || numero_ticket || '').trim();
 
     let query = `
       SELECT
@@ -108,7 +111,9 @@ router.get("/", requirePermission("caisse.sell", { json: true }), async (req, re
         u_caissier.username as caissier_nom,
         u_client.username as client_nom,
         COUNT(DISTINCT lv.id) as nb_lignes,
-        MAX(CASE WHEN lv.nom_produit LIKE '%(cde #%' AND lv.nom_produit LIKE '%cat #%' THEN 1 ELSE 0 END) AS catalogues_oui
+        MAX(CASE WHEN lv.nom_produit LIKE '%(cde #%' AND lv.nom_produit LIKE '%cat #%' THEN 1 ELSE 0 END) AS catalogues_oui,
+        MAX(CASE WHEN lv.nom_produit LIKE '%Cotisation mensuelle%' THEN 1 ELSE 0 END) AS cotisation_oui,
+        MAX(CASE WHEN (lv.produit_id IS NULL OR lv.produit_id = 0) AND (lv.nom_produit IS NULL OR lv.nom_produit NOT LIKE '%Cotisation mensuelle%') THEN 1 ELSE 0 END) AS avoir_oui
       FROM ventes v
       LEFT JOIN users u_caissier ON v.created_by = u_caissier.id
       LEFT JOIN users u_client ON v.adherent_id = u_client.id
@@ -131,10 +136,18 @@ router.get("/", requirePermission("caisse.sell", { json: true }), async (req, re
       params.push(date_fin + ' 23:59:59');
     }
 
-    // Filtre numéro ticket
-    if (numero_ticket) {
-      query += ` AND v.numero_ticket LIKE ?`;
-      params.push(`%${numero_ticket}%`);
+    // Recherche globale (ticket, date, caissier, client, montant)
+    if (searchTerm) {
+      const likeArg = '%' + searchTerm + '%';
+      query += ` AND (
+        v.numero_ticket LIKE ?
+        OR u_caissier.username LIKE ?
+        OR u_client.username LIKE ?
+        OR v.nom_client LIKE ?
+        OR CAST(v.montant_ttc AS CHAR) LIKE ?
+        OR v.created_at LIKE ?
+      )`;
+      params.push(likeArg, likeArg, likeArg, likeArg, likeArg, likeArg);
     }
 
     // Filtre caissier
@@ -157,6 +170,7 @@ router.get("/", requirePermission("caisse.sell", { json: true }), async (req, re
     let countQuery = `
       SELECT COUNT(DISTINCT v.id) as total
       FROM ventes v
+      ${searchTerm ? 'LEFT JOIN users u_caissier ON v.created_by = u_caissier.id LEFT JOIN users u_client ON v.adherent_id = u_client.id' : ''}
       WHERE v.organization_id = ?
         AND v.statut = 'complete'
     `;
@@ -170,9 +184,17 @@ router.get("/", requirePermission("caisse.sell", { json: true }), async (req, re
       countQuery += ` AND v.created_at <= ?`;
       countParams.push(date_fin + ' 23:59:59');
     }
-    if (numero_ticket) {
-      countQuery += ` AND v.numero_ticket LIKE ?`;
-      countParams.push(`%${numero_ticket}%`);
+    if (searchTerm) {
+      const likeArg = '%' + searchTerm + '%';
+      countQuery += ` AND (
+        v.numero_ticket LIKE ?
+        OR u_caissier.username LIKE ?
+        OR u_client.username LIKE ?
+        OR v.nom_client LIKE ?
+        OR CAST(v.montant_ttc AS CHAR) LIKE ?
+        OR v.created_at LIKE ?
+      )`;
+      countParams.push(likeArg, likeArg, likeArg, likeArg, likeArg, likeArg);
     }
     if (caissier_id) {
       countQuery += ` AND v.created_by = ?`;
@@ -263,6 +285,60 @@ router.post("/:id/envoyer-facture", requirePermission("caisse.sell", { json: tru
   } catch (error) {
     console.error('Error envoyer-facture:', error);
     return res.status(500).json({ success: false, error: error.message || 'Erreur lors de l\'envoi' });
+  }
+});
+
+/**
+ * POST /api/caisse/ventes-historique/:id/annuler
+ * Annule une vente (statut → cancelled) et remet les quantités en stock.
+ */
+router.post("/:id/annuler", requirePermission("caisse.sell", { json: true }), async (req, res) => {
+  try {
+    const venteId = parseInt(req.params.id);
+    const orgId = getCurrentOrgId(req);
+    const userId = req.session?.userId;
+
+    const ventes = await queryPromise(
+      `SELECT id, organization_id, statut, numero_ticket FROM ventes
+       WHERE id = ? AND organization_id = ? AND statut = 'complete'`,
+      [venteId, orgId]
+    );
+    if (ventes.length === 0) {
+      return res.status(404).json({ success: false, error: "Vente non trouvée ou déjà annulée." });
+    }
+
+    const lignes = await queryPromise(
+      `SELECT id, produit_id, quantite, nom_produit FROM lignes_vente WHERE vente_id = ?`,
+      [venteId]
+    );
+
+    for (const l of lignes || []) {
+      const isAvoirOuCotisation =
+        l.produit_id == null ||
+        l.produit_id === 0 ||
+        (l.nom_produit || "").includes("Cotisation mensuelle");
+      if (isAvoirOuCotisation) continue;
+      const qte = parseFloat(l.quantite) || 0;
+      if (qte <= 0) continue;
+      await queryPromise(
+        `UPDATE products SET stock = stock + ? WHERE id = ? AND organization_id = ?`,
+        [qte, l.produit_id, orgId]
+      );
+    }
+
+    await queryPromise(
+      `UPDATE ventes SET statut = 'cancelled' WHERE id = ? AND organization_id = ?`,
+      [venteId, orgId]
+    );
+
+    res.json({
+      success: true,
+      message: "Vente annulée. Les quantités ont été remises en stock.",
+      vente_id: venteId,
+    });
+  } catch (error) {
+    console.error("Error annuler vente:", error);
+    res.status(500).json({ success: false, error: error.message || "Erreur lors de l'annulation." });
   }
 });
 

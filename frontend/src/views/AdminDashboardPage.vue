@@ -9,7 +9,9 @@
         <div class="col-12">
           <div class="d-flex justify-content-between align-items-center mb-4">
             <h2 class="mb-0"><i class="bi bi-speedometer2 me-2"></i>Dashboard Administrateur</h2>
-            <div v-if="store.referentScopeActive" class="d-none d-md-block">
+            <div class="d-flex gap-2 align-items-center">
+              <BackButton />
+              <div v-if="store.referentScopeActive" class="d-none d-md-block">
               <div class="form-check form-switch mb-0">
                 <input
                   id="scopeToggle"
@@ -21,6 +23,7 @@
                 <label class="form-check-label" for="scopeToggle">
                   {{ store.showAllScope ? 'Voir tous' : 'Mes éléments' }}
                 </label>
+              </div>
               </div>
             </div>
           </div>
@@ -221,6 +224,7 @@
 <script setup>
 import { useAdminDashboardStore } from '@/stores/adminDashboard';
 import { ref, onMounted, watch } from 'vue';
+import BackButton from '@/components/BackButton.vue';
 
 const store = useAdminDashboardStore();
 const activeSection = ref('catalogues');

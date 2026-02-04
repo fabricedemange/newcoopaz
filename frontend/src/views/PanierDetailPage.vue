@@ -19,7 +19,10 @@
         <!-- En-tête -->
         <div class="row mb-4">
           <div class="col">
-            <h2><i class="bi bi-cart3 me-2"></i>{{ titrePanier }}</h2>
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+              <h2 class="mb-0"><i class="bi bi-cart3 me-2"></i>{{ titrePanier }}</h2>
+              <BackButton />
+            </div>
             <div class="card">
               <div class="card-body">
                 <dl class="row mb-0">
@@ -263,6 +266,7 @@
 <script setup>
 import { usePanierDetailStore } from '@/stores/panierDetail';
 import { onMounted, ref, computed } from 'vue';
+import BackButton from '@/components/BackButton.vue';
 
 const store = usePanierDetailStore();
 const panierIdRef = ref(null);

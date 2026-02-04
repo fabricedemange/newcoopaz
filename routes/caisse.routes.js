@@ -3,6 +3,14 @@ const router = express.Router();
 const { requirePermission } = require("../middleware/rbac.middleware");
 const { renderAdminView } = require("../utils/view-helpers");
 
+// GET /caisse/accueil - Page d'accueil Gestion de la Caisse (liens Caisse, Historique + chiffres du jour)
+router.get("/accueil", requirePermission("caisse.sell"), (req, res) => {
+  renderAdminView(res, "caisse_accueil", {
+    title: "Gestion de la Caisse",
+    pageTitle: "Gestion de la Caisse"
+  });
+});
+
 // GET /caisse - Page caisse
 router.get("/", requirePermission("caisse.sell"), (req, res) => {
   renderAdminView(res, "caisse_vue", {
@@ -14,6 +22,14 @@ router.get("/", requirePermission("caisse.sell"), (req, res) => {
 router.get("/historique", requirePermission("caisse.sell"), (req, res) => {
   renderAdminView(res, "caisse_historique_vue", {
     pageTitle: "Historique des ventes"
+  });
+});
+
+// GET /caisse/cotisations-historique - Historique des paiements de cotisations (tout le monde)
+router.get("/cotisations-historique", requirePermission("caisse.sell"), (req, res) => {
+  renderAdminView(res, "caisse_cotisations_historique_vue", {
+    title: "Historique des cotisations",
+    pageTitle: "Historique des cotisations"
   });
 });
 

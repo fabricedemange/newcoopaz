@@ -1,0 +1,185 @@
+<%- include('partials/header', { title: typeof title !== 'undefined' ? title : 'Admin Site', user, role }) %>
+
+<%
+function hasAccess(requiredPermissions) {
+  if (role === 'SuperAdmin') return true;
+  if (!userPermissions || userPermissions.length === 0) return false;
+  return requiredPermissions.some(function(perm) { return userPermissions.includes(perm); });
+}
+var showUsersRoles = hasAccess(['users', 'roles']);
+var showTempsReel = hasAccess(['catalogues', 'paniers.admin', 'commandes.admin']);
+var showStats = hasAccess(['reports', 'reports.view_analytics', 'reports.export']);
+var showTrace = hasAccess(['audit_logs']);
+var showEmailQueue = hasAccess(['admin']);
+var showBandeauxOrga = hasAccess(['bandeaux', 'organizations', 'admin']);
+%>
+
+<style>
+.admin-site-hero {
+  background: linear-gradient(135deg, rgba(255, 183, 77, 0.35) 0%, rgba(255, 183, 77, 0.12) 50%, rgba(255, 228, 181, 0.25) 100%);
+  border-radius: 1rem;
+  border: 1px solid rgba(230, 126, 34, 0.3);
+  padding: 2rem;
+  margin-bottom: 2rem;
+}
+.admin-site-zone {
+  background: #fff;
+  border-radius: 1rem;
+  border: 1px solid rgba(230, 126, 34, 0.2);
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  height: 100%;
+}
+.admin-site-zone:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+}
+.admin-site-zone .zone-header {
+  background: linear-gradient(90deg, rgba(255, 183, 77, 0.45), rgba(255, 228, 181, 0.35));
+  color: #a54a00;
+  font-weight: 600;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid rgba(230, 126, 34, 0.2);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.admin-site-zone .zone-header i {
+  font-size: 1.5rem;
+  opacity: 0.9;
+}
+.admin-site-zone .zone-body {
+  padding: 1.25rem;
+}
+.admin-site-zone .zone-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  color: #495057;
+  text-decoration: none;
+  border-radius: 0.5rem;
+  transition: background 0.15s ease, color 0.15s ease;
+  margin-bottom: 0.35rem;
+}
+.admin-site-zone .zone-link:last-child { margin-bottom: 0; }
+.admin-site-zone .zone-link:hover {
+  background: rgba(255, 183, 77, 0.2);
+  color: #6b2e00;
+}
+.admin-site-zone .zone-link i {
+  width: 1.5rem;
+  text-align: center;
+  font-size: 1.1rem;
+  color: #b85a0a;
+}
+</style>
+
+<div class="admin-content-wrapper">
+  <div class="container-fluid mt-4">
+    <div class="admin-site-hero">
+      <h1 class="mb-2 text-admin-site"><i class="bi bi-building-gear me-2"></i>Admin Site</h1>
+      <p class="text-muted mb-0">Vue d’ensemble des outils d’administration du site. Utilisateurs, monitoring et configuration.</p>
+    </div>
+
+    <div class="row g-4">
+      <!-- Zone 1 : Utilisateurs, rôles, utilisateurs connectés -->
+      <% if (showUsersRoles) { %>
+      <div class="col-12 col-md-6 col-lg-4">
+        <div class="admin-site-zone">
+          <div class="zone-header">
+            <i class="bi bi-people"></i>
+            <span>Utilisateurs & rôles</span>
+          </div>
+          <div class="zone-body">
+            <a href="/admin/users/vue" class="zone-link">
+              <i class="bi bi-people"></i>
+              <span>Utilisateurs</span>
+            </a>
+            <a href="/admin/connected-users" class="zone-link">
+              <i class="bi bi-person-check"></i>
+              <span>Utilisateurs connectés</span>
+            </a>
+            <a href="/admin/roles/vue" class="zone-link">
+              <i class="bi bi-shield-check"></i>
+              <span>Rôles & Permissions</span>
+            </a>
+          </div>
+        </div>
+      </div>
+      <% } %>
+
+      <!-- Zone 2 : Temps réel, file email, statistiques, traces -->
+      <% if (showTempsReel || showStats || showTrace || showEmailQueue) { %>
+      <div class="col-12 col-md-6 col-lg-4">
+        <div class="admin-site-zone">
+          <div class="zone-header">
+            <i class="bi bi-broadcast"></i>
+            <span>Temps réel & monitoring</span>
+          </div>
+          <div class="zone-body">
+            <% if (showTempsReel) { %>
+            <a href="/admin/dashboard-temps-reel" class="zone-link">
+              <i class="bi bi-broadcast"></i>
+              <span>Tableau de bord temps réel</span>
+            </a>
+            <% } %>
+            <% if (showEmailQueue) { %>
+            <a href="/admin/email-queue" class="zone-link">
+              <i class="bi bi-envelope-paper"></i>
+              <span>File d'attente email</span>
+            </a>
+            <% } %>
+            <% if (showStats) { %>
+            <a href="/admin/stats" class="zone-link">
+              <i class="bi bi-bar-chart-line"></i>
+              <span>Statistiques</span>
+            </a>
+            <% } %>
+            <% if (showTrace) { %>
+            <a href="/admin/trace" class="zone-link">
+              <i class="bi bi-activity"></i>
+              <span>Traces de MAJ</span>
+            </a>
+            <% } %>
+          </div>
+        </div>
+      </div>
+      <% } %>
+
+      <!-- Zone 3 : Bandeaux, organisations -->
+      <% if (showBandeauxOrga) { %>
+      <div class="col-12 col-md-6 col-lg-4">
+        <div class="admin-site-zone">
+          <div class="zone-header">
+            <i class="bi bi-megaphone"></i>
+            <span>Configuration</span>
+          </div>
+          <div class="zone-body">
+            <a href="/admin/bandeaux" class="zone-link">
+              <i class="bi bi-megaphone"></i>
+              <span>Bandeaux d'info</span>
+            </a>
+            <% if (hasAccess(['organizations'])) { %>
+            <a href="/admin/organizations" class="zone-link">
+              <i class="bi bi-building"></i>
+              <span>Organisations</span>
+            </a>
+            <% } %>
+          </div>
+        </div>
+      </div>
+      <% } %>
+    </div>
+
+    <% if (!showUsersRoles && !showTempsReel && !showStats && !showTrace && !showEmailQueue && !showBandeauxOrga) { %>
+    <div class="alert alert-warning mt-4">
+      <i class="bi bi-exclamation-triangle me-2"></i>
+      Vous n’avez accès à aucune zone Admin Site pour le moment. Contactez un administrateur pour obtenir les droits.
+    </div>
+    <% } %>
+  </div>
+</div>
+
+<%- include('partials/footer') %>

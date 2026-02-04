@@ -1,0 +1,274 @@
+<%- include('partials/header', { title: typeof title !== 'undefined' ? title : 'Historique des cotisations', user, role }) %>
+
+<div class="admin-content-wrapper">
+  <div class="container-fluid mt-4">
+    <div class="row mb-4">
+      <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+          <h2 class="text-caisse mb-0"><i class="bi bi-wallet2 me-2"></i>Historique des paiements de cotisations</h2>
+          <a href="/caisse" class="btn btn-outline-caisse">
+            <i class="bi bi-arrow-left me-2"></i>Retour à la caisse
+          </a>
+        </div>
+        <p class="text-muted">Tous les paiements de cotisation mensuelle (5–15 €) enregistrés en caisse.</p>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header card-header-caisse">
+        <h5 class="mb-0"><i class="bi bi-funnel me-2"></i>Filtres</h5>
+      </div>
+      <div class="card-body">
+        <div class="row g-3 align-items-end">
+          <div class="col-md-3">
+            <label class="form-label">Date début</label>
+            <input type="date" id="date-debut" class="form-control" />
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Date fin</label>
+            <input type="date" id="date-fin" class="form-control" />
+          </div>
+          <div class="col-md-4 d-flex gap-2">
+            <button type="button" class="btn btn-caisse" id="btn-rechercher">
+              <i class="bi bi-search me-1"></i>Rechercher
+            </button>
+            <button type="button" class="btn btn-outline-secondary" id="btn-reset">
+              <i class="bi bi-x-circle me-1"></i>Réinitialiser
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="erreur-cotisations" class="alert alert-danger alert-dismissible fade show d-none" role="alert">
+      <span id="erreur-msg"></span>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+
+    <div class="card">
+      <div class="card-header card-header-caisse d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <h5 class="mb-0">Résultats (<span id="total-cotisations">0</span> paiement(s))</h5>
+        <div class="d-flex align-items-center gap-2">
+          <label class="form-label mb-0 small text-nowrap">Recherche :</label>
+          <input type="text" id="recherche-cotisations" class="form-control form-control-sm" placeholder="Adhérent, ticket, montant..." style="max-width: 220px;" />
+        </div>
+      </div>
+      <div class="card-body p-0">
+        <div id="loading-cotisations" class="text-center py-5 text-muted">
+          <div class="spinner-border text-caisse" role="status"></div>
+          <p class="mt-2 mb-0">Chargement...</p>
+        </div>
+        <div id="empty-cotisations" class="text-center py-5 text-muted d-none">
+          <i class="bi bi-inbox" style="font-size: 3rem"></i>
+          <p class="mt-2 mb-0">Aucun paiement de cotisation sur la période.</p>
+        </div>
+        <div id="table-wrapper-cotisations" class="table-responsive d-none">
+          <table class="table table-hover mb-0">
+            <thead class="thead-caisse">
+              <tr>
+                <th class="sortable" data-sort="date" scope="col" title="Trier par date">
+                  Date / Heure <i class="bi bi-arrow-down-up sort-icon ms-1"></i>
+                </th>
+                <th class="sortable" data-sort="adherent" scope="col" title="Trier par adhérent">
+                  Adhérent <i class="bi bi-arrow-down-up sort-icon ms-1"></i>
+                </th>
+                <th class="sortable" data-sort="ticket" scope="col" title="Trier par ticket">
+                  Ticket <i class="bi bi-arrow-down-up sort-icon ms-1"></i>
+                </th>
+                <th class="sortable" data-sort="montant" scope="col" title="Trier par montant">
+                  Montant <i class="bi bi-arrow-down-up sort-icon ms-1"></i>
+                </th>
+              </tr>
+            </thead>
+            <tbody id="tbody-cotisations"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  var dateDebut = document.getElementById('date-debut');
+  var dateFin = document.getElementById('date-fin');
+  var btnRechercher = document.getElementById('btn-rechercher');
+  var btnReset = document.getElementById('btn-reset');
+  var loading = document.getElementById('loading-cotisations');
+  var empty = document.getElementById('empty-cotisations');
+  var tableWrapper = document.getElementById('table-wrapper-cotisations');
+  var tbody = document.getElementById('tbody-cotisations');
+  var totalEl = document.getElementById('total-cotisations');
+  var rechercheInput = document.getElementById('recherche-cotisations');
+  var erreurDiv = document.getElementById('erreur-cotisations');
+  var erreurMsg = document.getElementById('erreur-msg');
+
+  var allCotisations = [];
+  var sortCol = 'date';
+  var sortDir = 1; // 1 = asc, -1 = desc
+
+  function setToday() {
+    var t = new Date().toISOString().split('T')[0];
+    if (dateDebut) dateDebut.value = t;
+    if (dateFin) dateFin.value = t;
+  }
+
+  function showError(msg) {
+    if (erreurMsg) erreurMsg.textContent = msg || 'Erreur';
+    if (erreurDiv) { erreurDiv.classList.remove('d-none'); }
+  }
+  function hideError() {
+    if (erreurDiv) erreurDiv.classList.add('d-none');
+  }
+
+  function formatDate(d) {
+    if (!d) return '–';
+    try {
+      var date = typeof d === 'string' ? new Date(d) : d;
+      return date.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch (e) { return '–'; }
+  }
+
+  function nom(r) {
+    return r.adherent_username || r.nom_client || (r.adherent_id ? '#'.concat(r.adherent_id) : 'Anonyme');
+  }
+
+  function filterList(list) {
+    var q = (rechercheInput && rechercheInput.value) ? rechercheInput.value.trim().toLowerCase() : '';
+    if (!q) return list.slice();
+    return list.filter(function(r) {
+      var dateStr = formatDate(r.date_cotisation).toLowerCase();
+      var adherentStr = (nom(r) || '').toLowerCase();
+      var ticketStr = (r.numero_ticket || '').toLowerCase();
+      var montantStr = (Number(r.montant_cotisation).toFixed(2) + ' €').toLowerCase();
+      return dateStr.indexOf(q) !== -1 || adherentStr.indexOf(q) !== -1 || ticketStr.indexOf(q) !== -1 || montantStr.indexOf(q) !== -1;
+    });
+  }
+
+  function compare(a, b) {
+    switch (sortCol) {
+      case 'date':
+        var da = (a.date_cotisation && new Date(a.date_cotisation).getTime()) || 0;
+        var db = (b.date_cotisation && new Date(b.date_cotisation).getTime()) || 0;
+        return sortDir * (da - db);
+      case 'adherent':
+        var na = (nom(a) || '').toLowerCase();
+        var nb = (nom(b) || '').toLowerCase();
+        return sortDir * (na < nb ? -1 : na > nb ? 1 : 0);
+      case 'ticket':
+        var ta = (a.numero_ticket || '').toLowerCase();
+        var tb = (b.numero_ticket || '').toLowerCase();
+        return sortDir * (ta < tb ? -1 : ta > tb ? 1 : 0);
+      case 'montant':
+        var ma = Number(a.montant_cotisation) || 0;
+        var mb = Number(b.montant_cotisation) || 0;
+        return sortDir * (ma - mb);
+      default:
+        return 0;
+    }
+  }
+
+  function updateSortUI() {
+    var headers = document.querySelectorAll('#table-wrapper-cotisations .sortable');
+    headers.forEach(function(th) {
+      var col = th.getAttribute('data-sort');
+      var icon = th.querySelector('.sort-icon');
+      if (!icon) return;
+      icon.className = 'sort-icon ms-1 bi ' + (col === sortCol ? (sortDir === 1 ? 'bi-arrow-up' : 'bi-arrow-down') : 'bi-arrow-down-up');
+    });
+  }
+
+  function renderTable(filteredList) {
+    var sorted = filteredList.slice().sort(compare);
+    if (totalEl) totalEl.textContent = filteredList.length;
+    if (filteredList.length === 0) {
+      if (tableWrapper) tableWrapper.classList.add('d-none');
+      if (empty) empty.classList.remove('d-none');
+      if (tbody) tbody.innerHTML = '';
+      return;
+    }
+    if (empty) empty.classList.add('d-none');
+    if (tableWrapper) tableWrapper.classList.remove('d-none');
+    if (tbody) {
+      tbody.innerHTML = sorted.map(function(r) {
+        return '<tr><td>' + formatDate(r.date_cotisation) + '</td><td>' + (nom(r) || '–') + '</td><td><code>' + (r.numero_ticket || '–') + '</code></td><td><strong class="text-primary">' + (Number(r.montant_cotisation).toFixed(2)) + ' €</strong></td></tr>';
+      }).join('');
+    }
+    updateSortUI();
+  }
+
+  function applyFilterAndSort() {
+    var filtered = filterList(allCotisations);
+    renderTable(filtered);
+  }
+
+  function load() {
+    hideError();
+    if (loading) loading.classList.remove('d-none');
+    if (empty) empty.classList.add('d-none');
+    if (tableWrapper) tableWrapper.classList.add('d-none');
+
+    var params = new URLSearchParams();
+    params.set('limit', '500');
+    if (dateDebut && dateDebut.value) params.set('date_debut', dateDebut.value);
+    if (dateFin && dateFin.value) params.set('date_fin', dateFin.value);
+
+    fetch('/api/caisse/cotisation/historique?' + params.toString(), {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      credentials: 'include'
+    })
+      .then(function(res) {
+        if (!res.ok) throw new Error('Erreur ' + res.status);
+        return res.json();
+      })
+      .then(function(data) {
+        if (loading) loading.classList.add('d-none');
+        if (!data.success || !Array.isArray(data.cotisations)) {
+          showError(data.error || 'Données invalides');
+          allCotisations = [];
+          if (tbody) tbody.innerHTML = '';
+          if (totalEl) totalEl.textContent = '0';
+          return;
+        }
+        allCotisations = data.cotisations;
+        applyFilterAndSort();
+      })
+      .catch(function(e) {
+        if (loading) loading.classList.add('d-none');
+        showError(e.message || 'Erreur de chargement');
+        allCotisations = [];
+        if (tbody) tbody.innerHTML = '';
+        if (totalEl) totalEl.textContent = '0';
+      });
+  }
+
+  if (btnRechercher) btnRechercher.addEventListener('click', load);
+  if (btnReset) {
+    btnReset.addEventListener('click', function() {
+      setToday();
+      if (rechercheInput) rechercheInput.value = '';
+      load();
+    });
+  }
+  if (rechercheInput) {
+    rechercheInput.addEventListener('input', applyFilterAndSort);
+    rechercheInput.addEventListener('keyup', function(e) {
+      if (e.key === 'Enter') applyFilterAndSort();
+    });
+  }
+  document.querySelectorAll('#table-wrapper-cotisations .sortable').forEach(function(th) {
+    th.addEventListener('click', function() {
+      var col = th.getAttribute('data-sort');
+      if (col === sortCol) sortDir = -sortDir;
+      else { sortCol = col; sortDir = 1; }
+      applyFilterAndSort();
+    });
+  });
+
+  setToday();
+  load();
+})();
+</script>
+
+<%- include('partials/footer') %>

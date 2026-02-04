@@ -1,7 +1,30 @@
 // Wrapper pour logger toutes les requêtes SQL
+const mysql = require("mysql2");
 const { db } = require("./config");
 const fs = require("fs");
 const path = require("path");
+
+/** Construit la requête SQL avec les paramètres substitués (pour affichage / trace). */
+function buildQueryWithParams(sql, params) {
+  if (!sql || typeof sql !== "string") return "";
+  const paramList = Array.isArray(params) ? params : (params != null ? [params] : []);
+  let out = String(sql);
+  const placeholders = (out.match(/\?/g) || []).length;
+  for (let idx = 0; idx < placeholders; idx++) {
+    let raw = idx < paramList.length ? paramList[idx] : null;
+    if (raw === undefined) raw = null;
+    let escaped;
+    try {
+      escaped = mysql.escape(raw);
+    } catch (e) {
+      escaped = "'" + String(raw).replace(/'/g, "''") + "'";
+    }
+    const qPos = out.indexOf("?");
+    if (qPos === -1) break;
+    out = out.slice(0, qPos) + escaped + out.slice(qPos + 1);
+  }
+  return out;
+}
 
 // Table de log SQL (à créer dans la base si besoin)
 // CREATE TABLE IF NOT EXISTS trace_sql (
@@ -63,18 +86,24 @@ function queryWithUser(sql, params, callback, req) {
 
   if (shouldTrace) {
     console.log("TRACE SQL User:", username, "UserID:", userid);
-    // On ne stocke qu'un résumé des params (ex: nombre ou type)
-    let paramsSummary = "";
+    let queryFull = sql;
+    let paramsStr = "";
     try {
-      paramsSummary = Array.isArray(params)
-        ? params.slice(0, 10).join(" // ")
-        : "";
+      queryFull = buildQueryWithParams(sql, params);
+      if (queryFull.length > 65000) queryFull = queryFull.slice(0, 65000) + "\n/* ... tronqué */";
     } catch (e) {
-      paramsSummary = "[unserializable]";
+      console.error("Erreur buildQueryWithParams:", e.message);
+      try {
+        paramsStr = Array.isArray(params) ? params.slice(0, 20).join(" // ") : String(params || "");
+      } catch (e2) {
+        paramsStr = "[params non sérialisables]";
+      }
+      queryFull = sql;
     }
+    const usernameVal = (username != null ? username : "") + "(" + (userid != null ? userid : "") + ")";
     db.query(
       "INSERT INTO trace (username, query, params) VALUES (?, ?, ?)",
-      [username +'(' + userid +')', sql, paramsSummary],
+      [usernameVal, queryFull, paramsStr],
       (err) => {
         if (err) console.error("Erreur insertion trace:", err);
       }

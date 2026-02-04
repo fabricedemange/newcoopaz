@@ -17,8 +17,11 @@
 
       <template v-else-if="store.commande">
         <div class="d-flex justify-content-between align-items-center mb-4">
-          <h2><i class="bi bi-receipt me-2"></i>Commande #{{ store.commande.id }}</h2>
-          <a href="/commandes/vue" class="btn btn-secondary"><i class="bi bi-arrow-left me-1"></i>Retour aux commandes</a>
+          <h2 class="mb-0"><i class="bi bi-receipt me-2"></i>Commande #{{ store.commande.id }}</h2>
+          <div class="d-flex gap-2">
+            <BackButton />
+            <a href="/commandes/vue" class="btn btn-secondary">Liste des commandes</a>
+          </div>
         </div>
 
         <div class="card mb-4">
@@ -113,6 +116,7 @@
 <script setup>
 import { useCommandeDetailStore } from '@/stores/commandeDetail';
 import { onMounted, ref, watch } from 'vue';
+import BackButton from '@/components/BackButton.vue';
 
 const store = useCommandeDetailStore();
 const commandeIdRef = ref(null);

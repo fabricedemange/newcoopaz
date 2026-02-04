@@ -1,6 +1,9 @@
 <template>
   <div class="container">
-    <h2>Mon compte</h2>
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+      <h2 class="mb-0">Mon compte</h2>
+      <BackButton />
+    </div>
     <div v-if="error" class="alert alert-danger">{{ error }}</div>
     <div v-if="success" class="alert alert-success">{{ success }}</div>
     <form @submit.prevent="submit">
@@ -86,6 +89,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue';
+import BackButton from '@/components/BackButton.vue';
 
 const account = ref({
   username: '',

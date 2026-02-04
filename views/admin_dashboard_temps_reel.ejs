@@ -1,0 +1,182 @@
+<%- include('partials/header', { title: typeof title !== 'undefined' ? title : 'Tableau de bord temps réel', user, role }) %>
+
+<div class="admin-content-wrapper">
+  <div class="container-fluid px-3 mt-4">
+    <div class="row">
+      <div class="col-12">
+        <h2 class="mb-2">Tableau de bord temps réel</h2>
+        <p class="text-muted mb-4">Commandes récentes, ventes du jour et file d'attente email. Mise à jour automatique toutes les 10 secondes.</p>
+      </div>
+    </div>
+
+    <div class="row mb-3">
+      <div class="col-12 d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <a href="/admin/dashboard/vue" class="btn btn-outline-secondary">
+          <i class="bi bi-arrow-left me-2"></i>Retour au tableau de bord
+        </a>
+        <span id="sse-status" class="badge bg-success" title="Mise à jour automatique toutes les 10 s">Temps réel</span>
+      </div>
+    </div>
+
+    <div class="row g-4">
+      <!-- Commandes en cours (récentes) -->
+      <div class="col-12 col-lg-6">
+        <div class="card h-100">
+          <div class="card-header bg-primary text-white">
+            <h5 class="card-title mb-0">
+              <i class="bi bi-cart-check me-2"></i>Commandes récentes
+              <span id="commandes-count" class="badge bg-light text-dark ms-2"><%= (commandes && commandes.length) || 0 %></span>
+            </h5>
+          </div>
+          <div class="card-body p-0">
+            <div id="commandes-empty" class="p-3 text-muted text-center" style="<%= (commandes && commandes.length > 0) ? 'display:none' : '' %>">
+              Aucune commande récente.
+            </div>
+            <div id="commandes-list" class="list-group list-group-flush" style="<%= (!commandes || commandes.length === 0) ? 'display:none' : '' %>">
+              <% if (commandes && commandes.length > 0) { commandes.forEach(function(c) { %>
+                <div class="list-group-item d-flex justify-content-between align-items-start">
+                  <div>
+                    <span class="fw-bold"><%= c.username %></span>
+                    <span class="text-muted small">#<%= c.id %></span>
+                    <br><span class="small"><%= c.catalogue_nom || '–' %></span>
+                  </div>
+                  <small class="text-muted"><%= (c.updated_at || c.created_at) ? new Date(c.updated_at || c.created_at).toLocaleString('fr-FR') : '–' %></small>
+                </div>
+              <% }); } %>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Caisse / Ventes du jour -->
+      <div class="col-12 col-lg-6">
+        <div class="card h-100">
+          <div class="card-header bg-success text-white">
+            <h5 class="card-title mb-0">
+              <i class="bi bi-cash-stack me-2"></i>Ventes du jour (caisse)
+            </h5>
+          </div>
+          <div class="card-body">
+            <div class="row text-center">
+              <div class="col-6">
+                <div class="h3 mb-0" id="ventes-count"><%= (ventes && ventes.count) || 0 %></div>
+                <small class="text-muted">Nombre de ventes</small>
+              </div>
+              <div class="col-6">
+                <div class="h3 mb-0" id="ventes-total"><%= (ventes && ventes.total != null) ? Number(ventes.total).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00' %> €</div>
+                <small class="text-muted">Montant TTC</small>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- File email -->
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header bg-secondary text-white">
+            <h5 class="card-title mb-0">
+              <i class="bi bi-envelope me-2"></i>File d'attente email
+              <span class="badge bg-light text-dark ms-2" id="email-total"><%= email ? ((email.pending || 0) + (email.sending || 0) + (email.sent || 0) + (email.error || 0)) : '—' %></span>
+            </h5>
+          </div>
+          <div class="card-body">
+            <div class="row text-center" id="email-stats" style="<%= email ? '' : 'display:none' %>">
+              <div class="col-6 col-md-3">
+                <div class="h4 mb-0 text-warning" id="email-pending"><%= email ? (email.pending || 0) : 0 %></div>
+                <small class="text-muted">En attente</small>
+              </div>
+              <div class="col-6 col-md-3">
+                <div class="h4 mb-0 text-info" id="email-sending"><%= email ? (email.sending || 0) : 0 %></div>
+                <small class="text-muted">En cours</small>
+              </div>
+              <div class="col-6 col-md-3">
+                <div class="h4 mb-0 text-success" id="email-sent"><%= email ? (email.sent || 0) : 0 %></div>
+                <small class="text-muted">Envoyés</small>
+              </div>
+              <div class="col-6 col-md-3">
+                <div class="h4 mb-0 text-danger" id="email-error"><%= email ? (email.error || 0) : 0 %></div>
+                <small class="text-muted">Erreurs</small>
+              </div>
+            </div>
+            <p class="text-muted mb-0" id="email-no-access" style="<%= email ? 'display:none' : '' %>">Réservé aux administrateurs. <a href="/admin/email-queue/legacy">Voir la file email</a></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  var statusEl = document.getElementById('sse-status');
+  var commandesEmpty = document.getElementById('commandes-empty');
+  var commandesList = document.getElementById('commandes-list');
+  var commandesCount = document.getElementById('commandes-count');
+  var ventesCount = document.getElementById('ventes-count');
+  var ventesTotal = document.getElementById('ventes-total');
+  var emailStats = document.getElementById('email-stats');
+  var emailNoAccess = document.getElementById('email-no-access');
+  var emailTotal = document.getElementById('email-total');
+  var emailPending = document.getElementById('email-pending');
+  var emailSending = document.getElementById('email-sending');
+  var emailSent = document.getElementById('email-sent');
+  var emailError = document.getElementById('email-error');
+
+  function formatDate(d) {
+    if (!d) return '–';
+    try {
+      var t = typeof d === 'string' ? new Date(d) : d;
+      return t.toLocaleString ? t.toLocaleString('fr-FR') : '–';
+    } catch (e) { return '–'; }
+  }
+
+  function render(data) {
+    var cmd = data.commandes || [];
+    var hasCmd = cmd.length > 0;
+    if (commandesEmpty) commandesEmpty.style.display = hasCmd ? 'none' : '';
+    if (commandesList) {
+      commandesList.style.display = hasCmd ? '' : 'none';
+      if (hasCmd) {
+        commandesList.innerHTML = cmd.map(function(c) {
+          return '<div class="list-group-item d-flex justify-content-between align-items-start">' +
+            '<div><span class="fw-bold">' + (c.username || '') + '</span> <span class="text-muted small">#' + (c.id || '') + '</span><br><span class="small">' + (c.catalogue_nom || '–') + '</span></div>' +
+            '<small class="text-muted">' + formatDate(c.updated_at || c.created_at) + '</small></div>';
+        }).join('');
+      }
+    }
+    if (commandesCount) commandesCount.textContent = cmd.length;
+
+    var ventes = data.ventes || { count: 0, total: 0 };
+    if (ventesCount) ventesCount.textContent = ventes.count;
+    if (ventesTotal) ventesTotal.textContent = (Number(ventes.total) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+
+    var email = data.email;
+    if (emailStats) emailStats.style.display = email ? '' : 'none';
+    if (emailNoAccess) emailNoAccess.style.display = email ? 'none' : '';
+    if (emailTotal) emailTotal.textContent = email ? ((email.pending || 0) + (email.sending || 0) + (email.sent || 0) + (email.error || 0)) : '—';
+    if (email) {
+      if (emailPending) emailPending.textContent = email.pending || 0;
+      if (emailSending) emailSending.textContent = email.sending || 0;
+      if (emailSent) emailSent.textContent = email.sent || 0;
+      if (emailError) emailError.textContent = email.error || 0;
+    }
+    if (statusEl) { statusEl.classList.remove('bg-warning'); statusEl.classList.add('bg-success'); statusEl.textContent = 'Temps réel'; }
+  }
+
+  try {
+    var es = new EventSource('/admin/dashboard-temps-reel/stream');
+    es.onmessage = function(ev) {
+      try {
+        var data = JSON.parse(ev.data);
+        render(data);
+      } catch (e) {}
+    };
+    es.onerror = function() {
+      if (statusEl) { statusEl.classList.remove('bg-success'); statusEl.classList.add('bg-warning'); statusEl.textContent = 'Reconnexion…'; }
+    };
+  } catch (e) {}
+})();
+</script>
+
+<%- include('partials/footer') %>

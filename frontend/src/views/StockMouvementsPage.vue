@@ -4,9 +4,12 @@
         <div class="col-12">
           <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
             <h2 class="mb-0"><i class="bi bi-arrow-left-right me-2"></i>Mouvements de stock</h2>
-            <a href="/caisse" class="btn btn-outline-primary">
+            <div class="d-flex gap-2">
+              <BackButton />
+              <a href="/caisse" class="btn btn-outline-primary">
               <i class="bi bi-arrow-left me-2"></i>Retour caisse
             </a>
+            </div>
           </div>
           <p class="text-muted small mb-0 mt-2">
             Historique des mouvements de stock (ventes, ajustements, inventaires).
@@ -104,6 +107,7 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue';
+import BackButton from '@/components/BackButton.vue';
 import { fetchStockMouvements } from '@/api';
 
 const movements = ref([]);
