@@ -1,4 +1,4 @@
-require("dotenv").config();
+require("dotenv").config({ override: true });
 
 // Validation des variables d'environnement critiques
 const requiredEnvVars = [

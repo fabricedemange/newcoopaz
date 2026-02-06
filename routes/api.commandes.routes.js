@@ -72,6 +72,7 @@ router.get("/commandes", requireLogin, async (req, res) => {
 });
 
 // GET /api/commandes/caisse - Liste des achats en caisse de l'utilisateur
+// Uniquement les ventes où l'utilisateur est le client (adherent_id), pas celles qu'il a enregistrées en tant que caissier
 router.get("/commandes/caisse", requireLogin, async (req, res) => {
   const userId = req.session?.userId;
 
@@ -103,11 +104,11 @@ router.get("/commandes/caisse", requireLogin, async (req, res) => {
       LEFT JOIN modes_paiement mp ON p.mode_paiement_id = mp.id
       WHERE v.source = 'caisse'
         AND v.statut = 'complete'
-        AND (v.adherent_id = ? OR v.created_by = ?)
+        AND v.adherent_id = ?
       ORDER BY v.created_at DESC
     `;
 
-    const ventes = await queryPromise(ventesQuery, [userId, userId], req);
+    const ventes = await queryPromise(ventesQuery, [userId], req);
 
     res.json({
       success: true,
