@@ -87,6 +87,7 @@ async function fetchDueCatalogues(limit = 100) {
       AND u.email IS NOT NULL
       AND u.email <> ''
       AND u.is_validated = 1
+      AND COALESCE(u.is_active, 1) = 1
     ORDER BY c.expiration_date ASC
     LIMIT ?
   `;

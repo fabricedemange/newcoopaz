@@ -306,7 +306,7 @@ function envoimail(to, subject, text, attachment, { initiatedBy } = {}) {
 
 function envoimailtous(sujet, messagemail, pj) {
   db.query(
-    "SELECT email FROM users where is_validated=1 AND organization_id = ?",
+    "SELECT email FROM users WHERE is_validated=1 AND COALESCE(is_active,1)=1 AND organization_id = ? AND email IS NOT NULL AND email <> ''",
     [getCurrentOrgId(req)],
     (err, rows) => {
       if (err) throw err;
@@ -1384,6 +1384,7 @@ router.post(
           `SELECT email, username FROM users
            WHERE organization_id = ?
              AND is_validated = 1
+             AND COALESCE(is_active, 1) = 1
              AND email_catalogue = 1
              AND email IS NOT NULL
              AND email <> ''`,
@@ -1456,10 +1457,12 @@ router.post(
   (req, res) => {
     db.query(
       `SELECT u.email, u.id, c.description, c.originalname
-from users u
-join paniers p on u.id=p.user_id
-join catalog_files c on c.id=p.catalog_file_id
-where p.catalog_file_id=? and is_submitted=1  `,
+       FROM users u
+       JOIN paniers p ON u.id = p.user_id
+       JOIN catalog_files c ON c.id = p.catalog_file_id
+       WHERE p.catalog_file_id = ? AND p.is_submitted = 1
+         AND u.is_validated = 1 AND COALESCE(u.is_active, 1) = 1
+         AND u.email IS NOT NULL AND u.email <> ''`,
       [req.params.id],
       (err, rows) => {
         if (err || !rows || rows.length === 0)
@@ -1695,7 +1698,9 @@ router.post("/catalogues/:id/alerte", requirePermission('catalogues'), async (re
           `SELECT DISTINCT u.email, u.username
            FROM paniers p
            INNER JOIN users u ON u.id = p.user_id
-           WHERE p.catalog_file_id = ? AND p.is_submitted = 1 AND u.is_validated = 1 AND u.email IS NOT NULL AND u.email != ''`,
+           WHERE p.catalog_file_id = ? AND p.is_submitted = 1
+             AND u.is_validated = 1 AND COALESCE(u.is_active, 1) = 1
+             AND u.email IS NOT NULL AND u.email != ''`,
           [catalogueId],
           async (err, users) => {
             if (err) {
@@ -1738,7 +1743,7 @@ router.post("/catalogues/:id/rappel", requirePermission('catalogues'), async (re
   try {
     // Récupérer les infos du catalogue et du référent
     db.query(
-      "SELECT cf.originalname, cf.expiration_date, u.email, u.username FROM catalog_files cf JOIN users u ON cf.user_id = u.id WHERE cf.id = ? AND u.is_validated = 1",
+      "SELECT cf.originalname, cf.expiration_date, u.email, u.username FROM catalog_files cf JOIN users u ON cf.uploader_id = u.id WHERE cf.id = ? AND u.is_validated = 1 AND COALESCE(u.is_active, 1) = 1",
       [catalogueId],
       async (err, rows) => {
         if (err || !rows || rows.length === 0) {

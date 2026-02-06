@@ -342,7 +342,7 @@ router.post("/forgot-password", (req, res) => {
   const { email, flag } = req.body;
   const wantsJson = req.xhr || (req.headers.accept && req.headers.accept.includes("application/json"));
 
-  db.query("SELECT * FROM users WHERE email = ?", [email], (err, results) => {
+  db.query("SELECT * FROM users WHERE email = ? AND COALESCE(is_active, 1) = 1", [email], (err, results) => {
     if (err) {
       if (wantsJson) return res.status(500).json({ success: false, error: "Erreur interne." });
       return res.render("forgot-password", {

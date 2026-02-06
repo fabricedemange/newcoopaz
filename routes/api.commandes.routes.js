@@ -347,7 +347,7 @@ async function getVenteDetails(venteId, orgId, db) {
 async function getUserEmail(userId, db) {
   return new Promise((resolve, reject) => {
     db.query(
-      'SELECT email FROM users WHERE id = ?',
+      'SELECT email FROM users WHERE id = ? AND COALESCE(is_active, 1) = 1',
       [userId],
       (err, results) => {
         if (err) return reject(err);

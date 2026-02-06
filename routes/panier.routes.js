@@ -476,7 +476,7 @@ router.post(
 
         if (source === "U") {
           db.query(
-            "SELECT email FROM users WHERE id = ?",
+            "SELECT email FROM users WHERE id = ? AND COALESCE(is_active, 1) = 1",
             [newUserId],
             (err, rows) => {
               if (err || !rows || rows.length === 0) return;
@@ -536,7 +536,7 @@ router.post(
       () => {
         const userId = getCurrentUserId(req);
         db.query(
-          "SELECT email, username FROM users WHERE id = ?",
+          "SELECT email, username FROM users WHERE id = ? AND COALESCE(is_active, 1) = 1",
           [userId],
           (err, users) => {
             if (err || !users || users.length === 0) return;
@@ -608,7 +608,7 @@ router.post(
           () => {
             // Envoyer l'email de confirmation
             db.query(
-              "SELECT email, username FROM users WHERE id = ?",
+              "SELECT email, username FROM users WHERE id = ? AND COALESCE(is_active, 1) = 1",
               [userId],
               (err, users) => {
                 if (err || !users || users.length === 0) {
