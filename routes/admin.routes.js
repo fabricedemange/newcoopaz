@@ -119,6 +119,7 @@ const {
   isImpersonating,
 } = require("../utils/session-helpers");
 const { validateBandeauInput } = require("../utils/validation-helpers");
+const { invalidateUserRolesCache } = require("../utils/user-roles-cache");
 
 // Configuration sécurisée pour l'upload de fichiers
 const {
@@ -678,6 +679,7 @@ router.post("/users/new", requirePermission('users'), async (req, res) => {
           }
         );
       });
+      invalidateUserRolesCache(userId);
     }
 
     if (wantsJson) return res.json({ success: true, redirect: "/admin/users/vue" });
@@ -871,6 +873,7 @@ router.post("/users/:id/edit", requirePermission('users'), async (req, res) => {
         );
       });
     }
+    invalidateUserRolesCache(id);
 
     if (wantsJson) return res.json({ success: true, redirect: "/admin/users/vue" });
     res.redirect("/admin/users/vue");

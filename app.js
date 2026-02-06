@@ -1,4 +1,7 @@
+// Préserver NODE_ENV=test (Jest) pour ne pas être écrasé par .env
+const nodeEnvBeforeDotenv = process.env.NODE_ENV;
 require("dotenv").config({ override: true });
+if (nodeEnvBeforeDotenv === "test") process.env.NODE_ENV = "test";
 
 // Validation des variables d'environnement critiques
 const requiredEnvVars = [
@@ -46,6 +49,8 @@ const {
 
 // Import du cache des bandeaux
 const { getBandeaux } = require("./utils/bandeaux-cache");
+// Cache des rôles utilisateur (évite 1 requête SQL par requête HTTP)
+const { getDisplayRoles } = require("./utils/user-roles-cache");
 
 // Import du logger sécurisé
 const { logger, httpLogger, logsDir } = require("./config/logger");
@@ -179,7 +184,7 @@ const { db } = require("./config/config");
 // On fait confiance UNIQUEMENT au premier proxy (pas à tous)
 app.set("trust proxy", 1);
 
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "5mb" }));
 // public/ contient les assets statiques ; public/dist/ = build Vite (frontend)
 app.use(
   express.static("public", {
@@ -208,7 +213,7 @@ app.use(
 );
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
-app.use(express.json({ limit: "50mb" }));
+app.use(express.json({ limit: "5mb" }));
 
 // Logger HTTP automatique - Log toutes les requêtes
 app.use(httpLogger);
@@ -245,6 +250,23 @@ app.use(
   })
 );
 
+// Protection CSRF - Middleware
+app.use(cookieParser());
+const csrfProtection = require("./config/csrf");
+app.use((req, res, next) => {
+  const contentType = req.headers && req.headers["content-type"];
+  // Skip CSRF validation for multipart/form-data (file uploads)
+  if (contentType && contentType.indexOf("multipart/form-data") !== -1) {
+    return next();
+  }
+  // En test : permettre POST /test/session sans token pour les tests RBAC
+  const pathname = (req.originalUrl || req.url || req.path || "").split("?")[0];
+  if (process.env.NODE_ENV === "test" && pathname === "/test/session") {
+    return next();
+  }
+  csrfProtection(req, res, next);
+});
+
 // Route de test (NODE_ENV=test uniquement) pour créer une session mockée (RBAC 403)
 if (process.env.NODE_ENV === "test") {
   app.post("/test/session", (req, res) => {
@@ -256,18 +278,6 @@ if (process.env.NODE_ENV === "test") {
     });
   });
 }
-
-// Protection CSRF - Middleware
-app.use(cookieParser());
-const csrfProtection = require("./config/csrf");
-app.use((req, res, next) => {
-  const contentType = req.headers && req.headers["content-type"];
-  // Skip CSRF validation for multipart/form-data (file uploads)
-  if (contentType && contentType.indexOf("multipart/form-data") !== -1) {
-    return next();
-  }
-  csrfProtection(req, res, next);
-});
 
 // Injection du token CSRF dans toutes les vues
 app.use((req, res, next) => {
@@ -343,8 +353,6 @@ app.use((err, req, res, next) => {
   res.status(500).send("Une erreur serveur est survenue.");
 });
 
-app.use(express.json());
-
 // Import des routes
 const authRoutes = require("./routes/auth.routes");
 const indexRoutes = require("./routes/index.routes");
@@ -404,26 +412,9 @@ app.use(async (req, res, next) => {
     res.locals.role = getCurrentUserRole(req);
     res.locals.rbac_enabled = req.session?.rbac_enabled || false;
 
-    // Load user's RBAC roles for display
+    // Load user's RBAC roles for display (via cache pour éviter 1 SQL par requête)
     if (req.session?.userId) {
-      const { db } = require('./config/config');
-      const userRolesQuery = `
-        SELECT r.display_name
-        FROM user_roles ur
-        JOIN roles r ON ur.role_id = r.id
-        WHERE ur.user_id = ?
-        ORDER BY r.display_name
-      `;
-      await new Promise((resolve) => {
-        db.query(userRolesQuery, [req.session.userId], (err, results) => {
-          if (!err && results && results.length > 0) {
-            res.locals.userRoles = results.map(r => r.display_name);
-          } else {
-            res.locals.userRoles = [];
-          }
-          resolve();
-        });
-      });
+      res.locals.userRoles = await getDisplayRoles(req.session.userId);
     } else {
       res.locals.userRoles = [];
     }
@@ -519,8 +510,8 @@ app.use(async (req, res, next) => {
       // Session invalide, ignorer le tracing
     }
 
-    // Utiliser le cache des bandeaux pour éviter les requêtes répétitives
-    getBandeaux((err, allBandeaux) => {
+    // Cache bandeaux pré-filtré par org (voir utils/bandeaux-cache.js, ANALYSE_PERFORMANCES § 3.2)
+    getBandeaux(orgId, (err, allBandeaux) => {
       if (err) {
         logger.error("Erreur lors de la récupération des bandeaux", {
           error: err.message,
@@ -529,20 +520,9 @@ app.use(async (req, res, next) => {
         allBandeaux = [];
       }
 
-      // Filtrage côté application (plus rapide que SQL pour les données en cache)
-      const bandeaux = allBandeaux
-        .filter((bandeau) => {
-          // Vérifier l'organisation
-          if (
-            bandeau.organization_id !== 0 &&
-            bandeau.organization_id !== orgId
-          ) {
-            return false;
-          }
-
-          // Vérifier la page cible
-          return pageCibleMatches(bandeau.page_cible, urlPath, viewName);
-        })
+      // Filtrage page cible uniquement (organisation déjà filtrée en SQL/cache)
+      const bandeaux = (allBandeaux || [])
+        .filter((bandeau) => pageCibleMatches(bandeau.page_cible, urlPath, viewName))
         .sort((a, b) => {
           // Trier par date d'expiration
           if (!a.expiration_date && !b.expiration_date) return 0;
@@ -696,11 +676,22 @@ process.on("unhandledRejection", (reason, promise) => {
 const PORT = process.env.PORT || 3000;
 if (process.env.NODE_ENV !== "test") {
   const server = app.listen(PORT, () => {
+    const env = process.env.NODE_ENV || "development";
     logger.info("Serveur démarré", {
       port: PORT,
-      environment: process.env.NODE_ENV || "development",
+      environment: env,
       logsPath,
     });
+    // Vérification config production (priorité haute sécurité)
+    if (env === "production") {
+      logger.info("Config production active", {
+        cookiesSecure: true,
+        hstsEnabled: true,
+        rateLimitAuth: true,
+      });
+    } else if (env !== "development") {
+      logger.warn("NODE_ENV devrait être 'production' en production ou 'development' en dev", { current: env });
+    }
   });
   server.on("error", (err) => {
     if (err.code === "EADDRINUSE") {

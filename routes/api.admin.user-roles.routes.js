@@ -9,6 +9,7 @@ const express = require("express");
 const router = express.Router();
 const { db } = require("../config/db-trace-wrapper");
 const { requirePermission, clearUserPermissionCache } = require("../middleware/rbac.middleware");
+const { invalidateUserRolesCache } = require("../utils/user-roles-cache");
 const { getCurrentOrgId, getCurrentUserId } = require("../utils/session-helpers");
 const { hasPermission } = require("../middleware/rbac.middleware");
 
@@ -144,8 +145,9 @@ router.post("/:userId/roles", requirePermission('users', { json: true }), async 
       [targetUserId, role_id, actorId, expires_at || null, reason || null]
     );
 
-    // Clear permission cache for this user
+    // Clear permission cache and display roles cache for this user
     await clearUserPermissionCache(targetUserId);
+    invalidateUserRolesCache(targetUserId);
 
     // Audit log
     await queryPromise(
@@ -216,8 +218,9 @@ router.delete("/:userId/roles/:roleId", requirePermission('users', { json: true 
       [targetUserId, roleId]
     );
 
-    // Clear permission cache
+    // Clear permission cache and display roles cache
     await clearUserPermissionCache(targetUserId);
+    invalidateUserRolesCache(targetUserId);
 
     // Audit log
     await queryPromise(

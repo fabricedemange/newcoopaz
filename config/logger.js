@@ -210,18 +210,19 @@ if (process.env.NODE_ENV === "production") {
 }
 
 // Middleware Express pour logger les requêtes HTTP
+// En production : ne logger que les réponses 4xx/5xx (ANALYSE_PERFORMANCES § 3.5)
 const httpLogger = (req, res, next) => {
   const start = Date.now();
 
-  // Enregistrer la requête
-  safeLogger.http("Incoming request", {
-    method: req.method,
-    url: req.url,
-    ip: req.ip,
-    userAgent: req.get("user-agent"),
-  });
+  if (process.env.NODE_ENV !== "production") {
+    safeLogger.http("Incoming request", {
+      method: req.method,
+      url: req.url,
+      ip: req.ip,
+      userAgent: req.get("user-agent"),
+    });
+  }
 
-  // Hook sur la réponse
   res.on("finish", () => {
     const duration = Date.now() - start;
     const logData = {
@@ -236,8 +237,8 @@ const httpLogger = (req, res, next) => {
       safeLogger.error("Server error", logData);
     } else if (res.statusCode >= 400) {
       safeLogger.warn("Client error", logData);
-    } else {
-      //safeLogger.http("Request completed", logData);
+    } else if (process.env.NODE_ENV !== "production") {
+      safeLogger.http("Request completed", logData);
     }
   });
 

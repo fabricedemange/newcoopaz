@@ -7,8 +7,9 @@
 const express = require("express");
 const router = express.Router();
 const { db } = require("../config/db-trace-wrapper");
-const { requirePermission, hasPermission } = require("../middleware/rbac.middleware");
+const { requirePermission, hasPermission, clearUserPermissionCache } = require("../middleware/rbac.middleware");
 const { getCurrentOrgId, getCurrentUserId } = require("../utils/session-helpers");
+const { invalidateUserRolesCache, invalidateUserRolesCacheMany } = require("../utils/user-roles-cache");
 
 // Helper: Query with promise
 function queryPromise(query, params) {
@@ -264,9 +265,9 @@ router.put("/:id/roles", requirePermission('roles', { json: true }), async (req,
       );
     }
 
-    // Clear permission cache for this user
-    const { clearUserPermissionCache } = require("../middleware/rbac.middleware");
+    // Clear permission cache and display roles cache for this user
     await clearUserPermissionCache(userId);
+    invalidateUserRolesCache(userId);
 
     res.json({ success: true });
   } catch (error) {
@@ -337,9 +338,9 @@ router.post("/bulk-assign-roles", requirePermission('roles', { json: true }), as
         [userId]
       );
 
-      // Clear permission cache
-      const { clearUserPermissionCache } = require("../middleware/rbac.middleware");
+      // Clear permission cache and display roles cache
       await clearUserPermissionCache(userId);
+      invalidateUserRolesCache(userId);
 
       updatedCount++;
     }
@@ -460,9 +461,9 @@ router.delete("/:id", requirePermission('users', { json: true }), async (req, re
     // Delete user
     await queryPromise(`DELETE FROM users WHERE id = ?`, [userId]);
 
-    // Clear permission cache
-    const { clearUserPermissionCache } = require("../middleware/rbac.middleware");
+    // Clear permission and display roles cache
     await clearUserPermissionCache(userId);
+    invalidateUserRolesCache(userId);
 
     res.json({ success: true });
   } catch (error) {
