@@ -606,14 +606,14 @@ router.post(
           "UPDATE paniers SET is_submitted = 1 WHERE id = ?",
           [panierId],
           () => {
-            // Envoyer l'email de confirmation
+            // Réponse envoyée une seule fois après succès de l'UPDATE
+            res.json({ success: true });
+            // Envoyer l'email de confirmation (fire-and-forget, ne pas bloquer la réponse)
             db.query(
               "SELECT email, username FROM users WHERE id = ? AND COALESCE(is_active, 1) = 1",
               [userId],
               (err, users) => {
-                if (err || !users || users.length === 0) {
-                  return res.json({ success: true });
-                }
+                if (err || !users || users.length === 0) return;
                 const userEmail = users[0].email;
                 const sujet = "Votre commande N°" + panierId + " a été validée";
                 db.query(
@@ -640,8 +640,6 @@ router.post(
           },
           req
         );
-
-        res.json({ success: true });
       }
     );
   }

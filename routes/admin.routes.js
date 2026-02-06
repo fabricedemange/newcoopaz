@@ -47,7 +47,7 @@ async function getDashboardReelData(req) {
     LEFT JOIN organizations o ON u.organization_id = o.id
     JOIN catalog_files cf ON p.catalog_file_id = cf.id
     WHERE p.is_submitted = 1 AND cf.is_archived IN (0,2)
-      AND p.created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)${commandeFilter}
+      AND DATE(p.created_at) = CURDATE()${commandeFilter}
     ORDER BY p.created_at DESC
     LIMIT 50
   `;
