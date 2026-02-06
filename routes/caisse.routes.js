@@ -43,7 +43,8 @@ router.get("/test-codes-barres", requirePermission("caisse.sell"), (req, res) =>
 // GET /caisse/inventaire - Inventaire (scan caméra + recherche produit) — droit Administration Inventaire et stock
 router.get("/inventaire", requirePermission("inventory_stock"), (req, res) => {
   renderAdminView(res, "caisse_inventaire_vue", {
-    pageTitle: "Inventaire"
+    pageTitle: "Inventaire",
+    pwaManifest: "/manifest.json"
   });
 });
 

@@ -184,6 +184,127 @@ router.post("/inventaires/:id/lignes", requireInventoryStock, async (req, res) =
 });
 
 /**
+ * DELETE /api/caisse/inventaires/:id/lignes/:productId
+ * Draft : supprime la ligne.
+ * Complete : remet le stock à stock_theorique, enregistre un mouvement, puis supprime la ligne.
+ */
+router.delete("/inventaires/:id/lignes/:productId", requireInventoryStock, async (req, res) => {
+  try {
+    const orgId = getCurrentOrgId(req);
+    const userId = getCurrentUserId(req);
+    const id = parseInt(req.params.id, 10);
+    const productId = parseInt(req.params.productId, 10);
+
+    const [inv] = await queryPromise(
+      "SELECT id, statut FROM inventaires WHERE id = ? AND organization_id = ?",
+      [id, orgId]
+    );
+    if (!inv) {
+      return res.status(404).json({ success: false, error: "Inventaire non trouvé" });
+    }
+
+    if (inv.statut === "draft") {
+      await queryPromise(
+        "DELETE FROM inventaire_lignes WHERE inventaire_id = ? AND product_id = ?",
+        [id, productId]
+      );
+      return res.json({ success: true });
+    }
+
+    if (inv.statut === "complete") {
+      const [ligne] = await queryPromise(
+        "SELECT product_id, quantite_comptee, stock_theorique FROM inventaire_lignes WHERE inventaire_id = ? AND product_id = ?",
+        [id, productId]
+      );
+      if (!ligne) {
+        return res.status(404).json({ success: false, error: "Ligne non trouvée" });
+      }
+      const stockActuel = Number(ligne.quantite_comptee);
+      const stockRestaure = Number(ligne.stock_theorique);
+      const delta = stockRestaure - stockActuel;
+
+      await queryPromise(
+        "UPDATE products SET stock = ? WHERE id = ? AND organization_id = ?",
+        [stockRestaure, productId, orgId]
+      );
+      await queryPromise(
+        `INSERT INTO stock_movements
+          (organization_id, product_id, type, quantite, stock_avant, stock_apres, reference_type, reference_id, created_by, comment)
+         VALUES (?, ?, 'ajustement', ?, ?, ?, 'inventaire_annulation', ?, ?, ?)`,
+        [orgId, productId, delta, stockActuel, stockRestaure, id, userId, "Annulation ligne inventaire"]
+      );
+      await queryPromise(
+        "DELETE FROM inventaire_lignes WHERE inventaire_id = ? AND product_id = ?",
+        [id, productId]
+      );
+      return res.json({ success: true });
+    }
+
+    return res.status(400).json({ success: false, error: "Statut invalide" });
+  } catch (error) {
+    console.error("Erreur suppression ligne inventaire:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/caisse/inventaires/:id
+ * Draft : supprime l'inventaire (lignes en cascade).
+ * Complete : remet les stocks à stock_theorique pour chaque ligne, enregistre les mouvements, puis supprime.
+ */
+router.delete("/inventaires/:id", requireInventoryStock, async (req, res) => {
+  try {
+    const orgId = getCurrentOrgId(req);
+    const userId = getCurrentUserId(req);
+    const id = parseInt(req.params.id, 10);
+
+    const [inv] = await queryPromise(
+      "SELECT id, statut FROM inventaires WHERE id = ? AND organization_id = ?",
+      [id, orgId]
+    );
+    if (!inv) {
+      return res.status(404).json({ success: false, error: "Inventaire non trouvé" });
+    }
+
+    if (inv.statut === "draft") {
+      await queryPromise("DELETE FROM inventaires WHERE id = ?", [id]);
+      return res.json({ success: true });
+    }
+
+    if (inv.statut === "complete") {
+      const lignes = await queryPromise(
+        "SELECT product_id, quantite_comptee, stock_theorique FROM inventaire_lignes WHERE inventaire_id = ?",
+        [id]
+      );
+      for (const ligne of lignes || []) {
+        const stockRestaure = Number(ligne.stock_theorique);
+        const stockActuel = Number(ligne.quantite_comptee);
+        const delta = stockRestaure - stockActuel;
+
+        await queryPromise(
+          "UPDATE products SET stock = ? WHERE id = ? AND organization_id = ?",
+          [stockRestaure, ligne.product_id, orgId]
+        );
+        await queryPromise(
+          `INSERT INTO stock_movements
+            (organization_id, product_id, type, quantite, stock_avant, stock_apres, reference_type, reference_id, created_by, comment)
+           VALUES (?, ?, 'ajustement', ?, ?, ?, 'inventaire_annulation', ?, ?, ?)`,
+          [orgId, ligne.product_id, delta, stockActuel, stockRestaure, id, userId, "Annulation inventaire entier"]
+        );
+      }
+      await queryPromise("DELETE FROM inventaire_lignes WHERE inventaire_id = ?", [id]);
+      await queryPromise("DELETE FROM inventaires WHERE id = ?", [id]);
+      return res.json({ success: true });
+    }
+
+    return res.status(400).json({ success: false, error: "Statut invalide" });
+  } catch (error) {
+    console.error("Erreur suppression inventaire:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * POST /api/caisse/inventaires/:id/appliquer
  * Appliquer l'inventaire : pour chaque ligne, mettre à jour products.stock,
  * insérer dans stock_movements, passer l'inventaire en complete.

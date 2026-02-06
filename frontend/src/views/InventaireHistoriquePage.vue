@@ -62,13 +62,25 @@
                   <td>{{ i.created_by_username || '—' }}</td>
                   <td>{{ i.nb_lignes ?? 0 }}</td>
                   <td>{{ i.completed_at ? formatDate(i.completed_at) : '—' }}</td>
-                  <td>
+                  <td class="text-nowrap">
                     <button
                       type="button"
-                      class="btn btn-outline-primary btn-sm"
+                      class="btn btn-outline-primary btn-sm me-1"
                       @click="voirDetail(i.id)"
                     >
                       <i class="bi bi-eye me-1"></i>Détail
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-outline-danger btn-sm"
+                      title="Supprimer l'inventaire entier et remettre les stocks à l'état initial"
+                      :disabled="suppressingInventaire === i.id"
+                      @click="supprimerInventaire(i)"
+                    >
+                      <span v-if="suppressingInventaire === i.id" class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                      <template v-else>
+                        <i class="bi bi-trash me-1" aria-hidden="true"></i>Supprimer
+                      </template>
                     </button>
                   </td>
                 </tr>
@@ -102,6 +114,7 @@
                         <th class="text-end">Stock théorique</th>
                         <th class="text-end">Écart</th>
                         <th>Commentaire (écart)</th>
+                        <th class="text-end">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -113,6 +126,20 @@
                           {{ l.ecart > 0 ? '+' : '' }}{{ l.ecart }}
                         </td>
                         <td class="small text-muted">{{ l.comment || '—' }}</td>
+                        <td class="text-end text-nowrap" style="min-width: 100px;">
+                          <button
+                            type="button"
+                            class="btn btn-outline-danger btn-sm"
+                            title="Supprimer la ligne et remettre le stock à l'état initial"
+                            :disabled="suppressingLigne === l.product_id"
+                            @click="supprimerLigne(l)"
+                          >
+                            <span v-if="suppressingLigne === l.product_id" class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                            <template v-else>
+                              <i class="bi bi-trash me-1" aria-hidden="true"></i>Supprimer
+                            </template>
+                          </button>
+                        </td>
                       </tr>
                     </tbody>
                   </table>
@@ -128,7 +155,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import BackButton from '@/components/BackButton.vue';
-import { fetchInventaires, fetchInventaireDetail } from '@/api';
+import { fetchInventaires, fetchInventaireDetail, deleteInventaireLigne, deleteInventaire } from '@/api';
 
 const inventaires = ref([]);
 const total = ref(0);
@@ -137,6 +164,8 @@ const error = ref('');
 const showDetailModal = ref(false);
 const detail = ref(null);
 const detailLoading = ref(false);
+const suppressingLigne = ref(null);
+const suppressingInventaire = ref(null);
 
 function formatDate(d) {
   if (!d) return '—';
@@ -169,6 +198,44 @@ async function voirDetail(id) {
     error.value = e.message || 'Erreur détail';
   } finally {
     detailLoading.value = false;
+  }
+}
+
+async function supprimerInventaire(inv) {
+  const msg = inv.statut === 'complete'
+    ? `Supprimer l'inventaire #${inv.id} ? Les stocks seront remis à leur état initial.`
+    : `Supprimer le brouillon #${inv.id} ?`;
+  if (!confirm(msg)) return;
+  suppressingInventaire.value = inv.id;
+  try {
+    await deleteInventaire(inv.id);
+    inventaires.value = inventaires.value.filter((x) => x.id !== inv.id);
+    total.value = Math.max(0, total.value - 1);
+    if (showDetailModal.value && detail.value?.inventaire?.id === inv.id) {
+      showDetailModal.value = false;
+    }
+  } catch (e) {
+    error.value = e.message || 'Erreur suppression';
+  } finally {
+    suppressingInventaire.value = null;
+  }
+}
+
+async function supprimerLigne(ligne) {
+  if (!detail.value?.inventaire?.id) return;
+  if (!confirm(`Supprimer la ligne « ${ligne.product_nom} » ? Le stock sera remis à ${ligne.stock_theorique}.`)) return;
+  suppressingLigne.value = ligne.product_id;
+  try {
+    await deleteInventaireLigne(detail.value.inventaire.id, ligne.product_id);
+    detail.value.lignes = (detail.value.lignes || []).filter((l) => l.product_id !== ligne.product_id);
+    if (detail.value.lignes.length === 0) {
+      showDetailModal.value = false;
+      await charger();
+    }
+  } catch (e) {
+    error.value = e.message || 'Erreur suppression';
+  } finally {
+    suppressingLigne.value = null;
   }
 }
 

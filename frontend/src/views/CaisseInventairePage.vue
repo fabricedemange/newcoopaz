@@ -19,6 +19,17 @@
         </div>
       </div>
 
+      <div v-if="syncing" class="alert alert-info mb-2">
+        <i class="bi bi-cloud-arrow-up me-2"></i>
+        <strong>Synchronisation en cours…</strong>
+      </div>
+      <div v-else-if="isOffline" class="alert alert-warning mb-2">
+        <i class="bi bi-wifi-off me-2"></i>
+        <strong>Mode hors ligne</strong>
+        <span v-if="loadedFromCache"> — Données chargées depuis le cache.</span>
+        <span v-else> — Connectez-vous une première fois pour activer le mode hors ligne.</span>
+      </div>
+
       <div v-if="error" class="alert alert-danger alert-dismissible show">
         {{ error }}
         <button type="button" class="btn-close" @click="error = null" aria-label="Fermer"></button>
@@ -27,6 +38,29 @@
       <div v-if="!scanSupported" class="alert alert-info">
         <i class="bi bi-info-circle me-2"></i>
         Scan caméra n’est pas disponible. Utilisez la <strong>recherche produit</strong> ci-dessous (nom ou catégorie) pour ajouter des lignes à l’inventaire.
+      </div>
+
+      <!-- Brouillons en attente (reprenables) -->
+      <div v-if="!inventaireId && brouillons.length > 0 && !loading" class="mb-3">
+        <div class="card border-warning">
+          <div class="card-header bg-warning bg-opacity-25">
+            <h6 class="mb-0"><i class="bi bi-file-earmark-text me-2"></i>Brouillons en attente</h6>
+          </div>
+          <div class="card-body py-2">
+            <div class="d-flex flex-wrap gap-2">
+              <button
+                v-for="b in brouillons"
+                :key="b.id"
+                type="button"
+                class="btn btn-outline-warning btn-sm"
+                @click="reprendreBrouillon(b.id)"
+              >
+                <i class="bi bi-arrow-repeat me-1"></i>Reprendre #{{ b.id }}
+                <span class="badge bg-warning text-dark ms-1">{{ b.nb_lignes ?? 0 }} lignes</span>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Session : démarrer ou en cours -->
@@ -41,7 +75,7 @@
           <i class="bi bi-play-fill me-1"></i>Démarrer une session d'inventaire
         </button>
         <div v-else class="d-flex align-items-center gap-2">
-          <span class="badge bg-success">Session #{{ inventaireId }}</span>
+          <span class="badge bg-success">Session {{ isLocalInventaireId(inventaireId) ? '(hors ligne)' : '#' + inventaireId }}</span>
           <button type="button" class="btn btn-outline-secondary btn-sm" @click="reinitSession">
             Nouvelle session
           </button>
@@ -183,12 +217,15 @@
               <div v-if="lignes.length > 0 && inventaireId" class="p-3 border-top">
                 <button
                   type="button"
-                  class="btn btn-success"
-                  :disabled="applying"
+                  :class="['btn', (applying || isOffline) ? 'btn-secondary' : 'btn-success']"
+                  :disabled="applying || isOffline"
                   @click="appliquer"
                 >
                   <i class="bi bi-check-lg me-1"></i>Appliquer l'inventaire (mettre à jour les stocks)
                 </button>
+                <p v-if="isOffline && lignes.length > 0" class="text-warning small mt-2 mb-0">
+                  <i class="bi bi-wifi-off me-1"></i>Reconnexion requise pour appliquer l'inventaire.
+                </p>
               </div>
             </div>
           </div>
@@ -300,9 +337,25 @@ import {
   createInventaire,
   addInventaireLigne,
   appliquerInventaire,
+  fetchInventaires,
   fetchInventaireDetail,
+  deleteInventaireLigne,
+  deleteInventaire,
   updateProductCodeEan,
 } from '@/api';
+import {
+  saveProduitsCache,
+  getProduitsCache,
+  createLocalDraft,
+  getInventaireDraft,
+  saveInventaireDraftLignes,
+  clearInventaireDraft,
+  isLocalInventaireId,
+  queueCodeEanUpdate,
+  updateProductCodeEanInCache,
+  getSyncQueueCodeEan,
+  clearSyncQueueCodeEan,
+} from '@/lib/offline-inventaire';
 
 const videoEl = ref(null);
 const stream = ref(null);
@@ -331,6 +384,10 @@ const searchQueryCodeNotFound = ref('');
 const codeNotFoundError = ref('');
 const codeEanQuantiteModal = ref('');
 const codeEanQuantiteError = ref('');
+const isOffline = ref(false);
+const loadedFromCache = ref(false);
+const syncing = ref(false);
+const brouillons = ref([]);
 
 const SCAN_COOLDOWN_MS = 1500;
 
@@ -403,17 +460,54 @@ function fermerCodeNotFoundModal() {
   codeNotFoundError.value = '';
 }
 
+function isNetworkError(e) {
+  const msg = (e && e.message) || '';
+  return msg.includes('fetch') || msg.includes('network') || e instanceof TypeError;
+}
+
 async function associerCodeAuProduit(p) {
   codeNotFoundError.value = '';
+  const newCode = scannedCodeNotFound.value;
+  const doOffline = isOffline.value || !navigator.onLine;
   try {
-    await updateProductCodeEan(p.id, scannedCodeNotFound.value);
-    const idx = products.value.findIndex((x) => x.id === p.id);
-    if (idx >= 0) products.value[idx] = { ...p, code_ean: scannedCodeNotFound.value };
-    fermerCodeNotFoundModal();
-    if (inventaireId.value) {
-      ouvrirQuantiteProduit({ ...p, code_ean: scannedCodeNotFound.value });
-    } else if (typeof window !== 'undefined') {
-      window.alert('Code-barres associé au produit « ' + p.nom + ' ». Vous pouvez rescanner pour l\'ajouter à l\'inventaire.');
+    if (doOffline) {
+      await queueCodeEanUpdate(p.id, newCode);
+      await updateProductCodeEanInCache(p.id, newCode);
+      const idx = products.value.findIndex((x) => x.id === p.id);
+      if (idx >= 0) products.value[idx] = { ...p, code_ean: newCode };
+      fermerCodeNotFoundModal();
+      if (inventaireId.value) {
+        ouvrirQuantiteProduit({ ...p, code_ean: newCode });
+      } else if (typeof window !== 'undefined') {
+        window.alert('Code-barres associé (sera synchronisé à la reconnexion).');
+      }
+    } else {
+      try {
+        await updateProductCodeEan(p.id, newCode);
+        const idx = products.value.findIndex((x) => x.id === p.id);
+        if (idx >= 0) products.value[idx] = { ...p, code_ean: newCode };
+        fermerCodeNotFoundModal();
+        if (inventaireId.value) {
+          ouvrirQuantiteProduit({ ...p, code_ean: newCode });
+        } else if (typeof window !== 'undefined') {
+          window.alert('Code-barres associé au produit « ' + p.nom + ' ». Vous pouvez rescanner pour l\'ajouter à l\'inventaire.');
+        }
+      } catch (err) {
+        if (isNetworkError(err)) {
+          await queueCodeEanUpdate(p.id, newCode);
+          await updateProductCodeEanInCache(p.id, newCode);
+          const idx = products.value.findIndex((x) => x.id === p.id);
+          if (idx >= 0) products.value[idx] = { ...p, code_ean: newCode };
+          fermerCodeNotFoundModal();
+          if (inventaireId.value) {
+            ouvrirQuantiteProduit({ ...p, code_ean: newCode });
+          } else if (typeof window !== 'undefined') {
+            window.alert('Code-barres associé (sera synchronisé à la reconnexion).');
+          }
+        } else {
+          throw err;
+        }
+      }
     }
   } catch (e) {
     codeNotFoundError.value = e.message || 'Erreur lors de la mise à jour';
@@ -438,9 +532,13 @@ function ajouterOuIncrementerLigne(productId, productNom, stockTheorique, delta)
     });
   }
   if (inventaireId.value) {
-    addInventaireLigne(inventaireId.value, productId, newQty).catch((e) => {
-      error.value = e.message || 'Erreur ajout ligne';
-    });
+    if (isLocalInventaireId(inventaireId.value)) {
+      saveInventaireDraftLignes(lignes.value).catch(() => {});
+    } else {
+      addInventaireLigne(inventaireId.value, productId, newQty).catch((e) => {
+        error.value = e.message || 'Erreur ajout ligne';
+      });
+    }
   }
 }
 
@@ -448,11 +546,18 @@ async function demarrerSession() {
   error.value = '';
   loading.value = true;
   try {
-    const data = await createInventaire();
-    if (data.success && data.inventaire) {
-      inventaireId.value = data.inventaire.id;
+    if (!navigator.onLine) {
+      const id = await createLocalDraft();
+      inventaireId.value = id;
       lignes.value = [];
       scanned.value = [];
+    } else {
+      const data = await createInventaire();
+      if (data.success && data.inventaire) {
+        inventaireId.value = data.inventaire.id;
+        lignes.value = [];
+        scanned.value = [];
+      }
     }
   } catch (e) {
     error.value = e.message || 'Erreur création session';
@@ -461,10 +566,22 @@ async function demarrerSession() {
   }
 }
 
-function reinitSession() {
+async function reinitSession() {
+  const wasServerId = inventaireId.value && !isLocalInventaireId(inventaireId.value);
+  if (isLocalInventaireId(inventaireId.value)) {
+    await clearInventaireDraft();
+  }
   inventaireId.value = null;
   lignes.value = [];
   scanned.value = [];
+  if (wasServerId && navigator.onLine) {
+    try {
+      const listData = await fetchInventaires({ limit: 50, offset: 0 });
+      brouillons.value = (listData.inventaires || []).filter((i) => i.statut === 'draft');
+    } catch (e) {
+      brouillons.value = [];
+    }
+  }
 }
 
 function ouvrirQuantiteProduit(p) {
@@ -479,11 +596,33 @@ async function mettreAJourCodeEanQuantite() {
   if (!produitPourQuantite.value) return;
   codeEanQuantiteError.value = '';
   const newCode = (codeEanQuantiteModal.value || '').trim() || null;
+  const productId = produitPourQuantite.value.id;
+  const doOffline = isOffline.value || !navigator.onLine;
   try {
-    await updateProductCodeEan(produitPourQuantite.value.id, newCode);
-    const idx = products.value.findIndex((x) => x.id === produitPourQuantite.value.id);
-    if (idx >= 0) products.value[idx] = { ...products.value[idx], code_ean: newCode };
-    produitPourQuantite.value = { ...produitPourQuantite.value, code_ean: newCode };
+    if (doOffline) {
+      await queueCodeEanUpdate(productId, newCode);
+      await updateProductCodeEanInCache(productId, newCode);
+      const idx = products.value.findIndex((x) => x.id === productId);
+      if (idx >= 0) products.value[idx] = { ...products.value[idx], code_ean: newCode };
+      produitPourQuantite.value = { ...produitPourQuantite.value, code_ean: newCode };
+    } else {
+      try {
+        await updateProductCodeEan(productId, newCode);
+        const idx = products.value.findIndex((x) => x.id === productId);
+        if (idx >= 0) products.value[idx] = { ...products.value[idx], code_ean: newCode };
+        produitPourQuantite.value = { ...produitPourQuantite.value, code_ean: newCode };
+      } catch (err) {
+        if (isNetworkError(err)) {
+          await queueCodeEanUpdate(productId, newCode);
+          await updateProductCodeEanInCache(productId, newCode);
+          const idx = products.value.findIndex((x) => x.id === productId);
+          if (idx >= 0) products.value[idx] = { ...products.value[idx], code_ean: newCode };
+          produitPourQuantite.value = { ...produitPourQuantite.value, code_ean: newCode };
+        } else {
+          throw err;
+        }
+      }
+    }
   } catch (e) {
     codeEanQuantiteError.value = e.message || 'Erreur lors de la mise à jour';
   }
@@ -494,55 +633,84 @@ async function validerQuantiteProduit() {
   const qte = Number(quantiteSaisie.value);
   if (qte < 0) return;
   error.value = '';
-  try {
-    await addInventaireLigne(inventaireId.value, produitPourQuantite.value.id, qte);
-    const stockTheorique = Number(produitPourQuantite.value.stock) || 0;
-    const ecart = qte - stockTheorique;
-    const existing = lignes.value.find((l) => l.product_id === produitPourQuantite.value.id);
-    if (existing) {
-      existing.quantite_comptee = qte;
-      existing.stock_theorique = stockTheorique;
-      existing.ecart = ecart;
-    } else {
-      lignes.value.push({
-        product_id: produitPourQuantite.value.id,
-        product_nom: produitPourQuantite.value.nom,
-        quantite_comptee: qte,
-        stock_theorique: stockTheorique,
-        ecart,
-        comment: '',
-      });
+  const stockTheorique = Number(produitPourQuantite.value.stock) || 0;
+  const ecart = qte - stockTheorique;
+  const existing = lignes.value.find((l) => l.product_id === produitPourQuantite.value.id);
+  if (existing) {
+    existing.quantite_comptee = qte;
+    existing.stock_theorique = stockTheorique;
+    existing.ecart = ecart;
+  } else {
+    lignes.value.push({
+      product_id: produitPourQuantite.value.id,
+      product_nom: produitPourQuantite.value.nom,
+      quantite_comptee: qte,
+      stock_theorique: stockTheorique,
+      ecart,
+      comment: '',
+    });
+  }
+  showQuantiteModal.value = false;
+  if (isLocalInventaireId(inventaireId.value)) {
+    await saveInventaireDraftLignes(lignes.value).catch(() => {});
+  } else {
+    try {
+      await addInventaireLigne(inventaireId.value, produitPourQuantite.value.id, qte);
+    } catch (e) {
+      error.value = e.message || 'Erreur ajout ligne';
     }
-    showQuantiteModal.value = false;
-  } catch (e) {
-    error.value = e.message || 'Erreur ajout ligne';
   }
 }
 
-function retirerLigne(productId) {
+async function retirerLigne(productId) {
   lignes.value = lignes.value.filter((l) => l.product_id !== productId);
   if (inventaireId.value) {
-    addInventaireLigne(inventaireId.value, productId, 0).catch(() => {});
+    if (isLocalInventaireId(inventaireId.value)) {
+      await saveInventaireDraftLignes(lignes.value).catch(() => {});
+      if (lignes.value.length === 0) {
+        await clearInventaireDraft();
+        inventaireId.value = null;
+        scanned.value = [];
+      }
+    } else {
+      try {
+        await deleteInventaireLigne(inventaireId.value, productId);
+        if (lignes.value.length === 0) {
+          await deleteInventaire(inventaireId.value);
+          inventaireId.value = null;
+          scanned.value = [];
+          const listData = await fetchInventaires({ limit: 50, offset: 0 });
+          brouillons.value = (listData.inventaires || []).filter((i) => i.statut === 'draft');
+        }
+      } catch (e) {
+        error.value = e.message || 'Erreur suppression ligne';
+      }
+    }
   }
 }
 
 async function sauverCommentaire(ligne) {
   if (!inventaireId.value || ligne.ecart === 0) return;
   error.value = '';
-  try {
-    await addInventaireLigne(
-      inventaireId.value,
-      ligne.product_id,
-      ligne.quantite_comptee,
-      ligne.comment || null
-    );
-  } catch (e) {
-    error.value = e.message || 'Erreur sauvegarde commentaire';
+  if (isLocalInventaireId(inventaireId.value)) {
+    await saveInventaireDraftLignes(lignes.value).catch(() => {});
+  } else {
+    try {
+      await addInventaireLigne(
+        inventaireId.value,
+        ligne.product_id,
+        ligne.quantite_comptee,
+        ligne.comment || null
+      );
+    } catch (e) {
+      error.value = e.message || 'Erreur sauvegarde commentaire';
+    }
   }
 }
 
 async function appliquer() {
   if (!inventaireId.value || lignes.value.length === 0) return;
+  if (isLocalInventaireId(inventaireId.value)) return; // Hors ligne : appliquer désactivé
   error.value = '';
   applying.value = true;
   try {
@@ -646,22 +814,156 @@ function stopCamera() {
   cameraError.value = '';
 }
 
-onMounted(async () => {
+async function loadProduitsEtCategories() {
   loading.value = true;
   error.value = '';
+  isOffline.value = !navigator.onLine;
+  loadedFromCache.value = false;
+
   try {
-    const data = await fetchCaisseProduits();
-    if (data.success && data.produits) products.value = data.produits;
-    if (data.success && data.categories) categories.value = data.categories || [];
+    if (navigator.onLine) {
+      const data = await fetchCaisseProduits();
+      if (data.success && data.produits) products.value = data.produits;
+      if (data.success && data.categories) categories.value = data.categories || [];
+      await saveProduitsCache(products.value, categories.value);
+    } else {
+      const cached = await getProduitsCache();
+      if (cached) {
+        products.value = cached.produits || [];
+        categories.value = cached.categories || [];
+        loadedFromCache.value = true;
+      } else {
+        error.value = 'Connectez-vous une première fois pour activer le mode hors ligne.';
+      }
+    }
   } catch (e) {
-    error.value = e.message || 'Erreur chargement produits';
+    if (!navigator.onLine) {
+      const cached = await getProduitsCache();
+      if (cached) {
+        products.value = cached.produits || [];
+        categories.value = cached.categories || [];
+        loadedFromCache.value = true;
+        error.value = '';
+      } else {
+        error.value = 'Connectez-vous une première fois pour activer le mode hors ligne.';
+      }
+    } else {
+      error.value = e.message || 'Erreur chargement produits';
+    }
   } finally {
     loading.value = false;
   }
+  // Restaurer le brouillon : local si hors ligne, serveur si en ligne
+  if (!navigator.onLine) {
+    const draft = await getInventaireDraft();
+    if (draft) {
+      inventaireId.value = draft.id;
+      lignes.value = draft.lignes || [];
+    }
+  } else {
+    // Charger la liste des brouillons serveur (reprenables)
+    try {
+      const listData = await fetchInventaires({ limit: 50, offset: 0 });
+      brouillons.value = (listData.inventaires || []).filter((i) => i.statut === 'draft');
+    } catch (e) {
+      brouillons.value = [];
+    }
+  }
+}
+
+async function reprendreBrouillon(id) {
+  if (!navigator.onLine) return;
+  loading.value = true;
+  error.value = '';
+  try {
+    const detail = await fetchInventaireDetail(id);
+    if (detail.success && detail.inventaire && detail.lignes) {
+      inventaireId.value = detail.inventaire.id;
+      lignes.value = detail.lignes.map((l) => ({
+        product_id: l.product_id,
+        product_nom: l.product_nom,
+        quantite_comptee: l.quantite_comptee,
+        stock_theorique: l.stock_theorique,
+        ecart: l.ecart,
+        comment: l.comment || '',
+      }));
+      scanned.value = [];
+      brouillons.value = brouillons.value.filter((b) => b.id !== id);
+    }
+  } catch (e) {
+    error.value = e.message || 'Erreur reprise brouillon';
+  } finally {
+    loading.value = false;
+  }
+}
+
+/** Phase 4 + 5 : sync à la reconnexion (code EAN + inventaire draft) */
+async function processSyncOnReconnect() {
+  if (!navigator.onLine) return;
+  syncing.value = true;
+  try {
+    // Phase 5 : mises à jour code EAN
+    const codeEanQueue = await getSyncQueueCodeEan();
+    for (const entry of codeEanQueue) {
+      try {
+        await updateProductCodeEan(entry.productId, entry.codeEan);
+      } catch (e) {
+        console.warn('Sync code EAN échoué:', e);
+      }
+    }
+    if (codeEanQueue.length > 0) await clearSyncQueueCodeEan();
+
+    // Phase 4 : inventaire draft
+    const draft = await getInventaireDraft();
+    if (draft && draft.lignes && draft.lignes.length > 0) {
+      const data = await createInventaire();
+      if (data.success && data.inventaire) {
+        const serverId = data.inventaire.id;
+        for (const l of draft.lignes) {
+          await addInventaireLigne(serverId, l.product_id, l.quantite_comptee, l.comment || null);
+        }
+        await appliquerInventaire(serverId);
+        await clearInventaireDraft();
+        inventaireId.value = null;
+        lignes.value = [];
+        scanned.value = [];
+        if (typeof window !== 'undefined') {
+          window.alert('Inventaire synchronisé et appliqué. Les stocks ont été mis à jour.');
+        }
+      }
+    } else if (draft) {
+      await clearInventaireDraft();
+      inventaireId.value = null;
+      lignes.value = [];
+    }
+  } catch (e) {
+    console.warn('Sync échoué:', e);
+  } finally {
+    syncing.value = false;
+  }
+}
+
+async function handleOnline() {
+  isOffline.value = false;
+  await loadProduitsEtCategories();
+  await processSyncOnReconnect();
+}
+
+function handleOffline() {
+  isOffline.value = true;
+}
+
+onMounted(async () => {
+  await loadProduitsEtCategories();
+  if (navigator.onLine) await processSyncOnReconnect();
+  window.addEventListener('online', handleOnline);
+  window.addEventListener('offline', handleOffline);
 });
 
 onUnmounted(() => {
   stopCamera();
+  window.removeEventListener('online', handleOnline);
+  window.removeEventListener('offline', handleOffline);
 });
 </script>
 

@@ -340,6 +340,42 @@ export async function appliquerInventaire(inventaireId) {
   return response.json();
 }
 
+/** DELETE /api/caisse/inventaires/:id/lignes/:productId - Supprimer une ligne */
+export async function deleteInventaireLigne(inventaireId, productId) {
+  const response = await fetch(`/api/caisse/inventaires/${inventaireId}/lignes/${productId}`, {
+    method: 'DELETE',
+    headers: {
+      Accept: 'application/json',
+      'csrf-token': typeof window !== 'undefined' && window.CSRF_TOKEN ? window.CSRF_TOKEN : '',
+    },
+    credentials: 'include',
+  });
+  checkAuth(response);
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+/** DELETE /api/caisse/inventaires/:id - Supprimer un inventaire draft */
+export async function deleteInventaire(inventaireId) {
+  const response = await fetch(`/api/caisse/inventaires/${inventaireId}`, {
+    method: 'DELETE',
+    headers: {
+      Accept: 'application/json',
+      'csrf-token': typeof window !== 'undefined' && window.CSRF_TOKEN ? window.CSRF_TOKEN : '',
+    },
+    credentials: 'include',
+  });
+  checkAuth(response);
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
 /** GET /api/caisse/stock-mouvements - Liste des mouvements de stock */
 export async function fetchStockMouvements(params = {}) {
   const q = new URLSearchParams(params).toString();

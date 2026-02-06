@@ -1,0 +1,16 @@
+{
+  "name": "COOPAZ Inventaire",
+  "short_name": "Inventaire",
+  "description": "Inventaire hors ligne - COOPAZ",
+  "start_url": "/caisse/inventaire",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#198754",
+  "icons": [
+    {
+      "src": "/dist/favicon.ico",
+      "sizes": "48x48",
+      "type": "image/x-icon"
+    }
+  ]
+}
