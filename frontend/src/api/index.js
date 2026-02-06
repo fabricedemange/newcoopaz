@@ -1450,6 +1450,37 @@ export async function fetchAdminEmailQueue(limit = 500) {
   return response.json();
 }
 
+/** GET /api/admin/email-queue/settings */
+export async function fetchEmailQueueSettings() {
+  const response = await fetch('/api/admin/email-queue/settings', {
+    method: 'GET',
+    headers: { Accept: 'application/json', 'csrf-token': typeof window !== 'undefined' && window.CSRF_TOKEN ? window.CSRF_TOKEN : '' },
+    credentials: 'include',
+  });
+  checkAuth(response);
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+/** PATCH /api/admin/email-queue/settings */
+export async function updateEmailQueueSettings(payload) {
+  const response = await fetch('/api/admin/email-queue/settings', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'csrf-token': typeof window !== 'undefined' && window.CSRF_TOKEN ? window.CSRF_TOKEN : '' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+  checkAuth(response);
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
 // --- Admin User Roles (assignation rôles à un utilisateur) ---
 // fetchAdminRoles est défini dans la section Admin Rôles (RBAC) ci-dessus
 

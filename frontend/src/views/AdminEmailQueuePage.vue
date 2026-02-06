@@ -6,13 +6,43 @@
     </div>
     <div v-else-if="store.error" class="alert alert-danger">{{ store.error }}</div>
     <div v-else>
-      <div class="d-flex justify-content-between align-items-center mb-4">
+      <div v-if="store.settingsError" class="alert alert-warning alert-dismissible fade show">
+        <i class="bi bi-exclamation-triangle me-2"></i>{{ store.settingsError }}
+        <button type="button" class="btn-close" @click="store.settingsError = null"></button>
+      </div>
+      <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
         <h2 class="mb-0"><i class="bi bi-envelope-paper me-2"></i>File d'attente email</h2>
-        <div class="d-flex gap-2">
-          <BackButton />
-          <button @click="store.loadEmailQueue()" class="btn btn-outline-primary">
-          <i class="bi bi-arrow-clockwise me-2"></i>Actualiser
-        </button>
+        <div class="d-flex flex-wrap gap-3 align-items-center">
+          <div class="d-flex gap-3">
+            <div class="form-check form-switch mb-0">
+              <input
+                id="toggleMailQueueSend"
+                v-model="store.settings.mailQueueSendEnabled"
+                class="form-check-input"
+                type="checkbox"
+                :disabled="store.settingsLoading"
+                @change="onToggle('mailQueueSendEnabled', store.settings.mailQueueSendEnabled)"
+              >
+              <label class="form-check-label" for="toggleMailQueueSend">Envoi des emails (file)</label>
+            </div>
+            <div class="form-check form-switch mb-0">
+              <input
+                id="toggleCatalogueReminder"
+                v-model="store.settings.catalogueOrderReminderEnabled"
+                class="form-check-input"
+                type="checkbox"
+                :disabled="store.settingsLoading"
+                @change="onToggle('catalogueOrderReminderEnabled', store.settings.catalogueOrderReminderEnabled)"
+              >
+              <label class="form-check-label" for="toggleCatalogueReminder">Rappels catalogue (expiration + 8h)</label>
+            </div>
+          </div>
+          <div class="d-flex gap-2">
+            <BackButton />
+            <button @click="store.loadEmailQueue()" class="btn btn-outline-primary">
+              <i class="bi bi-arrow-clockwise me-2"></i>Actualiser
+            </button>
+          </div>
         </div>
       </div>
       <div class="row g-3 mb-4">
@@ -183,7 +213,17 @@ import { useAdminEmailQueueStore } from '@/stores/adminEmailQueue';
 
 const store = useAdminEmailQueueStore();
 
+async function onToggle(key, newVal) {
+  try {
+    await store.updateSetting(key, newVal);
+  } catch {
+    if (key === 'mailQueueSendEnabled') store.settings.mailQueueSendEnabled = !newVal;
+    else store.settings.catalogueOrderReminderEnabled = !newVal;
+  }
+}
+
 onMounted(() => {
   store.loadEmailQueue();
+  store.loadSettings();
 });
 </script>

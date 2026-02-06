@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { fetchAdminEmailQueue } from '@/api';
+import { fetchAdminEmailQueue, fetchEmailQueueSettings, updateEmailQueueSettings } from '@/api';
 
 export const useAdminEmailQueueStore = defineStore('adminEmailQueue', {
   state: () => ({
@@ -11,6 +11,12 @@ export const useAdminEmailQueueStore = defineStore('adminEmailQueue', {
     currentTab: 'notifications',
     limit: 500,
     statusFilter: 'all',
+    settings: {
+      mailQueueSendEnabled: false,
+      catalogueOrderReminderEnabled: false,
+    },
+    settingsLoading: false,
+    settingsError: null,
   }),
 
   getters: {
@@ -70,6 +76,36 @@ export const useAdminEmailQueueStore = defineStore('adminEmailQueue', {
         this.error = e.message || 'Erreur de connexion au serveur';
       } finally {
         this.loading = false;
+      }
+    },
+    async loadSettings() {
+      this.settingsLoading = true;
+      this.settingsError = null;
+      try {
+        const data = await fetchEmailQueueSettings();
+        if (data.success) {
+          this.settings.mailQueueSendEnabled = !!data.mailQueueSendEnabled;
+          this.settings.catalogueOrderReminderEnabled = !!data.catalogueOrderReminderEnabled;
+        } else throw new Error(data.error);
+      } catch (e) {
+        this.settingsError = e.message || 'Erreur chargement réglages';
+      } finally {
+        this.settingsLoading = false;
+      }
+    },
+    async updateSetting(key, value) {
+      const payload = key === 'mailQueueSendEnabled'
+        ? { mailQueueSendEnabled: value }
+        : { catalogueOrderReminderEnabled: value };
+      try {
+        const data = await updateEmailQueueSettings(payload);
+        if (data.success) {
+          this.settings.mailQueueSendEnabled = !!data.mailQueueSendEnabled;
+          this.settings.catalogueOrderReminderEnabled = !!data.catalogueOrderReminderEnabled;
+        } else throw new Error(data.error);
+      } catch (e) {
+        this.settingsError = e.message || 'Erreur mise à jour';
+        throw e;
       }
     },
     formatDate(dateStr) {

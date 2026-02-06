@@ -2,17 +2,14 @@ const { db } = require("../config/config");
 const { logger } = require("../config/logger");
 const { enqueueEmail } = require("./email-queue.service");
 const { generateCatalogueSynthesisPdfBuffer } = require("../utils/exports");
-
-/** Activer le worker cron d'envoi des rappels "prévoir la commande". En dev, laisser à false pour ne pas envoyer de mails aux utilisateurs. */
-const REMINDER_CRON_ENABLED =
-  process.env.CATALOGUE_ORDER_REMINDER_ENABLED === "true" ||
-  process.env.CATALOGUE_ORDER_REMINDER_ENABLED === "1";
+const { isCatalogueOrderReminderEnabled } = require("./app-settings.service");
 
 const REMINDER_OFFSET_HOURS = Number(
   process.env.CATALOGUE_ORDER_REMINDER_OFFSET_HOURS || 8
 );
+/** Intervalle du cron : 1 minute par défaut (était 10 min). */
 const WORKER_INTERVAL_MS = Number(
-  process.env.CATALOGUE_ORDER_REMINDER_INTERVAL_MS || 10 * 60 * 1000
+  process.env.CATALOGUE_ORDER_REMINDER_INTERVAL_MS || 60 * 1000
 );
 
 let reminderTimer = null;
@@ -114,6 +111,13 @@ async function markCatalogueReminded(catalogueId) {
 }
 
 async function processCatalogueOrderRemindersOnce() {
+  const enabled = await new Promise((res, rej) => {
+    isCatalogueOrderReminderEnabled((err, v) => (err ? rej(err) : res(v)));
+  });
+  if (!enabled) {
+    return;
+  }
+
   const due = await fetchDueCatalogues();
   if (!due.length) {
     return;
@@ -164,13 +168,6 @@ async function processCatalogueOrderRemindersOnce() {
 }
 
 function startCatalogueOrderReminderWorker() {
-  if (!REMINDER_CRON_ENABLED) {
-    logger.info("Catalogue order reminder cron désactivé (CATALOGUE_ORDER_REMINDER_ENABLED != true)", {
-      hint: "En production, définir CATALOGUE_ORDER_REMINDER_ENABLED=true pour activer les rappels.",
-    });
-    return;
-  }
-
   if (reminderTimer) {
     return;
   }
@@ -196,5 +193,4 @@ function startCatalogueOrderReminderWorker() {
 module.exports = {
   startCatalogueOrderReminderWorker,
   processCatalogueOrderRemindersOnce,
-  isReminderCronEnabled: () => REMINDER_CRON_ENABLED,
 };

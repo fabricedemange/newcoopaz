@@ -143,6 +143,9 @@
   .sidebar-section-admin-site .sidebar-section-toggle:hover {
     background: rgba(255, 183, 77, 0.35);
   }
+  .sidebar-section-mon-compte .sidebar-section-toggle:hover {
+    background: rgba(200, 190, 220, 0.2);
+  }
   .sidebar-section-toggle .toggle-icon {
     font-size: 0.75rem;
     transition: transform 0.2s ease;
@@ -372,6 +375,33 @@
     background: rgba(255, 183, 77, 0.3);
     border-left-color: #b85a0a;
     color: #6b2e00;
+  }
+
+  /* Mon compte - Gris/violet pastel pour le bloc utilisateur */
+  .sidebar-section-mon-compte .sidebar-section-title {
+    background: rgba(200, 190, 220, 0.25);
+    color: #5a4a7a;
+  }
+
+  .sidebar-section-mon-compte .sidebar-section-content {
+    background: rgba(200, 190, 220, 0.06);
+  }
+
+  .sidebar-section-mon-compte .sidebar-menu-item {
+    background: rgba(200, 190, 220, 0.1);
+    color: #5a4a7a;
+  }
+
+  .sidebar-section-mon-compte .sidebar-menu-item:hover {
+    background: rgba(200, 190, 220, 0.2);
+    border-left-color: #6a5a8a;
+    color: #4a3a6a;
+  }
+
+  .sidebar-section-mon-compte .sidebar-menu-item.active {
+    background: rgba(200, 190, 220, 0.25);
+    border-left-color: #6a5a8a;
+    color: #4a3a6a;
   }
 
   /* En-têtes de tableaux : même pastel que le menu Admin Site (orange, très clair) */
@@ -723,27 +753,33 @@ function hasAccess(requiredPermissions) {
   </div>
   <% } %>
 
-  <!-- User info and actions at bottom -->
-  <div class="sidebar-user-info" style="padding-top: 0.5rem;">
-    <a href="/account" class="sidebar-menu-item" data-path="/account" style="padding: 0.4rem 1rem; margin: 0 -1rem 0.5rem -1rem;">
-      <i class="bi bi-person-circle"></i>
-      <span><%= user %> - Mon Compte</span>
-    </a>
-    <a href="/logout" class="sidebar-menu-item" data-path="/logout" style="padding: 0.4rem 1rem; margin: 0 -1rem 0.5rem -1rem;">
-      <i class="bi bi-box-arrow-right"></i>
-      <span>Déconnexion</span>
-    </a>
-    <div style="padding: 0.5rem 0; border-top: 1px solid #dee2e6; margin-top: 0.5rem;">
-      <% if (userRoles && userRoles.length > 0) { %>
-        <small class="text-muted d-block mb-1">Rôles:</small>
-        <div>
-          <% userRoles.forEach(function(roleName) { %>
-            <span class="badge bg-primary me-1 mb-1" style="font-size: 0.7rem;"><%= roleName %></span>
-          <% }); %>
-        </div>
-      <% } else { %>
-        <small class="text-muted d-block">Rôle: <span class="badge bg-secondary"><%= role || 'Aucun' %></span></small>
-      <% } %>
+  <!-- Mon compte : accès compte et déconnexion (même principe que les autres menus) -->
+  <div class="sidebar-section sidebar-section-mon-compte">
+    <div class="sidebar-section-title sidebar-section-title-with-link">
+      <a href="/account" class="sidebar-section-title-link sidebar-menu-item" data-path="/account">Mon compte</a>
+      <button type="button" class="sidebar-section-toggle" data-section="mon-compte" aria-label="Ouvrir/Fermer le menu"><i class="bi bi-chevron-down toggle-icon"></i></button>
+    </div>
+    <div class="sidebar-section-content" data-section-content="mon-compte">
+      <a href="/account" class="sidebar-menu-item" data-path="/account">
+        <i class="bi bi-person-circle"></i>
+        <span>Mon Compte</span>
+      </a>
+      <a href="/logout" class="sidebar-menu-item" data-path="/logout">
+        <i class="bi bi-box-arrow-right"></i>
+        <span>Déconnexion</span>
+      </a>
+      <div class="sidebar-user-roles" style="padding: 0.5rem 0; border-top: 1px solid #dee2e6; margin-top: 0.5rem;">
+        <% if (userRoles && userRoles.length > 0) { %>
+          <small class="text-muted d-block mb-1">Rôles:</small>
+          <div>
+            <% userRoles.forEach(function(roleName) { %>
+              <span class="badge bg-primary me-1 mb-1" style="font-size: 0.7rem;"><%= roleName %></span>
+            <% }); %>
+          </div>
+        <% } else { %>
+          <small class="text-muted d-block">Rôle: <span class="badge bg-secondary"><%= role || 'Aucun' %></span></small>
+        <% } %>
+      </div>
     </div>
   </div>
 </nav>
@@ -890,21 +926,8 @@ function hasAccess(requiredPermissions) {
     });
   });
 
-  // Auto-expand section containing active item (uniquement si l'actif est un lien du contenu, pas le lien-titre accueil)
-  const activeItem = document.querySelector('.sidebar-menu-item.active');
-  if (activeItem) {
-    const isTitleLink = activeItem.classList.contains('sidebar-section-title-link');
-    if (isTitleLink) return;
-    const section = activeItem.closest('.sidebar-section');
-    if (section) {
-      const title = section.querySelector('[data-section]');
-      const content = section.querySelector('[data-section-content]');
-      if (title && content) {
-        title.classList.remove('collapsed');
-        content.classList.remove('collapsed');
-      }
-    }
-  }
+  // Ne plus auto-déplier la section contenant l'élément actif : on respecte l'état replié/déplié
+  // choisi par l'utilisateur (chevron uniquement). L'état est stocké dans localStorage.
 
   // Save and restore scroll position
   const SCROLL_KEY = 'sidebar-scroll-position';

@@ -3,6 +3,11 @@ const router = express.Router();
 const { db } = require("../config/config");
 const { requirePermission } = require("../middleware/rbac.middleware");
 const { logger } = require("../config/logger");
+const {
+  getAppSetting,
+  setAppSetting,
+  isEnabled,
+} = require("../services/app-settings.service");
 
 // ============================================================================
 // API: File d'attente email (JSON)
@@ -146,6 +151,80 @@ router.get("/", requirePermission('admin', { json: true }), (req, res) => {
       });
     });
   });
+});
+
+// ============================================================================
+// API: Réglages des workers email (interrupteurs page /admin/email-queue)
+// ============================================================================
+
+/** GET /api/admin/email-queue/settings */
+router.get("/settings", requirePermission("admin", { json: true }), (req, res) => {
+  getAppSetting("mail_queue_send_enabled", (err1, v1) => {
+    if (err1) {
+      return res.status(500).json({ success: false, error: "Erreur lecture réglages" });
+    }
+    getAppSetting("catalogue_order_reminder_enabled", (err2, v2) => {
+      if (err2) {
+        return res.status(500).json({ success: false, error: "Erreur lecture réglages" });
+      }
+      res.json({
+        success: true,
+        mailQueueSendEnabled: isEnabled(v1),
+        catalogueOrderReminderEnabled: isEnabled(v2),
+      });
+    });
+  });
+});
+
+/** PATCH /api/admin/email-queue/settings */
+router.patch("/settings", requirePermission("admin", { json: true }), (req, res) => {
+  const { mailQueueSendEnabled, catalogueOrderReminderEnabled } = req.body || {};
+  const updates = [];
+  if (typeof mailQueueSendEnabled === "boolean") {
+    updates.push((cb) => setAppSetting("mail_queue_send_enabled", mailQueueSendEnabled, cb));
+  }
+  if (typeof catalogueOrderReminderEnabled === "boolean") {
+    updates.push((cb) => setAppSetting("catalogue_order_reminder_enabled", catalogueOrderReminderEnabled, cb));
+  }
+  if (updates.length === 0) {
+    return res.status(400).json({ success: false, error: "Aucune valeur à mettre à jour" });
+  }
+  let done = 0;
+  const onDone = (err) => {
+    if (res.headersSent) return;
+    if (err) {
+      return res.status(500).json({ success: false, error: "Erreur mise à jour réglages" });
+    }
+    done += 1;
+    if (done === updates.length) {
+      // Tracer la mise à jour des interrupteurs pour /admin/trace
+      const username = req.session?.username || "";
+      const userId = req.session?.userId ?? "";
+      const usernameVal = username + (userId !== "" ? "(" + userId + ")" : "");
+      const parts = [];
+      if (typeof mailQueueSendEnabled === "boolean") parts.push(`mail_queue_send_enabled=${mailQueueSendEnabled ? 1 : 0}`);
+      if (typeof catalogueOrderReminderEnabled === "boolean") parts.push(`catalogue_order_reminder_enabled=${catalogueOrderReminderEnabled ? 1 : 0}`);
+      const queryDesc = "UPDATE app_settings (email-queue) : " + parts.join(", ");
+      db.query(
+        "INSERT INTO trace (username, query, params) VALUES (?, ?, ?)",
+        [usernameVal, queryDesc, parts.join(" // ")],
+        (traceErr) => {
+          if (traceErr) logger.error("Erreur insertion trace app_settings", { error: traceErr?.message });
+        }
+      );
+
+      getAppSetting("mail_queue_send_enabled", (e1, v1) => {
+        getAppSetting("catalogue_order_reminder_enabled", (e2, v2) => {
+          res.json({
+            success: true,
+            mailQueueSendEnabled: isEnabled(v1),
+            catalogueOrderReminderEnabled: isEnabled(v2),
+          });
+        });
+      });
+    }
+  };
+  updates.forEach((fn) => fn(onDone));
 });
 
 module.exports = router;
