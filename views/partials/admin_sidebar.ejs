@@ -736,6 +736,12 @@ function hasAccess(requiredPermissions) {
         <span>File d'attente email</span>
       </a>
       <% } %>
+      <% if (hasAccess(['organizations.view_all', 'admin'])) { %>
+      <a href="/admin/maintenance" class="sidebar-menu-item" data-path="/admin/maintenance">
+        <i class="bi bi-tools"></i>
+        <span>Maintenance</span>
+      </a>
+      <% } %>
       <!-- Configuration -->
       <% if (hasAccess(['bandeaux', 'organizations', 'admin'])) { %>
       <a href="/admin/bandeaux" class="sidebar-menu-item" data-path="/admin/bandeaux">

@@ -375,6 +375,7 @@ const apiUsersRoutes = require("./routes/api.admin.users.routes");
 // Stats, Trace, Email Queue, Bandeaux, Organizations Routes
 const apiTraceRoutes = require("./routes/api.admin.trace.routes");
 const apiEmailQueueRoutes = require("./routes/api.admin.email-queue.routes");
+const apiMaintenanceRoutes = require("./routes/api.admin.maintenance.routes");
 const apiStatsRoutes = require("./routes/api.admin.stats.routes");
 const apiBandeauxRoutes = require("./routes/api.admin.bandeaux.routes");
 const apiOrganizationsRoutes = require("./routes/api.admin.organizations.routes");
@@ -566,6 +567,10 @@ app.use(async (req, res, next) => {
 // Middleware global compatible MySQL
 // HelpText middleware removed - feature disabled
 
+// Middleware maintenance : en mode maintenance, seul le super admin peut accéder
+const { maintenanceMiddleware } = require("./middleware/maintenance.middleware");
+app.use(maintenanceMiddleware);
+
 // Import du middleware de traçage
 //const { traceActionsMiddleware } = require("./middleware/trace.middleware");
 //app.use(traceActionsMiddleware);
@@ -617,6 +622,7 @@ app.use("/api/admin/users", apiUsersRoutes);
 // Stats, Trace, Email Queue, Bandeaux, Organizations API Routes
 app.use("/api/admin/trace", apiTraceRoutes);
 app.use("/api/admin/email-queue", apiEmailQueueRoutes);
+app.use("/api/admin/maintenance", apiMaintenanceRoutes);
 app.use("/api/admin/stats", apiStatsRoutes);
 app.use("/api/admin/bandeaux", apiBandeauxRoutes);
 app.use("/api/admin/organizations", apiOrganizationsRoutes);

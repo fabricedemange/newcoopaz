@@ -1,0 +1,111 @@
+<%- include('partials/header', { title: 'Maintenance', user, role }) %>
+
+<div class="admin-content-wrapper">
+  <div class="container-fluid px-3 mt-4">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+      <h2 class="mb-0"><i class="bi bi-tools me-2"></i>Mode maintenance</h2>
+      <a href="/admin/site" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Retour Admin Site</a>
+    </div>
+
+    <div class="row">
+      <div class="col-lg-8">
+        <div class="card">
+          <div class="card-header">
+            <h5 class="mb-0">Paramètres</h5>
+          </div>
+          <div class="card-body">
+            <div id="maintenance-message" class="alert alert-info d-none"></div>
+            <div id="maintenance-error" class="alert alert-danger d-none"></div>
+
+            <form id="maintenanceForm">
+              <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+              <div class="form-check form-switch mb-4">
+                <input class="form-check-input" type="checkbox" id="maintenanceEnabled" name="maintenance_enabled" <%= maintenanceEnabled ? 'checked' : '' %>>
+                <label class="form-check-label" for="maintenanceEnabled">
+                  Activer le mode maintenance
+                </label>
+                <div class="form-text">
+                  En mode maintenance, seul le super administrateur peut accéder au site. Les autres utilisateurs verront une page avec le message ci-dessous.
+                </div>
+              </div>
+
+              <div class="mb-4">
+                <label for="maintenanceMessage" class="form-label">Message affiché aux utilisateurs</label>
+                <textarea
+                  class="form-control"
+                  id="maintenanceMessage"
+                  name="maintenance_message"
+                  rows="4"
+                  maxlength="255"
+                  placeholder="Le site est actuellement en maintenance. Merci de réessayer plus tard."
+                ><%= typeof maintenanceMessage !== 'undefined' && maintenanceMessage ? maintenanceMessage : '' %></textarea>
+                <div class="form-text">
+                  Ce message sera affiché sur la page de maintenance (max. 255 caractères).
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-primary" id="submitBtn">
+                <span class="spinner-border spinner-border-sm d-none me-1" id="spinner"></span>
+                Enregistrer
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const form = document.getElementById('maintenanceForm');
+  const msgEl = document.getElementById('maintenance-message');
+  const errEl = document.getElementById('maintenance-error');
+  const submitBtn = document.getElementById('submitBtn');
+  const spinner = document.getElementById('spinner');
+
+  function showMsg(text, isError) {
+    msgEl.classList.add('d-none');
+    errEl.classList.add('d-none');
+    (isError ? errEl : msgEl).textContent = text;
+    (isError ? errEl : msgEl).classList.remove('d-none');
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    submitBtn.disabled = true;
+    spinner.classList.remove('d-none');
+    showMsg('', false);
+
+    const csrfInput = document.querySelector('input[name="_csrf"]');
+    const csrfToken = csrfInput ? csrfInput.value : '';
+    const payload = {
+      maintenanceEnabled: document.getElementById('maintenanceEnabled').checked,
+      maintenanceMessage: document.getElementById('maintenanceMessage').value.trim(),
+      _csrf: csrfToken
+    };
+
+    try {
+      const res = await fetch('/api/admin/maintenance/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'csrf-token': csrfToken },
+        credentials: 'include',
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.success) {
+        showMsg('Paramètres enregistrés.', false);
+      } else {
+        showMsg(data.error || 'Erreur lors de l\'enregistrement.', true);
+      }
+    } catch (err) {
+      showMsg('Erreur de connexion.', true);
+    } finally {
+      submitBtn.disabled = false;
+      spinner.classList.add('d-none');
+    }
+  });
+})();
+</script>
+
+<%- include('partials/footer') %>

@@ -70,6 +70,15 @@ function envoimail(to, subject, htmlContent, initiatedBy = null) {
   }
 }
 
+// GET /maintenance - Page affichée aux utilisateurs quand le site est en maintenance (path skip dans middleware)
+router.get("/maintenance", (req, res) => {
+  const { getMaintenanceSettings } = require("../services/app-settings.service");
+  getMaintenanceSettings((err, settings) => {
+    const message = settings?.message || "Le site est actuellement en maintenance. Merci de réessayer plus tard.";
+    res.status(503).render("maintenance", { message });
+  });
+});
+
 // GET /login - Formulaire de connexion Vue+Vite
 router.get("/login", (req, res) => {
   const redirectUrl = req.query.redirect;

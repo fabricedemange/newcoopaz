@@ -3336,6 +3336,24 @@ router.get(
   }
 );
 
+// Page Maintenance - super admin ou admin (pour configurer)
+router.get("/maintenance", requireAnyPermission(["organizations.view_all", "admin"]), (req, res) => {
+  const { getMaintenanceSettings } = require("../services/app-settings.service");
+  getMaintenanceSettings((err, settings) => {
+    if (err) {
+      return renderAdminView(res, "admin_maintenance_vue", {
+        maintenanceEnabled: false,
+        maintenanceMessage: "",
+        error: "Erreur lors du chargement des paramètres.",
+      });
+    }
+    renderAdminView(res, "admin_maintenance_vue", {
+      maintenanceEnabled: !!settings?.enabled,
+      maintenanceMessage: settings?.message || "",
+    });
+  });
+});
+
 // Menu admin - Redirection vers dashboard Vue+Vite
 router.get("/menu", requirePermission('catalogues'), (req, res) => {
   res.redirect("/admin/dashboard/vue");

@@ -93,6 +93,38 @@ function setAppSetting(key, value, callback) {
   );
 }
 
+/** Stocke une valeur texte (ex. maintenance_message). */
+function setAppSettingText(key, value, callback) {
+  const v = value != null ? String(value).slice(0, 255) : "";
+  db.query(
+    "INSERT INTO app_settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)",
+    [key, v],
+    (err) => {
+      if (err) {
+        logger.error("app_settings setText", { key, error: err?.message });
+        return callback(err);
+      }
+      cache[key] = v;
+      cacheExpiry[key] = Date.now() + CACHE_MS;
+      callback(null);
+    }
+  );
+}
+
+/** Récupère les réglages maintenance (enabled + message). */
+function getMaintenanceSettings(callback) {
+  getAppSetting("maintenance_enabled", (err1, v1) => {
+    if (err1) return callback(err1, null);
+    getAppSetting("maintenance_message", (err2, v2) => {
+      if (err2) return callback(err2, null);
+      callback(null, {
+        enabled: isEnabled(v1),
+        message: (v2 != null ? String(v2) : "").trim() || "Le site est actuellement en maintenance. Merci de réessayer plus tard.",
+      });
+    });
+  });
+}
+
 /** Promisified getAppSetting pour usage async/await */
 function getAppSettingAsync(key) {
   return new Promise((resolve, reject) => {
@@ -107,8 +139,10 @@ module.exports = {
   getAppSetting,
   getAppSettingSync,
   setAppSetting,
+  setAppSettingText,
   getAppSettingAsync,
   isEnabled,
   isMailQueueSendEnabled,
   isCatalogueOrderReminderEnabled,
+  getMaintenanceSettings,
 };

@@ -157,6 +157,12 @@ var showBandeauxOrga = hasAccess(['bandeaux', 'organizations', 'admin']);
             <span>Configuration</span>
           </div>
           <div class="zone-body">
+            <% if (hasAccess(['organizations.view_all', 'admin'])) { %>
+            <a href="/admin/maintenance" class="zone-link">
+              <i class="bi bi-tools"></i>
+              <span>Maintenance</span>
+            </a>
+            <% } %>
             <a href="/admin/bandeaux" class="zone-link">
               <i class="bi bi-megaphone"></i>
               <span>Bandeaux d'info</span>
