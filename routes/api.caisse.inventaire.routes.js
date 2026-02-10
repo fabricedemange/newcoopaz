@@ -364,14 +364,38 @@ router.post("/inventaires/:id/appliquer", requireInventoryStock, async (req, res
 
 /**
  * GET /api/caisse/stock-mouvements
- * Liste des mouvements de stock (filtres : product_id, type, date_debut, date_fin).
+ * Liste des mouvements de stock.
+ * Filtres: product_id, product_search (nom produit LIKE), type, date_debut, date_fin, created_by.
+ * Tri: sort_by (created_at|product_nom|type|quantite|stock_avant|stock_apres), sort_order (asc|desc).
  */
 router.get("/stock-mouvements", requireInventoryStock, async (req, res) => {
   try {
     const orgId = getCurrentOrgId(req);
-    const { product_id, type, date_debut, date_fin, limit = 50, offset = 0 } = req.query;
+    const {
+      product_id,
+      product_search,
+      type,
+      date_debut,
+      date_fin,
+      created_by,
+      limit = 50,
+      offset = 0,
+      sort_by = "created_at",
+      sort_order = "desc",
+    } = req.query;
     const lim = Math.min(parseInt(limit, 10) || 50, 200);
     const off = parseInt(offset, 10) || 0;
+
+    const allowedSort = {
+      created_at: "sm.created_at",
+      product_nom: "p.nom",
+      type: "sm.type",
+      quantite: "sm.quantite",
+      stock_avant: "sm.stock_avant",
+      stock_apres: "sm.stock_apres",
+    };
+    const orderCol = allowedSort[sort_by] || "sm.created_at";
+    const orderDir = sort_order === "asc" ? "ASC" : "DESC";
 
     let query = `
       SELECT sm.id, sm.product_id, sm.type, sm.quantite, sm.stock_avant, sm.stock_apres,
@@ -379,15 +403,19 @@ router.get("/stock-mouvements", requireInventoryStock, async (req, res) => {
              p.nom AS product_nom,
              u.username AS created_by_username
       FROM stock_movements sm
-      INNER JOIN products p ON p.id = sm.product_id
+      INNER JOIN products p ON p.id = sm.product_id AND p.organization_id = ?
       LEFT JOIN users u ON sm.created_by = u.id
       WHERE sm.organization_id = ?
     `;
-    const params = [orgId];
+    const params = [orgId, orgId];
 
     if (product_id) {
       query += " AND sm.product_id = ?";
       params.push(parseInt(product_id, 10));
+    }
+    if (product_search && String(product_search).trim()) {
+      query += " AND p.nom LIKE ?";
+      params.push("%" + String(product_search).trim() + "%");
     }
     if (type) {
       query += " AND sm.type = ?";
@@ -401,17 +429,30 @@ router.get("/stock-mouvements", requireInventoryStock, async (req, res) => {
       query += " AND sm.created_at <= ?";
       params.push(date_fin + " 23:59:59");
     }
+    if (created_by) {
+      query += " AND sm.created_by = ?";
+      params.push(parseInt(created_by, 10));
+    }
 
-    let countQuery = "SELECT COUNT(*) AS total FROM stock_movements sm WHERE sm.organization_id = ?";
-    const countParams = [orgId];
+    let countQuery = `
+      SELECT COUNT(*) AS total FROM stock_movements sm
+      INNER JOIN products p ON p.id = sm.product_id AND p.organization_id = ?
+      WHERE sm.organization_id = ?
+    `;
+    const countParams = [orgId, orgId];
     if (product_id) { countQuery += " AND sm.product_id = ?"; countParams.push(parseInt(product_id, 10)); }
+    if (product_search && String(product_search).trim()) {
+      countQuery += " AND p.nom LIKE ?";
+      countParams.push("%" + String(product_search).trim() + "%");
+    }
     if (type) { countQuery += " AND sm.type = ?"; countParams.push(type); }
     if (date_debut) { countQuery += " AND sm.created_at >= ?"; countParams.push(date_debut); }
     if (date_fin) { countQuery += " AND sm.created_at <= ?"; countParams.push(date_fin + " 23:59:59"); }
+    if (created_by) { countQuery += " AND sm.created_by = ?"; countParams.push(parseInt(created_by, 10)); }
     const countResult = await queryPromise(countQuery, countParams);
     const total = (countResult && countResult[0] && countResult[0].total) ? countResult[0].total : 0;
 
-    query += " ORDER BY sm.created_at DESC LIMIT ? OFFSET ?";
+    query += ` ORDER BY ${orderCol} ${orderDir} LIMIT ? OFFSET ?`;
     params.push(lim, off);
     const movements = await queryPromise(query, params);
 

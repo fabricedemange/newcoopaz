@@ -40,6 +40,13 @@ router.get("/test-codes-barres", requirePermission("caisse.sell"), (req, res) =>
   });
 });
 
+// GET /caisse/stock - Page d'accueil Stock (Inventaire, Réceptions, Mouvements)
+router.get("/stock", requirePermission("inventory_stock"), (req, res) => {
+  renderAdminView(res, "caisse_stock_accueil", {
+    pageTitle: "Stock"
+  });
+});
+
 // GET /caisse/inventaire - Inventaire (scan caméra + recherche produit) — droit Administration Inventaire et stock
 router.get("/inventaire", requirePermission("inventory_stock"), (req, res) => {
   renderAdminView(res, "caisse_inventaire_vue", {
@@ -66,6 +73,20 @@ router.get("/inventaires-historique", requirePermission("inventory_stock"), (req
 router.get("/receptions", requirePermission("inventory_stock"), (req, res) => {
   renderAdminView(res, "caisse_receptions_vue", {
     pageTitle: "Réceptions de commandes"
+  });
+});
+
+// GET /caisse/stock-produits-jamais-vendus - Produits jamais vendus (à enrichir avec volume)
+router.get("/stock-produits-jamais-vendus", requirePermission("inventory_stock"), (req, res) => {
+  renderAdminView(res, "caisse_stock_produits_jamais_vendus", {
+    pageTitle: "Produits jamais vendus"
+  });
+});
+
+// GET /caisse/stock-produits-limite - Vendus régulièrement en limite de stock (à enrichir avec volume)
+router.get("/stock-produits-limite", requirePermission("inventory_stock"), (req, res) => {
+  renderAdminView(res, "caisse_stock_produits_limite", {
+    pageTitle: "Vendus régulièrement en limite de stock"
   });
 });
 

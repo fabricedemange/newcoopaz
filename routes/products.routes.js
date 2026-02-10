@@ -130,6 +130,7 @@ router.post("/", requirePermission('products'), csrfProtection, (req, res) => {
     conditionnement,
     unite,
     quantite_min,
+    stock_min,
     prix,
     dlc_jours,
     origine,
@@ -149,12 +150,14 @@ router.post("/", requirePermission('products'), csrfProtection, (req, res) => {
     return res.status(400).send("La catégorie est obligatoire");
   }
 
+  const stockMinVal = (stock_min !== undefined && stock_min !== '' && stock_min !== null) ? parseFloat(stock_min) : null;
+
   queryWithUser(`
     INSERT INTO products (
       organization_id, nom, description, category_id, supplier_id,
-      reference_fournisseur, code_ean, conditionnement, unite, quantite_min,
+      reference_fournisseur, code_ean, conditionnement, unite, quantite_min, stock_min,
       prix, dlc_jours, origine, label, allergenes, is_active
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     orgId,
     nom.trim(),
@@ -166,6 +169,7 @@ router.post("/", requirePermission('products'), csrfProtection, (req, res) => {
     conditionnement || null,
     unite || 'Pièce',
     quantite_min || 1,
+    stockMinVal,
     prix || 0,
     dlc_jours || null,
     origine || null,
@@ -291,6 +295,7 @@ router.post("/:id", requirePermission('products'), (req, res, next) => {
     conditionnement,
     unite,
     quantite_min,
+    stock_min,
     prix,
     dlc_jours,
     origine,
@@ -315,6 +320,8 @@ router.post("/:id", requirePermission('products'), (req, res, next) => {
     imageUrl = '/uploads/products/' + imageFile.filename;
   }
 
+  const stockMinVal = (stock_min !== undefined && stock_min !== '' && stock_min !== null) ? parseFloat(stock_min) : null;
+
   let updateQuery = `
     UPDATE products SET
       nom = ?,
@@ -326,6 +333,7 @@ router.post("/:id", requirePermission('products'), (req, res, next) => {
       conditionnement = ?,
       unite = ?,
       quantite_min = ?,
+      stock_min = ?,
       prix = ?,
       dlc_jours = ?,
       origine = ?,
@@ -343,6 +351,7 @@ router.post("/:id", requirePermission('products'), (req, res, next) => {
     conditionnement || null,
     unite || 'Pièce',
     quantite_min || 1,
+    stockMinVal,
     prix || 0,
     dlc_jours || null,
     origine || null,

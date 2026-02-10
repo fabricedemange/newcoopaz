@@ -7,7 +7,6 @@
             <div class="d-flex gap-2">
               <BackButton />
               <a href="/caisse/inventaires-historique" class="btn btn-outline-secondary">Historique inventaires</a>
-              <a href="/caisse/stock-mouvements" class="btn btn-outline-secondary">Mouvements stock</a>
               <a href="/caisse" class="btn btn-outline-primary">
                 <i class="bi bi-arrow-left me-2"></i>Retour caisse
               </a>

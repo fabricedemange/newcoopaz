@@ -125,7 +125,7 @@
               </div>
 
               <div class="col-md-4 mb-3">
-                <label for="quantite_min" class="form-label">Quantité minimale</label>
+                <label for="quantite_min" class="form-label">Quantité minimale (vente)</label>
                 <input
                   type="number"
                   class="form-control"
@@ -136,7 +136,22 @@
                   step="0.001"
                   required>
                 <small class="form-text text-muted">
-                  Pas d'incrément (ex: 1, 0.5, 0.001)
+                  Minimum de vente, pas d'incrément à la caisse (ex: 1, 0.5, 0.001)
+                </small>
+              </div>
+              <div class="col-md-4 mb-3">
+                <label for="stock_min" class="form-label">Seuil de stock (alerte)</label>
+                <input
+                  type="number"
+                  class="form-control"
+                  id="stock_min"
+                  name="stock_min"
+                  value="<%= product && product.stock_min != null && product.stock_min !== '' ? product.stock_min : '' %>"
+                  min="0"
+                  step="0.001"
+                  placeholder="Optionnel">
+                <small class="form-text text-muted">
+                  En dessous de ce niveau, alerte « à recommander » (vide = pas d'alerte)
                 </small>
               </div>
             </div>

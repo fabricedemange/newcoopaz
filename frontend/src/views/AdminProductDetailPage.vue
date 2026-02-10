@@ -65,8 +65,10 @@
                 </dd>
                 <dt class="col-sm-5">Unité</dt>
                 <dd class="col-sm-7">{{ product.unite || '-' }}</dd>
-                <dt class="col-sm-5">Quantité minimale</dt>
+                <dt class="col-sm-5">Quantité minimale (vente)</dt>
                 <dd class="col-sm-7">{{ product.quantite_min != null && product.quantite_min !== '' ? product.quantite_min : '-' }}</dd>
+                <dt class="col-sm-5">Seuil de stock (alerte)</dt>
+                <dd class="col-sm-7">{{ product.stock_min != null && product.stock_min !== '' ? product.stock_min : '-' }}</dd>
                 <dt class="col-sm-5">Description / Commentaire</dt>
                 <dd class="col-sm-7">{{ product.description || '-' }}</dd>
                 <dt class="col-sm-5">Réf. fournisseur</dt>

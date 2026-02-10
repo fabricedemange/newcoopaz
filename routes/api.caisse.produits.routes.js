@@ -13,6 +13,7 @@ router.get("/", requireAnyPermission(["caisse.sell", "inventory_stock"], { json:
       p.id,
       p.nom,
       p.stock,
+      p.stock_min,
       p.prix,
       p.unite,
       p.quantite_min,

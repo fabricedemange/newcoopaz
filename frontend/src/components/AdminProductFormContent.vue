@@ -61,9 +61,14 @@
           </select>
         </div>
         <div class="col-md-4 mb-3">
-          <label for="quantite_min" class="form-label">Quantité minimale</label>
+          <label for="quantite_min" class="form-label">Quantité minimale (vente)</label>
           <input id="quantite_min" v-model.number="form.quantite_min" type="number" class="form-control" min="0.001" step="0.001" required>
-          <small class="form-text text-muted">Pas d'incrément (ex: 1, 0.5, 0.001)</small>
+          <small class="form-text text-muted">Minimum de vente, pas d'incrément à la caisse</small>
+        </div>
+        <div class="col-md-4 mb-3">
+          <label for="stock_min" class="form-label">Seuil de stock (alerte)</label>
+          <input id="stock_min" v-model.number="form.stock_min" type="number" class="form-control" min="0" step="0.001" placeholder="Optionnel">
+          <small class="form-text text-muted">En dessous → alerte « à recommander » (vide = pas d'alerte)</small>
         </div>
       </div>
       <div class="row">
@@ -184,6 +189,7 @@ const form = ref({
   conditionnement: '',
   unite: 'Pièce',
   quantite_min: 1,
+  stock_min: null,
   prix: '',
   dlc_jours: '',
   origine: '',
@@ -221,6 +227,7 @@ function initForm() {
       conditionnement: p.conditionnement || '',
       unite: p.unite || 'Pièce',
       quantite_min: p.quantite_min ?? 1,
+      stock_min: p.stock_min != null && p.stock_min !== '' ? p.stock_min : null,
       prix: p.prix ?? '',
       dlc_jours: p.dlc_jours ?? '',
       origine: p.origine || '',
@@ -240,6 +247,7 @@ function initForm() {
       conditionnement: '',
       unite: 'Pièce',
       quantite_min: 1,
+      stock_min: null,
       prix: '',
       dlc_jours: '',
       origine: '',
@@ -286,6 +294,7 @@ async function submit() {
       fd.append('conditionnement', form.value.conditionnement || '');
       fd.append('unite', form.value.unite || 'Pièce');
       fd.append('quantite_min', String(form.value.quantite_min ?? 1));
+      fd.append('stock_min', form.value.stock_min != null && form.value.stock_min !== '' ? String(form.value.stock_min) : '');
       fd.append('prix', String(form.value.prix ?? 0));
       fd.append('dlc_jours', form.value.dlc_jours !== '' && form.value.dlc_jours != null ? String(form.value.dlc_jours) : '');
       fd.append('origine', form.value.origine || '');
@@ -306,6 +315,7 @@ async function submit() {
         conditionnement: form.value.conditionnement || '',
         unite: form.value.unite || 'Pièce',
         quantite_min: String(form.value.quantite_min ?? 1),
+        stock_min: form.value.stock_min != null && form.value.stock_min !== '' ? String(form.value.stock_min) : '',
         prix: String(form.value.prix ?? 0),
         dlc_jours: form.value.dlc_jours !== '' && form.value.dlc_jours != null ? String(form.value.dlc_jours) : '',
         origine: form.value.origine || '',

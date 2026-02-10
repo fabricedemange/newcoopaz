@@ -172,7 +172,7 @@
     margin: 0.5rem 1rem;
   }
 
-  /* Sous-section repliable (ex. Administration > Outils) */
+  /* Sous-section repliable (ex. Administration > Stock) */
   .sidebar-subsection-title {
     font-size: 0.8rem;
     font-weight: 600;
@@ -186,6 +186,39 @@
     justify-content: space-between;
     border-radius: 0.35rem;
     transition: background 0.2s ease;
+  }
+  .sidebar-subsection-title-with-link {
+    cursor: default;
+  }
+  .sidebar-subsection-title-with-link:hover {
+    background: rgba(255, 235, 156, 0.3);
+  }
+  .sidebar-subsection-title-link {
+    color: #7a5e12;
+    text-decoration: none;
+    font-weight: 600;
+    flex: 1;
+    padding: 0.2rem 0;
+  }
+  .sidebar-subsection-title-link:hover {
+    color: #5c4610;
+  }
+  .sidebar-subsection-toggle {
+    background: none;
+    border: none;
+    padding: 0.25rem;
+    cursor: pointer;
+    color: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .sidebar-subsection-toggle .toggle-icon {
+    font-size: 0.7rem;
+    transition: transform 0.2s ease;
+  }
+  .sidebar-subsection-toggle.collapsed .toggle-icon {
+    transform: rotate(-90deg);
   }
   .sidebar-subsection-title:hover {
     background: rgba(255, 235, 156, 0.3);
@@ -652,14 +685,24 @@ function hasAccess(requiredPermissions) {
       </a>
       <% } %>
       <% if (hasAccess(['inventory_stock'])) { %>
-      <a href="/caisse/inventaire" class="sidebar-menu-item" data-path="/caisse/inventaire">
-        <i class="bi bi-upc-scan"></i>
-        <span>Inventaire</span>
-      </a>
-      <a href="/caisse/receptions" class="sidebar-menu-item" data-path="/caisse/receptions">
-        <i class="bi bi-truck"></i>
-        <span>Réceptions</span>
-      </a>
+      <div class="sidebar-subsection-title sidebar-subsection-title-with-link">
+        <a href="/caisse/stock" class="sidebar-subsection-title-link sidebar-menu-item" data-path="/caisse/stock">Stock</a>
+        <button type="button" class="sidebar-subsection-toggle collapsed" data-section="admin-stock" aria-label="Ouvrir/Fermer le sous-menu Stock"><i class="bi bi-chevron-down toggle-icon"></i></button>
+      </div>
+      <div class="sidebar-subsection-content collapsed" data-section-content="admin-stock">
+        <a href="/caisse/inventaire" class="sidebar-menu-item" data-path="/caisse/inventaire">
+          <i class="bi bi-upc-scan"></i>
+          <span>Inventaire</span>
+        </a>
+        <a href="/caisse/receptions" class="sidebar-menu-item" data-path="/caisse/receptions">
+          <i class="bi bi-truck"></i>
+          <span>Réceptions</span>
+        </a>
+        <a href="/caisse/stock-mouvements" class="sidebar-menu-item" data-path="/caisse/stock-mouvements">
+          <i class="bi bi-arrow-left-right"></i>
+          <span>Mouvements stock</span>
+        </a>
+      </div>
       <% } %>
       <% if (hasAccess(['catalogues', 'paniers.admin', 'commandes.admin', 'catalogues.manage', 'paniers.manage', 'commandes.manage'])) { %>
       <a href="/admin/dashboard/vue" class="sidebar-menu-item sidebar-menu-admin" data-path="/admin/dashboard/vue">
