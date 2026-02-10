@@ -302,6 +302,10 @@
                   <div class="row align-items-center">
                     <div class="col-md-6">
                       <strong>{{ (panier.lignes || []).length }} article(s)</strong>
+                      <span class="text-muted ms-2">—</span>
+                      <span class="text-primary">
+                        <i class="bi bi-person me-1"></i>{{ store.utilisateurs.find(u => u.id === panier.selectedUtilisateur)?.username || 'Non assigné' }}
+                      </span>
                       <br />
                       <small class="text-muted">
                         <i class="bi bi-clock me-1"></i>{{ new Date(panier.saved_at).toLocaleString('fr-FR') }}
@@ -625,16 +629,25 @@ function onChargerCommandeCatalogue() {
   if (cmd) store.confirmerChargerCommande(cmd);
 }
 
+function onBeforeUnload(e) {
+  if (store.lignes.length > 0) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+}
+
 onMounted(() => {
   store.chargerProduits();
   store.chargerUtilisateurs();
   store.chargerModesPaiement();
   nextTick(() => initTooltipCommandes());
   document.addEventListener('keydown', onKeydownScan);
+  window.addEventListener('beforeunload', onBeforeUnload);
 });
 
 onUnmounted(() => {
   document.removeEventListener('keydown', onKeydownScan);
+  window.removeEventListener('beforeunload', onBeforeUnload);
   if (scanBufferTimer) clearTimeout(scanBufferTimer);
   if (scanToastTimer) clearTimeout(scanToastTimer);
 });
