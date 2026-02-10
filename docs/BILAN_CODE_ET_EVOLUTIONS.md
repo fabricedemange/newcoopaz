@@ -92,8 +92,8 @@
    - **Finalisé** : migration `20260202_add_organizations_view_all_permission.sql`, `hasPermission(req, "organizations.view_all")` partout en backend ; helper retiré de session-helpers. Frontend : stores utilisent encore `state.role === 'SuperAdmin'` pour l’affichage (option : API renvoie `canViewAllOrgs`).
 
 2. **Tests automatisés (Phases 1, 2 et 3 en place)**  
-   **Backend** : Jest + supertest ; tests dans `tests/` (`tests/api/auth.spec.js`, `tests/api/rbac.spec.js`). Lancer avec `npm run test`.  
-   - Phase 1 : smoke GET /login ; Phase 2 : routes publiques, route protégée sans session, RBAC (401/403). Session en test : MemoryStore ; route `/test/session` (NODE_ENV=test).  
+   **Backend** : Jest + supertest ; tests dans `tests/` (`tests/api/auth.spec.js`, `tests/api/rbac.spec.js`, `tests/api/rate-limit.spec.js`, `tests/utils/xss-protection.spec.js`, `tests/views/xss-phase3.spec.js`). Lancer avec `npm run test`.  
+   - Phase 1 : smoke GET /login ; Phase 2 : routes publiques, route protégée sans session, RBAC (401/403). Session en test : MemoryStore ; route `/test/session` (NODE_ENV=test, exclue du CSRF en test). En tête de `app.js`, NODE_ENV est préservé après `dotenv` pour que les tests gardent `NODE_ENV=test`.  
    **Frontend** : Vitest + @vue/test-utils (happy-dom) ; tests dans `frontend/src/` (stores : `catalogues.spec.js`, `commandes.spec.js` ; composant : `AdminProductFormContent.spec.js`). Lancer avec `cd frontend && npm run test`.  
    - Phase 3 : getters + actions mockées (catalogues : loadAll succès/erreur/authRequired ; commandes : filteredCommandes, sortedCommandes, loadAll) ; composant AdminProductFormContent (rendu, champs obligatoires, émission cancel, libellés création/édition).  
    **Script racine** : `npm run test:all` exécute backend puis frontend.

@@ -58,6 +58,25 @@ export async function fetchCommandeDetail(commandeId) {
   return response.json();
 }
 
+/** POST /api/commandes/:id/send-pdf-email - Envoyer le PDF de la commande à l'utilisateur connecté */
+export async function sendCommandePdfByEmail(commandeId, csrfToken) {
+  const response = await fetch(`/api/commandes/${commandeId}/send-pdf-email`, {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
+      'csrf-token': csrfToken || '',
+    },
+    credentials: 'include',
+    body: JSON.stringify({}),
+  });
+  checkAuth(response);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+  return data;
+}
+
 /** POST /article/:id/note - Note d'un article (panier_articles.id) */
 export async function saveArticleNote(panierArticleId, note, csrfToken) {
   const response = await fetch(`/article/${panierArticleId}/note`, {

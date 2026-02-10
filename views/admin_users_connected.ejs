@@ -70,6 +70,7 @@
   </div>
 </div>
 
+<script src="/js/xss-protection.js"></script>
 <script>
 (function() {
   var tbody = document.getElementById('connected-users-tbody');
@@ -96,7 +97,7 @@
     tbody.innerHTML = list.map(function(u) {
       var org = u.organizationName || (u.organization_id ? '#' + u.organization_id : '–');
       var exp = formatExpires(u.maxExpires);
-      return '<tr><td><span class="fw-bold">' + (u.username || '') + '</span> <span class="text-muted small">#' + (u.userId || '') + '</span></td><td>' + org + '</td><td>' + (u.sessionCount || 0) + '</td><td><span class="small">' + exp + '</span></td></tr>';
+      return '<tr><td><span class="fw-bold">' + escapeHtml(u.username || '') + '</span> <span class="text-muted small">#' + escapeHtml(String(u.userId || '')) + '</span></td><td>' + escapeHtml(org) + '</td><td>' + (u.sessionCount || 0) + '</td><td><span class="small">' + escapeHtml(exp) + '</span></td></tr>';
     }).join('');
   }
 

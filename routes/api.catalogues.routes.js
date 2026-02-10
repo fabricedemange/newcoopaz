@@ -226,7 +226,10 @@ router.get("/catalogues/:id", requireLogin, async (req, res) => {
       panier: panier || null,
       panierArticles: panierArticles,
       canChangeOwner: canChangeOwner,
-      users: users
+      users: users,
+      currentUser: userId && req.session?.username
+        ? { id: userId, username: req.session.username }
+        : null
     });
   } catch (error) {
     console.error("❌ ERREUR API /api/catalogues/:id:", error);

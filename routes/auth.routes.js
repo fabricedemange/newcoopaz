@@ -25,11 +25,52 @@ const {
 // Rate limiter pour la route de login (protection contre brute force)
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Maximum 5 tentatives par fenêre de 15 minutes
+  max: 5, // Maximum 5 tentatives par fenêtre de 15 minutes
   message:
     "Trop de tentatives de connexion. Veuillez réessayer dans 15 minutes.",
-  standardHeaders: true, // Retourne les infos de rate limit dans les headers `RateLimit-*`
-  legacyHeaders: false, // Désactive les headers `X-RateLimit-*`
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Handler commun pour renvoyer JSON ou HTML selon la requête (rate limit dépassé)
+function rateLimitHandler(message) {
+  return (req, res, next, options) => {
+    const wantsJson = req.xhr || (req.headers.accept && req.headers.accept.includes("application/json"));
+    if (wantsJson) {
+      return res.status(429).json({ success: false, error: message || options.message });
+    }
+    res.status(429).send(message || options.message);
+  };
+}
+
+// Rate limiter pour l'inscription (protection contre abus / spam)
+const registerLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5,
+  message: "Trop de tentatives d'inscription. Veuillez réessayer dans 15 minutes.",
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler("Trop de tentatives d'inscription. Veuillez réessayer dans 15 minutes."),
+});
+
+// Rate limiter pour la réinitialisation de mot de passe (saisie du nouveau mot de passe)
+const resetPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: "Trop de tentatives de réinitialisation. Veuillez réessayer dans 15 minutes.",
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler("Trop de tentatives de réinitialisation. Veuillez réessayer dans 15 minutes."),
+});
+
+// Rate limiter pour la demande de réinitialisation (forgot-password) — plus restrictif pour limiter l'envoi d'emails
+const forgotPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 3,
+  message: "Trop de demandes de réinitialisation. Veuillez réessayer dans 15 minutes.",
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler("Trop de demandes de réinitialisation. Veuillez réessayer dans 15 minutes."),
 });
 
 // Helper function pour envoyer des emails
@@ -346,8 +387,8 @@ router.get("/forgot-password", (req, res) => {
   });
 });
 
-// POST /forgot-password - Traitement de la demande de reset
-router.post("/forgot-password", (req, res) => {
+// POST /forgot-password - Traitement de la demande de reset (rate limiting pour limiter l'abus d'envoi d'emails)
+router.post("/forgot-password", forgotPasswordLimiter, (req, res) => {
   const { email, flag } = req.body;
   const wantsJson = req.xhr || (req.headers.accept && req.headers.accept.includes("application/json"));
 
@@ -434,8 +475,8 @@ router.get("/reset-password", (req, res) => {
   );
 });
 
-// POST /reset-password - Traitement de la saisie du nouveau mot de passe
-router.post("/reset-password", (req, res) => {
+// POST /reset-password - Traitement de la saisie du nouveau mot de passe (rate limiting)
+router.post("/reset-password", resetPasswordLimiter, (req, res) => {
   const { token, password, confirm } = req.body;
   const wantsJson = req.xhr || (req.headers.accept && req.headers.accept.includes("application/json"));
 
@@ -497,8 +538,8 @@ router.get("/register", (req, res) => {
   });
 });
 
-// POST /register - Traitement de l'inscription
-router.post("/register", async (req, res) => {
+// POST /register - Traitement de l'inscription (rate limiting)
+router.post("/register", registerLimiter, async (req, res) => {
   const { username, email, password, description, role } = req.body;
   const wantsJson = req.xhr || (req.headers.accept && req.headers.accept.includes("application/json"));
 

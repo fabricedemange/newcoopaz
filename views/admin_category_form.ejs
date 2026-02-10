@@ -247,6 +247,7 @@
               </small>
             </div>
 
+            <script src="/js/xss-protection.js"></script>
             <script>
             document.addEventListener('DOMContentLoaded', function() {
               const iconInput = document.getElementById('icon');
@@ -256,14 +257,12 @@
               iconOptions.forEach(option => {
                 option.addEventListener('click', function(e) {
                   e.preventDefault();
-                  const iconClass = this.getAttribute('data-icon');
+                  const iconClass = this.getAttribute('data-icon') || '';
                   iconInput.value = iconClass;
 
                   if (iconClass) {
-                    iconDisplay.innerHTML = `
-                      <i class="${iconClass} me-2" style="font-size: 1.2rem;"></i>
-                      <span class="text-muted small">${iconClass}</span>
-                    `;
+                    var safeClass = escapeHtml(iconClass);
+                    iconDisplay.innerHTML = '<i class="' + safeClass + ' me-2" style="font-size: 1.2rem;"></i><span class="text-muted small">' + safeClass + '</span>';
                   } else {
                     iconDisplay.innerHTML = '<span class="text-muted">Aucune icône</span>';
                   }

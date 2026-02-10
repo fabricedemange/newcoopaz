@@ -9,6 +9,7 @@
     "dev:frontend": "cd frontend && npm run dev",
     "build:frontend": "cd frontend && npm ci && npm run build",
     "security-check": "node scripts/security-check.js",
+    "generate-secret": "node scripts/generate-secret.js",
     "extract-sql-trace": "node scripts/rebuild-trace-sql.js",
     "catalogue-auto-archive:run": "node scripts/run-catalogue-auto-archive.js",
     "test": "npx jest --runInBand --forceExit",

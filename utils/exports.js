@@ -413,6 +413,7 @@ function generateAndSendPdf(catalogueId, type, action, res, req) {
 }
 
 module.exports = {
+  envoimail,
   generateAndSendPdf,
   generateCatalogueSynthesisPdfBuffer,
 };

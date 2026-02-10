@@ -107,6 +107,7 @@
   </div>
 </div>
 
+<script src="/js/xss-protection.js"></script>
 <script>
 (function() {
   var statusEl = document.getElementById('sse-status');
@@ -140,8 +141,8 @@
       if (hasCmd) {
         commandesList.innerHTML = cmd.map(function(c) {
           return '<div class="list-group-item d-flex justify-content-between align-items-start">' +
-            '<div><span class="fw-bold">' + (c.username || '') + '</span> <span class="text-muted small">#' + (c.id || '') + '</span><br><span class="small">' + (c.catalogue_nom || '–') + '</span></div>' +
-            '<small class="text-muted">' + formatDate(c.updated_at || c.created_at) + '</small></div>';
+            '<div><span class="fw-bold">' + escapeHtml(c.username || '') + '</span> <span class="text-muted small">#' + escapeHtml(String(c.id || '')) + '</span><br><span class="small">' + escapeHtml(c.catalogue_nom || '–') + '</span></div>' +
+            '<small class="text-muted">' + escapeHtml(formatDate(c.updated_at || c.created_at)) + '</small></div>';
         }).join('');
       }
     }

@@ -76,7 +76,7 @@
               :key="produit.id"
               class="col-lg-4 col-md-6 col-sm-4 col-6"
             >
-              <div class="card h-100 produit-card" @click="store.ajouterProduit(produit)">
+              <div class="card h-100 produit-card" @click="onSelectProduit(produit)">
                 <img
                   v-if="produit.image_url"
                   :src="produit.image_url"
@@ -88,7 +88,12 @@
                   <h6 class="card-title mb-1" style="font-size: 0.9rem">{{ produit.nom }}</h6>
                   <div class="mt-auto pt-1 d-flex justify-content-between align-items-center">
                     <span class="text-primary fw-bold">{{ (parseFloat(produit.prix) || 0).toFixed(2) }} €</span>
-                    <span class="small text-muted">Stock : {{ produit.stock ?? 0 }} {{ produit.unite || 'pièce' }}</span>
+                    <span
+                      class="small"
+                      :class="(Number(produit.stock) ?? 0) < 0 ? 'fw-bold text-danger' : 'text-muted'"
+                    >
+                      Stock : {{ produit.stock ?? 0 }} {{ produit.unite || 'pièce' }}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -222,6 +227,7 @@
                           <i class="bi bi-dash"></i>
                         </button>
                         <input
+                          :ref="(el) => setQuantiteInputRef(el, index)"
                           type="number"
                           class="form-control form-control-sm text-center quantite-input"
                           :value="ligne.quantite"
@@ -363,28 +369,58 @@
                 placeholder="exemple@email.com"
               />
             </div>
-            <div class="alert alert-success">
+            <div class="alert alert-success mb-3">
               Total à payer: <strong>{{ store.total.toFixed(2) }} €</strong>
             </div>
-            <div class="mb-3">
-              <label class="form-label">Mode de paiement *</label>
-              <select v-model="store.modePaiementId" class="form-select">
-                <option :value="null">-- Sélectionner --</option>
-                <option v-for="m in store.modesPaiement" :key="m.id" :value="m.id">{{ m.nom }}</option>
-              </select>
+            <div class="mb-2">
+              <label class="form-label">Paiements</label>
+              <div
+                v-for="(ligne, index) in store.lignesPaiement"
+                :key="index"
+                class="d-flex gap-2 align-items-start mb-2"
+              >
+                <select
+                  v-model="ligne.mode_paiement_id"
+                  class="form-select flex-grow-1"
+                  style="min-width: 140px"
+                >
+                  <option :value="null">-- Mode --</option>
+                  <option v-for="m in store.modesPaiement" :key="m.id" :value="m.id">{{ m.nom }}</option>
+                </select>
+                <div class="input-group" style="max-width: 120px">
+                  <input
+                    v-model.number="ligne.montant"
+                    type="number"
+                    class="form-control"
+                    step="0.01"
+                    min="0"
+                    placeholder="Montant"
+                  />
+                  <span class="input-group-text">€</span>
+                </div>
+                <button
+                  type="button"
+                  class="btn btn-outline-danger btn-sm"
+                  :disabled="store.lignesPaiement.length <= 1"
+                  :title="store.lignesPaiement.length <= 1 ? 'Garder au moins une ligne' : 'Supprimer'"
+                  @click="store.supprimerLignePaiement(index)"
+                >
+                  <i class="bi bi-trash"></i>
+                </button>
+              </div>
+              <button type="button" class="btn btn-outline-secondary btn-sm mt-1" @click="store.ajouterLignePaiement()">
+                <i class="bi bi-plus me-1"></i>Ajouter un paiement
+              </button>
             </div>
-            <div class="mb-3">
-              <label class="form-label">Montant reçu</label>
-              <input
-                v-model.number="store.montantPaiement"
-                type="number"
-                class="form-control"
-                step="0.01"
-                min="0.01"
-              />
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span>Total payé:</span>
+              <strong>{{ store.totalPaye.toFixed(2) }} €</strong>
             </div>
-            <div v-if="store.montantPaiement > store.total" class="alert alert-info">
-              Rendu monnaie: <strong>{{ (store.montantPaiement - store.total).toFixed(2) }} €</strong>
+            <div v-if="store.resteAPayer > 0" class="alert alert-warning mb-2 py-2">
+              <i class="bi bi-exclamation-triangle me-1"></i>Reste à payer: <strong>{{ store.resteAPayer.toFixed(2) }} €</strong>. La vente ne peut pas être validée tant que le montant n'est pas entièrement couvert.
+            </div>
+            <div v-else-if="store.resteAPayer < 0" class="alert alert-info mb-2 py-2">
+              Rendu monnaie: <strong>{{ (-store.resteAPayer).toFixed(2) }} €</strong>
             </div>
           </div>
           <div class="modal-footer">
@@ -392,7 +428,7 @@
             <button
               type="button"
               class="btn btn-success"
-              :disabled="!store.modePaiementId"
+              :disabled="!store.peutValiderPaiement"
               @click="store.validerVente()"
             >
               <i class="bi bi-check-circle me-1"></i>Valider la vente
@@ -464,6 +500,19 @@ import { useCaisseStore } from '@/stores/caisse';
 
 const store = useCaisseStore();
 const infobulleCommandesRef = ref(null);
+const quantityInputRefs = ref({});
+
+function setQuantiteInputRef(el, index) {
+  if (el) quantityInputRefs.value[index] = el;
+}
+
+function onSelectProduit(produit) {
+  const lineIndex = store.ajouterProduit(produit);
+  nextTick(() => {
+    const input = quantityInputRefs.value[lineIndex];
+    if (input && typeof input.focus === 'function') input.focus();
+  });
+}
 
 // Toast scan lecteur (léger, dynamique)
 const scanToastMessage = ref('');
@@ -496,6 +545,12 @@ function flushScanBuffer() {
     const result = store.ajouterProduitParEan(code);
     if (result.found) {
       showScanToast(`Ajouté : ${result.produit.nom}`, 'success');
+      if (result.lineIndex != null) {
+        nextTick(() => {
+          const input = quantityInputRefs.value[result.lineIndex];
+          if (input && typeof input.focus === 'function') input.focus();
+        });
+      }
     } else {
       showScanToast('Code non reconnu', 'warning');
     }
@@ -512,6 +567,12 @@ function onKeydownScan(e) {
         const result = store.ajouterProduitParEan(val);
         if (result.found) {
           showScanToast(`Ajouté : ${result.produit.nom}`, 'success');
+          if (result.lineIndex != null) {
+            nextTick(() => {
+              const input = quantityInputRefs.value[result.lineIndex];
+              if (input && typeof input.focus === 'function') input.focus();
+            });
+          }
         } else {
           showScanToast('Code non reconnu', 'warning');
         }

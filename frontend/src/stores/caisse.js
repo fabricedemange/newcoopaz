@@ -68,8 +68,8 @@ export const useCaisseStore = defineStore('caisse', {
     avoirMontant: 0,
     avoirCommentaire: '',
     showPaiementModal: false,
-    montantPaiement: 0,
-    modePaiementId: null,
+    /** Lignes de paiement multi-modes : [{ mode_paiement_id, montant }, ...] */
+    lignesPaiement: [],
     modesPaiement: [],
     error: null,
     // Charger une commande catalogue
@@ -94,7 +94,12 @@ export const useCaisseStore = defineStore('caisse', {
       if (state.selectedCategorie) {
         filtered = filtered.filter((p) => p.category_id === state.selectedCategorie);
       }
-      return filtered;
+      // Par défaut : stocks positifs en tête, puis zéro, puis négatifs
+      return filtered.sort((a, b) => {
+        const sa = Number(a.stock) ?? 0;
+        const sb = Number(b.stock) ?? 0;
+        return sb - sa;
+      });
     },
     total(state) {
       const sum = state.lignes.reduce((acc, l) => {
@@ -119,6 +124,30 @@ export const useCaisseStore = defineStore('caisse', {
     /** true si le panier contient déjà une ligne cotisation mensuelle */
     aPanierCotisation(state) {
       return state.lignes.some((l) => l.is_cotisation === true);
+    },
+    /** Total des montants saisis dans les lignes de paiement */
+    totalPaye(state) {
+      return roundToCent(
+        (state.lignesPaiement || []).reduce((s, l) => s + (parseFloat(l.montant) || 0), 0)
+      );
+    },
+    /** Reste à payer (négatif = trop perçu, rendu monnaie) */
+    resteAPayer(state, getters) {
+      const total = getters?.total ?? roundToCent(state.lignes.reduce((acc, l) => acc + roundToCent(l.quantite * l.prix_unitaire), 0));
+      const totalPaye = getters?.totalPaye ?? roundToCent((state.lignesPaiement || []).reduce((s, l) => s + (parseFloat(l.montant) || 0), 0));
+      return roundToCent(total - totalPaye);
+    },
+    /** true si on peut valider (total payé >= total et chaque ligne avec montant > 0 a un mode) */
+    peutValiderPaiement(state, getters) {
+      const total = getters?.total ?? roundToCent(state.lignes.reduce((acc, l) => acc + roundToCent(l.quantite * l.prix_unitaire), 0));
+      const totalPaye = getters?.totalPaye ?? roundToCent((state.lignesPaiement || []).reduce((s, l) => s + (parseFloat(l.montant) || 0), 0));
+      if (totalPaye <= 0) return false;
+      if (totalPaye < total) return false;
+      const lignes = state.lignesPaiement || [];
+      const hasInvalid = lignes.some(
+        (l) => (parseFloat(l.montant) || 0) > 0 && !l.mode_paiement_id
+      );
+      return !hasInvalid;
     },
   },
 
@@ -163,21 +192,24 @@ export const useCaisseStore = defineStore('caisse', {
       }
     },
 
+    /** Ajoute un produit au panier (ou incrémente la quantité). Retourne l'index de la ligne concernée pour le focus. */
     ajouterProduit(produit) {
-      const existing = this.lignes.find((l) => l.produit_id === produit.id);
-      if (existing) {
+      const existingIndex = this.lignes.findIndex((l) => l.produit_id === produit.id);
+      if (existingIndex >= 0) {
+        const existing = this.lignes[existingIndex];
         existing.quantite += parseFloat(produit.quantite_min) || 1;
-      } else {
-        this.lignes.push({
-          produit_id: produit.id,
-          nom_produit: produit.nom,
-          quantite: parseFloat(produit.quantite_min) || 1,
-          prix_unitaire: parseFloat(produit.prix) || 0,
-          unite: produit.unite || 'Pièce',
-          quantite_min: parseFloat(produit.quantite_min) || 1,
-          is_avoir: false,
-        });
+        return existingIndex;
       }
+      this.lignes.push({
+        produit_id: produit.id,
+        nom_produit: produit.nom,
+        quantite: parseFloat(produit.quantite_min) || 1,
+        prix_unitaire: parseFloat(produit.prix) || 0,
+        unite: produit.unite || 'Pièce',
+        quantite_min: parseFloat(produit.quantite_min) || 1,
+        is_avoir: false,
+      });
+      return this.lignes.length - 1;
     },
 
     /** Trouve un produit par code EAN et l’ajoute au panier. Retourne { found: true, produit } ou { found: false }. */
@@ -188,8 +220,8 @@ export const useCaisseStore = defineStore('caisse', {
         (p) => p.code_ean && String(p.code_ean).trim().replace(/\s/g, '') === code
       );
       if (produit) {
-        this.ajouterProduit(produit);
-        return { found: true, produit };
+        const lineIndex = this.ajouterProduit(produit);
+        return { found: true, produit, lineIndex };
       }
       return { found: false };
     },
@@ -289,7 +321,7 @@ export const useCaisseStore = defineStore('caisse', {
     },
 
     async ouvrirPaiement() {
-      this.montantPaiement = this.total;
+      this.lignesPaiement = [{ mode_paiement_id: null, montant: roundToCent(this.total) }];
       this.showPaiementModal = true;
       this.cotisationCheck = null;
       this.emailFactureAnonyme = '';
@@ -303,6 +335,14 @@ export const useCaisseStore = defineStore('caisse', {
           console.error('Erreur vérification cotisation:', e);
         }
       }
+    },
+
+    ajouterLignePaiement() {
+      this.lignesPaiement.push({ mode_paiement_id: null, montant: 0 });
+    },
+
+    supprimerLignePaiement(index) {
+      this.lignesPaiement.splice(index, 1);
     },
 
     /** Vérifier à nouveau si l'adhérent doit cotiser (après changement utilisateur) */
@@ -330,12 +370,12 @@ export const useCaisseStore = defineStore('caisse', {
         is_avoir: false,
         is_cotisation: true,
       });
-      this.montantPaiement = this.total;
+      if (this.lignesPaiement.length) this.lignesPaiement[0].montant = roundToCent(this.total);
     },
 
     fermerPaiement() {
       this.showPaiementModal = false;
-      this.modePaiementId = null;
+      this.lignesPaiement = [];
     },
 
     async chargerCommandesUtilisateur() {
@@ -412,8 +452,10 @@ export const useCaisseStore = defineStore('caisse', {
     },
 
     async validerVente() {
-      if (!this.modePaiementId) {
-        this.error = 'Veuillez sélectionner un mode de paiement';
+      if (!this.peutValiderPaiement) {
+        this.error = this.totalPaye < this.total
+          ? 'Le total des paiements doit couvrir le montant à payer.'
+          : 'Veuillez renseigner le mode de paiement pour chaque montant.';
         return;
       }
       this.error = null;
@@ -428,11 +470,15 @@ export const useCaisseStore = defineStore('caisse', {
           montant_ttc: this.total,
         });
         if (!venteData.success) throw new Error(venteData.error);
-        await postCaissePaiement({
-          vente_id: venteData.vente.id,
-          mode_paiement_id: this.modePaiementId,
-          montant: this.montantPaiement,
-        });
+        for (const ligne of this.lignesPaiement) {
+          const montant = roundToCent(parseFloat(ligne.montant) || 0);
+          if (montant <= 0 || !ligne.mode_paiement_id) continue;
+          await postCaissePaiement({
+            vente_id: venteData.vente.id,
+            mode_paiement_id: ligne.mode_paiement_id,
+            montant,
+          });
+        }
         if (this.currentPanierId) this.supprimerPanier(this.currentPanierId);
         this.viderPanier();
         this.fermerPaiement();

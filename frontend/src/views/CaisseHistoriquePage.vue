@@ -72,11 +72,11 @@
               placeholder="Ticket, date, caissier, client, montant..."
             />
           </div>
-          <div class="col-md-2 d-flex align-items-end gap-2">
-            <button class="btn btn-caisse" @click="store.rechercher()">
+          <div class="col-12 col-md-2 d-flex align-items-end gap-2 flex-wrap">
+            <button type="button" class="btn btn-sm btn-caisse" @click="store.rechercher()">
               <i class="bi bi-search me-1"></i>Rechercher
             </button>
-            <button class="btn btn-outline-secondary" @click="store.resetFiltres()">
+            <button type="button" class="btn btn-sm btn-outline-secondary" @click="store.resetFiltres()">
               <i class="bi bi-x-circle me-1"></i>Réinitialiser
             </button>
           </div>
@@ -265,14 +265,12 @@
                   <tr>
                     <th>Mode de paiement</th>
                     <th class="text-end">Montant</th>
-                    <th>Date</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr v-for="paiement in store.selectedVente.paiements" :key="paiement.id">
                     <td>{{ paiement.mode_paiement_nom }}</td>
                     <td class="text-end"><strong>{{ paiement.montant.toFixed(2) }} €</strong></td>
-                    <td>{{ store.formatDate(paiement.date_paiement) }}</td>
                   </tr>
                 </tbody>
               </table>

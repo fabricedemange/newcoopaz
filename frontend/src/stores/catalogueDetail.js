@@ -19,6 +19,7 @@ export const useCatalogueDetailStore = defineStore('catalogueDetail', {
     products: [],
     panier: null,
     panierArticles: {},
+    currentUser: null,
     searchTerm: '',
     selectedCategory: 'all',
     canChangeOwner: false,
@@ -232,9 +233,10 @@ export const useCatalogueDetailStore = defineStore('catalogueDetail', {
           this.products = data.products || [];
           this.panier = data.panier || null;
           this.panierArticles = data.panierArticles || {};
+          this.currentUser = data.currentUser || null;
           this.canChangeOwner = data.canChangeOwner === true;
           this.users = data.users || [];
-          this.selectedUserId = null;
+          this.selectedUserId = data.panier ? data.panier.user_id : (data.currentUser?.id ?? null);
         } else {
           throw new Error(data.error || 'Erreur chargement catalogue');
         }

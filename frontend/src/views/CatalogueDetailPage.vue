@@ -125,7 +125,7 @@
                   <span v-if="store.totalArticles === 0" class="text-muted fw-normal">(Ajoutez au moins un article pour activer.)</span>
                 </h5>
                 <div class="d-flex flex-column flex-md-row gap-2 align-items-md-center flex-wrap">
-                  <label class="form-label mb-0 text-nowrap">Propriétaire actuel : <strong>{{ store.panier?.username || '—' }}</strong></label>
+                  <label class="form-label mb-0 text-nowrap">Propriétaire actuel : <strong>{{ store.panier?.username || store.currentUser?.username || '—' }}</strong></label>
                   <select v-model="store.selectedUserId" class="form-select form-select-sm" style="width: auto; min-width: 200px;" :disabled="store.changingOwner || store.totalArticles === 0">
                     <option :value="null">-- Sélectionner un utilisateur --</option>
                     <option v-for="u in store.users" :key="u.id" :value="u.id">{{ u.username }}</option>

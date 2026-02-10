@@ -347,7 +347,7 @@ async function getVenteDetails(venteId, orgId, db) {
 async function getUserEmail(userId, db) {
   return new Promise((resolve, reject) => {
     db.query(
-      'SELECT email FROM users WHERE id = ? AND COALESCE(is_active, 1) = 1',
+      'SELECT email FROM users WHERE id = ? AND COALESCE(is_validated, 1) = 1',
       [userId],
       (err, results) => {
         if (err) return reject(err);
@@ -357,6 +357,104 @@ async function getUserEmail(userId, db) {
     );
   });
 }
+
+// POST /api/commandes/commandes/:id/send-pdf-email - Envoyer le PDF de la commande (panier validé) à l'utilisateur connecté
+router.post("/commandes/:id/send-pdf-email", requireLogin, async (req, res) => {
+  const commandeId = req.params.id;
+  const userId = getCurrentUserId(req);
+  const canViewAny = await hasAnyPermission(req, ["commandes.admin", "catalogues", "paniers.admin"]);
+
+  try {
+    const commandeQuery = `
+      SELECT
+        p.*,
+        u.username,
+        cf.originalname,
+        cf.date_livraison,
+        DATE_FORMAT(p.created_at, '%d/%m/%Y à %H:%i') as created_formatted,
+        DATE_FORMAT(cf.date_livraison, '%d/%m/%Y') as livraison_formatted
+      FROM paniers p
+      JOIN catalog_files cf ON p.catalog_file_id = cf.id
+      JOIN users u ON p.user_id = u.id
+      WHERE p.id = ? AND p.is_submitted = 1
+      ${canViewAny ? "" : "AND p.user_id = ?"}
+    `;
+    const commandeParams = canViewAny ? [commandeId] : [commandeId, userId];
+    const commandes = await queryPromise(commandeQuery, commandeParams, req);
+    if (!commandes || commandes.length === 0) {
+      return res.status(404).json({ success: false, error: "Commande non trouvée" });
+    }
+    const commande = commandes[0];
+
+    let articles = await queryPromise(
+      `SELECT
+        pa.quantity,
+        pa.note,
+        cp.prix,
+        COALESCE(cp.unite, 1) as unite,
+        p.nom as produit,
+        c.nom as categorie,
+        s.nom as fournisseur
+       FROM panier_articles pa
+       INNER JOIN catalog_products cp ON pa.catalog_product_id = cp.id
+       INNER JOIN products p ON cp.product_id = p.id
+       LEFT JOIN categories c ON p.category_id = c.id
+       LEFT JOIN suppliers s ON p.supplier_id = s.id
+       WHERE pa.panier_id = ?
+       ORDER BY c.ordre, p.nom`,
+      [commandeId],
+      req
+    );
+    if (!articles || articles.length === 0) {
+      articles = await queryPromise(
+        `SELECT
+          pa.quantity,
+          pa.note,
+          a.prix,
+          COALESCE(a.unite, 1) as unite,
+          a.produit,
+          NULL as categorie,
+          NULL as fournisseur
+         FROM panier_articles pa
+         INNER JOIN articles a ON pa.article_id = a.id
+         WHERE pa.panier_id = ?
+         ORDER BY a.produit`,
+        [commandeId],
+        req
+      );
+    }
+
+    const { generatePdf, createCommandeDocDefinition } = require("../services/pdf.service");
+    const { envoimail } = require("../utils/exports");
+    const { db } = require("../config/config");
+
+    const docDef = createCommandeDocDefinition(commande, articles || []);
+    const pdfBuffer = await generatePdf(docDef);
+
+    const userEmail = await new Promise((resolve, reject) => {
+      db.query("SELECT email FROM users WHERE id = ? AND COALESCE(is_validated, 1) = 1", [userId], (err, rows) => {
+        if (err) return reject(err);
+        if (!rows || rows.length === 0) return reject(new Error("Email utilisateur non trouvé"));
+        resolve(rows[0].email);
+      });
+    });
+
+    const subject = `Commande #${commande.id} - ${commande.originalname || "Catalogue"}`;
+    const text = `Bonjour,\n\nVeuillez trouver ci-joint le récapitulatif de votre commande #${commande.id} (${commande.originalname || "Catalogue"}).`;
+
+    await envoimail(userEmail, subject, text, pdfBuffer, {
+      initiatedBy: req.session?.username || "system",
+    });
+
+    return res.json({ success: true, message: "PDF envoyé par email à l'adresse de votre compte." });
+  } catch (error) {
+    console.error("Erreur envoi PDF commande:", error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || "Erreur lors de l'envoi du PDF",
+    });
+  }
+});
 
 // GET /api/commandes/:id/pdf - Télécharger le PDF détail de la vente (identique à la modale)
 router.get("/:id/pdf", requireLogin, async (req, res) => {

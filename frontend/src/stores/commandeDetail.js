@@ -3,6 +3,7 @@ import {
   fetchCommandeDetail,
   saveArticleNote,
   reopenCommande as apiReopenCommande,
+  sendCommandePdfByEmail as apiSendCommandePdfByEmail,
   AuthRequiredError,
 } from '@/api';
 
@@ -14,6 +15,8 @@ export const useCommandeDetailStore = defineStore('commandeDetail', {
     commande: null,
     articles: [],
     editingNoteId: null,
+    sendingPdf: false,
+    sendPdfMessage: null,
   }),
 
   getters: {
@@ -79,6 +82,19 @@ export const useCommandeDetailStore = defineStore('commandeDetail', {
       await apiReopenCommande(commandeId, csrfToken);
       if (typeof window !== 'undefined') {
         window.location.href = `/panier/${commandeId}/modifier/vue`;
+      }
+    },
+
+    async sendPdfByEmail(commandeId, csrfToken) {
+      this.sendingPdf = true;
+      this.sendPdfMessage = null;
+      try {
+        const data = await apiSendCommandePdfByEmail(commandeId, csrfToken);
+        this.sendPdfMessage = { type: 'success', text: data.message || 'PDF envoyé par email.' };
+      } catch (e) {
+        this.sendPdfMessage = { type: 'error', text: e.message || 'Erreur lors de l\'envoi.' };
+      } finally {
+        this.sendingPdf = false;
       }
     },
   },

@@ -65,6 +65,7 @@
   </div>
 </div>
 
+<script src="/js/xss-protection.js"></script>
 <script>
 (function () {
   const inputUsb = document.getElementById('input-usb');
@@ -98,7 +99,7 @@
     history.unshift({ code: code, at: timeStr });
     if (history.length > maxHistory) history.pop();
     const html = history.map(function (h) {
-      return '<li class="list-group-item d-flex justify-content-between"><code>' + h.code + '</code><span class="text-muted small">' + h.at + '</span></li>';
+      return '<li class="list-group-item d-flex justify-content-between"><code>' + escapeHtml(h.code) + '</code><span class="text-muted small">' + escapeHtml(h.at) + '</span></li>';
     }).join('');
     historyList.innerHTML = html || '<li class="list-group-item text-muted">Aucun scan</li>';
   }

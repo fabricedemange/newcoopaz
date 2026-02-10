@@ -18,10 +18,23 @@
       <template v-else-if="store.commande">
         <div class="d-flex justify-content-between align-items-center mb-4">
           <h2 class="mb-0"><i class="bi bi-receipt me-2"></i>Commande #{{ store.commande.id }}</h2>
-          <div class="d-flex gap-2">
+          <div class="d-flex gap-2 flex-wrap">
+            <button
+              type="button"
+              class="btn btn-outline-primary"
+              :disabled="store.sendingPdf"
+              @click="sendPdfByEmail"
+            >
+              <span v-if="store.sendingPdf" class="spinner-border spinner-border-sm me-1"></span>
+              <i v-else class="bi bi-envelope-paper me-1"></i>
+              Envoyer le PDF par mail
+            </button>
             <BackButton />
             <a href="/commandes/vue" class="btn btn-secondary">Liste des commandes</a>
           </div>
+        </div>
+        <div v-if="store.sendPdfMessage" class="alert mb-4" :class="store.sendPdfMessage.type === 'success' ? 'alert-success' : 'alert-danger'">
+          {{ store.sendPdfMessage.text }}
         </div>
 
         <div class="card mb-4">
@@ -149,6 +162,11 @@ function confirmReopen() {
   if (!commandeIdRef.value) return;
   if (!confirm('Confirmer la réouverture de cette commande en panier ?')) return;
   store.reopenCommande(commandeIdRef.value, typeof window !== 'undefined' ? window.CSRF_TOKEN : '');
+}
+
+function sendPdfByEmail() {
+  if (!commandeIdRef.value) return;
+  store.sendPdfByEmail(commandeIdRef.value, typeof window !== 'undefined' ? window.CSRF_TOKEN : '');
 }
 
 watch(() => store.editingNoteId, (id) => {

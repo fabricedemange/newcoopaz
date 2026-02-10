@@ -88,6 +88,7 @@
   </div>
 </div>
 
+<script src="/js/xss-protection.js"></script>
 <script>
 (function() {
   var dateDebut = document.getElementById('date-debut');
@@ -191,7 +192,7 @@
     if (tableWrapper) tableWrapper.classList.remove('d-none');
     if (tbody) {
       tbody.innerHTML = sorted.map(function(r) {
-        return '<tr><td>' + formatDate(r.date_cotisation) + '</td><td>' + (nom(r) || '–') + '</td><td><code>' + (r.numero_ticket || '–') + '</code></td><td><strong class="text-primary">' + (Number(r.montant_cotisation).toFixed(2)) + ' €</strong></td></tr>';
+        return '<tr><td>' + escapeHtml(formatDate(r.date_cotisation)) + '</td><td>' + escapeHtml(nom(r) || '–') + '</td><td><code>' + escapeHtml(r.numero_ticket || '–') + '</code></td><td><strong class="text-primary">' + (Number(r.montant_cotisation).toFixed(2)) + ' €</strong></td></tr>';
       }).join('');
     }
     updateSortUI();

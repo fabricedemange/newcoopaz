@@ -308,6 +308,92 @@ function createSyntheseUtilisateurDocDefinition(catalogue, data) {
   };
 }
 
+/**
+ * Crée la définition du PDF d'une commande (panier validé) pour envoi par email
+ * @param {Object} commande - { id, username, originalname, created_formatted, livraison_formatted, note, ... }
+ * @param {Array} articles - [{ produit, quantity, prix, unite, note, fournisseur, categorie }]
+ * @returns {Object} docDefinition pdfmake
+ */
+function createCommandeDocDefinition(commande, articles) {
+  const total = (articles || []).reduce(
+    (sum, a) => sum + (parseFloat(a.prix) || 0) * (parseFloat(a.quantity) || 0) * (parseFloat(a.unite) || 1),
+    0
+  );
+
+  const tableBody = [
+    [
+      { text: "Produit", style: "tableHeader" },
+      { text: "Qté", style: "tableHeader" },
+      { text: "Prix / Unité", style: "tableHeader" },
+      { text: "Total", style: "tableHeader" },
+      { text: "Note", style: "tableHeader" },
+    ],
+  ];
+
+  (articles || []).forEach((a) => {
+    const qty = parseFloat(a.quantity) || 0;
+    const prix = parseFloat(a.prix) || 0;
+    const unite = parseFloat(a.unite) || 1;
+    const ligneTotal = qty * prix * unite;
+    tableBody.push([
+      { text: (a.produit || "").slice(0, 40), fontSize: 9 },
+      { text: String(qty), alignment: "right" },
+      { text: `${prix.toFixed(2)} € / ${unite}`, alignment: "right" },
+      { text: `${ligneTotal.toFixed(2)} €`, alignment: "right" },
+      { text: (a.note || "").slice(0, 25), fontSize: 8 },
+    ]);
+  });
+
+  const content = [
+    { text: "Commande", style: "header", alignment: "center" },
+    { text: `#${commande.id} - ${commande.originalname || "Catalogue"}`, style: "subheader", alignment: "center", margin: [0, 4, 0, 12] },
+    {
+      columns: [
+        { text: `Demandeur : ${commande.username || "-"}`, width: "*" },
+        { text: `Date : ${commande.created_formatted || "-"}`, width: "*" },
+      ],
+      margin: [0, 0, 0, 8],
+    },
+    { text: `Livraison prévue : ${commande.livraison_formatted || "-"}`, margin: [0, 0, 0, 8] },
+  ];
+
+  if (commande.note) {
+    content.push({ text: `Note : ${commande.note}`, italics: true, margin: [0, 0, 0, 8] });
+  }
+
+  content.push(
+    {
+      table: {
+        headerRows: 1,
+        widths: ["*", 40, 70, 60, 80],
+        body: tableBody,
+      },
+      layout: {
+        fillColor: (rowIndex) => (rowIndex === 0 ? "#3498db" : rowIndex % 2 === 0 ? "#ecf0f1" : null),
+      },
+    },
+    { text: " ", margin: [0, 8] },
+    {
+      columns: [
+        { text: "Total commande", bold: true, width: "*" },
+        { text: `${total.toFixed(2)} €`, bold: true, alignment: "right", width: 80 },
+      ],
+    }
+  );
+
+  return {
+    pageSize: "A4",
+    pageMargins: [40, 60, 40, 60],
+    content,
+    styles: {
+      header: { fontSize: 18, bold: true },
+      subheader: { fontSize: 12 },
+      tableHeader: { bold: true, fontSize: 10, color: "white" },
+    },
+    defaultStyle: { fontSize: 10 },
+  };
+}
+
 /** Alias pour generatePdf (utilisé par ticket-pdf) */
 const createPdfBuffer = generatePdf;
 
@@ -318,5 +404,6 @@ module.exports = {
   createSyntheseSimpleDocDefinition,
   createSyntheseDetaileeDocDefinition,
   createSyntheseUtilisateurDocDefinition,
+  createCommandeDocDefinition,
   printer,
 };
