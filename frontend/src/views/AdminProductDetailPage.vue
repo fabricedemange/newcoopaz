@@ -52,43 +52,43 @@
                 </dd>
                 <dt class="col-sm-5">Fournisseur</dt>
                 <dd class="col-sm-7">
-                  <a v-if="product.fournisseur_id" :href="`/admin/suppliers/${product.fournisseur_id}`">
+                  <a v-if="product.supplier_id || product.fournisseur_id" :href="`/admin/suppliers/${product.supplier_id || product.fournisseur_id}`">
                     {{ product.fournisseur }}
                   </a>
                   <span v-else class="text-muted">-</span>
                 </dd>
-                <template v-if="product.description">
-                  <dt class="col-sm-5">Description</dt>
-                  <dd class="col-sm-7">{{ product.description }}</dd>
-                </template>
-                <template v-if="product.reference_fournisseur">
-                  <dt class="col-sm-5">Réf. fournisseur</dt>
-                  <dd class="col-sm-7">{{ product.reference_fournisseur }}</dd>
-                </template>
-                <template v-if="product.code_ean">
-                  <dt class="col-sm-5">Code EAN</dt>
-                  <dd class="col-sm-7">{{ product.code_ean }}</dd>
-                </template>
-                <template v-if="product.conditionnement">
-                  <dt class="col-sm-5">Conditionnement</dt>
-                  <dd class="col-sm-7">{{ product.conditionnement }}</dd>
-                </template>
-                <template v-if="product.dlc_jours">
-                  <dt class="col-sm-5">DLC</dt>
-                  <dd class="col-sm-7">{{ product.dlc_jours }} jours</dd>
-                </template>
-                <template v-if="product.origine">
-                  <dt class="col-sm-5">Origine</dt>
-                  <dd class="col-sm-7">{{ product.origine }}</dd>
-                </template>
-                <template v-if="product.label">
-                  <dt class="col-sm-5">Labels</dt>
-                  <dd class="col-sm-7"><span class="badge bg-success">{{ product.label }}</span></dd>
-                </template>
-                <template v-if="product.allergenes">
-                  <dt class="col-sm-5">Allergènes</dt>
-                  <dd class="col-sm-7"><span class="badge bg-warning text-dark">{{ product.allergenes }}</span></dd>
-                </template>
+                <dt class="col-sm-5">Prix (€)</dt>
+                <dd class="col-sm-7">
+                  <strong :class="product.prix != null && Number(product.prix) < 0 ? 'text-warning' : 'text-primary'">
+                    {{ product.prix != null && product.prix !== '' ? Number(product.prix).toFixed(2) : '-' }} €
+                  </strong>
+                </dd>
+                <dt class="col-sm-5">Unité</dt>
+                <dd class="col-sm-7">{{ product.unite || '-' }}</dd>
+                <dt class="col-sm-5">Quantité minimale</dt>
+                <dd class="col-sm-7">{{ product.quantite_min != null && product.quantite_min !== '' ? product.quantite_min : '-' }}</dd>
+                <dt class="col-sm-5">Description / Commentaire</dt>
+                <dd class="col-sm-7">{{ product.description || '-' }}</dd>
+                <dt class="col-sm-5">Réf. fournisseur</dt>
+                <dd class="col-sm-7">{{ product.reference_fournisseur || '-' }}</dd>
+                <dt class="col-sm-5">Code EAN</dt>
+                <dd class="col-sm-7">{{ product.code_ean || '-' }}</dd>
+                <dt class="col-sm-5">Conditionnement</dt>
+                <dd class="col-sm-7">{{ product.conditionnement || '-' }}</dd>
+                <dt class="col-sm-5">DLC</dt>
+                <dd class="col-sm-7">{{ product.dlc_jours != null && product.dlc_jours !== '' ? product.dlc_jours + ' jours' : '-' }}</dd>
+                <dt class="col-sm-5">Origine</dt>
+                <dd class="col-sm-7">{{ product.origine || '-' }}</dd>
+                <dt class="col-sm-5">Labels</dt>
+                <dd class="col-sm-7">
+                  <span v-if="product.label" class="badge bg-success">{{ product.label }}</span>
+                  <span v-else class="text-muted">-</span>
+                </dd>
+                <dt class="col-sm-5">Allergènes</dt>
+                <dd class="col-sm-7">
+                  <span v-if="product.allergenes" class="badge bg-warning text-dark">{{ product.allergenes }}</span>
+                  <span v-else class="text-muted">-</span>
+                </dd>
                 <dt class="col-sm-5">Créé le</dt>
                 <dd class="col-sm-7">{{ formatDateTime(product.created_at) }}</dd>
                 <template v-if="product.updated_at">

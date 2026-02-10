@@ -236,6 +236,7 @@
                         <th style="cursor: pointer" @click="store.sortBy('prix')">
                           Prix <i :class="'bi ms-1 ' + getSortIcon('prix')"></i>
                         </th>
+                        <th>Unité</th>
                         <th style="cursor: pointer" @click="store.sortBy('label')">
                           Label <i :class="'bi ms-1 ' + getSortIcon('label')"></i>
                         </th>
@@ -288,6 +289,7 @@
                           <strong v-if="p.prix && p.prix > 0">{{ parseFloat(p.prix).toFixed(2) }} €</strong>
                           <span v-else class="text-muted">-</span>
                         </td>
+                        <td>{{ p.unite || '-' }}</td>
                         <td>
                           <small v-if="p.label">{{ p.label }}</small>
                           <span v-else class="text-muted">-</span>
@@ -350,6 +352,10 @@
                           <strong class="text-success">
                             {{ p.prix && p.prix > 0 ? parseFloat(p.prix).toFixed(2) + ' €' : '-' }}
                           </strong>
+                        </div>
+                        <div class="col-6">
+                          <small class="text-muted d-block">Unité</small>
+                          <strong>{{ p.unite || '-' }}</strong>
                         </div>
                         <div class="col-6">
                           <small class="text-muted d-block">Label</small>

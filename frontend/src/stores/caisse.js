@@ -498,15 +498,17 @@ export const useCaisseStore = defineStore('caisse', {
         if (this.currentPanierId) this.supprimerPanier(this.currentPanierId);
         this.viderPanier();
         this.fermerPaiement();
-        const emailFacture = (this.emailFactureAnonyme || '').trim();
-        if (emailFacture) {
+        const emailDestinataire = estAnonyme
+          ? (this.emailFactureAnonyme || '').trim()
+          : (selectedUser?.email || '').trim();
+        if (emailDestinataire) {
           try {
-            await postCaisseEnvoyerFacture(venteData.vente.id, emailFacture);
-            alert(`Vente enregistrée ! Ticket n°${venteData.vente.numero_ticket}. Facture envoyée par email.`);
+            await postCaisseEnvoyerFacture(venteData.vente.id, emailDestinataire);
+            alert(`Vente enregistrée ! Ticket n°${venteData.vente.numero_ticket}. Ticket envoyé par email au destinataire.`);
           } catch (errEmail) {
-            alert(`Vente enregistrée (Ticket n°${venteData.vente.numero_ticket}). Envoi de la facture par email a échoué : ${errEmail.message}`);
+            alert(`Vente enregistrée (Ticket n°${venteData.vente.numero_ticket}). L'envoi du ticket par email a échoué : ${errEmail.message}`);
           }
-          this.emailFactureAnonyme = '';
+          if (estAnonyme) this.emailFactureAnonyme = '';
         } else {
           alert(`Vente enregistrée ! Ticket n°${venteData.vente.numero_ticket}`);
         }

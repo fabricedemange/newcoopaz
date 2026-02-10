@@ -10,8 +10,8 @@
         <input id="nom" v-model="form.nom" type="text" class="form-control" required>
       </div>
       <div class="mb-3">
-        <label for="description" class="form-label">Description</label>
-        <textarea id="description" v-model="form.description" class="form-control" rows="3"></textarea>
+        <label for="description" class="form-label">Description / Commentaire</label>
+        <textarea id="description" v-model="form.description" class="form-control" rows="3" :placeholder="form.prix < 0 ? 'Ex. Retour consigne' : ''"></textarea>
       </div>
 
       <div class="row">
@@ -23,9 +23,9 @@
           </select>
         </div>
         <div class="col-md-6 mb-3">
-          <label for="supplier_id" class="form-label">Fournisseur</label>
-          <select id="supplier_id" v-model="form.supplier_id" class="form-select">
-            <option value="">Aucun fournisseur</option>
+          <label for="supplier_id" class="form-label">Fournisseur <span class="text-danger">*</span></label>
+          <select id="supplier_id" v-model="form.supplier_id" class="form-select" required>
+            <option value="">Sélectionner un fournisseur</option>
             <option v-for="sup in suppliers" :key="sup.id" :value="sup.id">{{ sup.nom }}</option>
           </select>
         </div>
@@ -68,8 +68,9 @@
       </div>
       <div class="row">
         <div class="col-md-4 mb-3">
-          <label for="prix" class="form-label">Prix (€)</label>
-          <input id="prix" v-model.number="form.prix" type="number" class="form-control" min="0" step="0.01">
+          <label for="prix" class="form-label">Prix (€) <span class="text-danger">*</span></label>
+          <input id="prix" v-model.number="form.prix" type="number" class="form-control" step="0.01" required>
+          <small class="form-text text-muted">Négatif autorisé (ex. retours de consignes)</small>
         </div>
         <div class="col-md-4 mb-3">
           <label for="dlc_jours" class="form-label">DLC (jours)</label>
@@ -256,8 +257,20 @@ watch(() => [props.product, props.productId], initForm, { immediate: true });
 
 async function submit() {
   error.value = '';
+  const prixNum = form.value.prix !== '' && form.value.prix != null ? Number(form.value.prix) : NaN;
+  if (!form.value.supplier_id) {
+    error.value = 'Veuillez sélectionner un fournisseur.';
+    return;
+  }
+  if (Number.isNaN(prixNum)) {
+    error.value = 'Veuillez saisir un prix valide.';
+    return;
+  }
   loading.value = true;
   try {
+    const descriptionToSend =
+      (form.value.description || '').trim() ||
+      (prixNum < 0 ? 'Retour consigne' : '');
     const url = isEdit.value ? `/admin/products/${props.productId}` : '/admin/products';
     const opts = { method: 'POST', credentials: 'include', headers: { Accept: 'application/json' } };
 
@@ -265,7 +278,7 @@ async function submit() {
       const fd = new FormData();
       fd.append('_csrf', props.csrfToken);
       fd.append('nom', form.value.nom.trim());
-      fd.append('description', form.value.description || '');
+      fd.append('description', descriptionToSend);
       fd.append('category_id', form.value.category_id || '');
       fd.append('supplier_id', form.value.supplier_id || '');
       fd.append('reference_fournisseur', form.value.reference_fournisseur || '');
@@ -285,7 +298,7 @@ async function submit() {
       const body = new URLSearchParams({
         _csrf: props.csrfToken,
         nom: form.value.nom.trim(),
-        description: form.value.description || '',
+        description: descriptionToSend,
         category_id: form.value.category_id || '',
         supplier_id: form.value.supplier_id || '',
         reference_fournisseur: form.value.reference_fournisseur || '',
