@@ -85,16 +85,29 @@ export const useCaisseStore = defineStore('caisse', {
   }),
 
   getters: {
-    produitsFiltrés(state) {
+    /** Produits filtrés par la recherche uniquement (pour badges catégories). */
+    produitsFiltresParRecherche(state) {
       let filtered = [...state.produits];
       if (state.searchQuery) {
         const q = state.searchQuery.toLowerCase();
         filtered = filtered.filter((p) => p.nom.toLowerCase().includes(q));
       }
+      return filtered;
+    },
+    /** Produits affichés : recherche + catégorie sélectionnée éventuelle. */
+    produitsFiltrés(state, getters) {
+      const parRecherche = getters?.produitsFiltresParRecherche ?? (() => {
+        let f = [...state.produits];
+        if (state.searchQuery) {
+          const q = state.searchQuery.toLowerCase();
+          f = f.filter((p) => p.nom.toLowerCase().includes(q));
+        }
+        return f;
+      })();
+      let filtered = [...parRecherche];
       if (state.selectedCategorie) {
         filtered = filtered.filter((p) => p.category_id === state.selectedCategorie);
       }
-      // Par défaut : stocks positifs en tête, puis zéro, puis négatifs
       return filtered.sort((a, b) => {
         const sa = Number(a.stock) ?? 0;
         const sb = Number(b.stock) ?? 0;
@@ -110,14 +123,17 @@ export const useCaisseStore = defineStore('caisse', {
     nombreArticles(state) {
       return state.lignes.length;
     },
-    categoriesFiltrées(state) {
-      let produitsRecherche = [...state.produits];
-      if (state.searchQuery) {
-        const q = state.searchQuery.toLowerCase();
-        produitsRecherche = produitsRecherche.filter((p) => p.nom.toLowerCase().includes(q));
-      }
+    categoriesFiltrées(state, getters) {
+      const parRecherche = getters?.produitsFiltresParRecherche ?? (() => {
+        let f = [...state.produits];
+        if (state.searchQuery) {
+          const q = state.searchQuery.toLowerCase();
+          f = f.filter((p) => p.nom.toLowerCase().includes(q));
+        }
+        return f;
+      })();
       const categoryIds = new Set(
-        produitsRecherche.filter((p) => p.category_id).map((p) => p.category_id)
+        parRecherche.filter((p) => p.category_id).map((p) => p.category_id)
       );
       return state.categories.filter((c) => categoryIds.has(c.id));
     },

@@ -59,7 +59,7 @@
               >
                 {{ cat.nom }}
                 <span :class="['badge ms-2', store.selectedCategorie === cat.id ? 'bg-light text-primary' : 'bg-primary']">
-                  {{ store.produitsFiltrés.filter((p) => p.category_id === cat.id).length }}
+                  {{ store.produitsFiltresParRecherche.filter((p) => p.category_id === cat.id).length }}
                 </span>
               </button>
             </div>
@@ -534,6 +534,20 @@ const BARCODE_IDLE_MS = 200;
 let scanBuffer = '';
 let scanBufferTimer = null;
 
+function focusQuantiteInput(lineIndex) {
+  const doFocus = () => {
+    const input = quantityInputRefs.value[lineIndex];
+    if (input && typeof input.focus === 'function') {
+      input.focus();
+      input.select?.();
+    }
+  };
+  nextTick(() => {
+    doFocus();
+    setTimeout(doFocus, 50);
+  });
+}
+
 function clearScanBuffer() {
   scanBuffer = '';
 }
@@ -545,12 +559,7 @@ function flushScanBuffer() {
     const result = store.ajouterProduitParEan(code);
     if (result.found) {
       showScanToast(`Ajouté : ${result.produit.nom}`, 'success');
-      if (result.lineIndex != null) {
-        nextTick(() => {
-          const input = quantityInputRefs.value[result.lineIndex];
-          if (input && typeof input.focus === 'function') input.focus();
-        });
-      }
+      if (result.lineIndex != null) focusQuantiteInput(result.lineIndex);
     } else {
       showScanToast('Code non reconnu', 'warning');
     }
@@ -567,16 +576,12 @@ function onKeydownScan(e) {
         const result = store.ajouterProduitParEan(val);
         if (result.found) {
           showScanToast(`Ajouté : ${result.produit.nom}`, 'success');
-          if (result.lineIndex != null) {
-            nextTick(() => {
-              const input = quantityInputRefs.value[result.lineIndex];
-              if (input && typeof input.focus === 'function') input.focus();
-            });
-          }
+          if (result.lineIndex != null) focusQuantiteInput(result.lineIndex);
+          if (store.searchQuery === val) store.searchQuery = '';
+          e.target.value = '';
         } else {
           showScanToast('Code non reconnu', 'warning');
         }
-        e.target.value = '';
       }
     } else {
       if (scanBuffer.length >= BARCODE_MIN_LENGTH && /^\d+$/.test(scanBuffer)) {
@@ -632,6 +637,10 @@ onUnmounted(() => {
   document.removeEventListener('keydown', onKeydownScan);
   if (scanBufferTimer) clearTimeout(scanBufferTimer);
   if (scanToastTimer) clearTimeout(scanToastTimer);
+});
+
+watch(() => store.searchQuery, () => {
+  store.selectedCategorie = null;
 });
 
 watch(() => store.selectedUtilisateur, (userId) => {
