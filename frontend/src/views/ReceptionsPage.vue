@@ -45,7 +45,12 @@
                 <tr v-for="r in receptions" :key="r.id">
                   <td><code>{{ r.bl_number }}</code></td>
                   <td>{{ r.supplier_nom }}</td>
-                  <td>{{ r.is_from_preorder ? 'Oui' : 'Non' }}</td>
+                  <td>
+                    <span v-if="r.is_from_preorder">
+                      Oui<span v-if="r.catalog_file_id"> — #{{ r.catalog_file_id }}</span>
+                    </span>
+                    <span v-else>Non</span>
+                  </td>
                   <td>{{ formatDate(r.created_at) }}</td>
                   <td>
                     <span :class="['badge', r.statut === 'validated' ? 'bg-success' : 'bg-secondary']">
@@ -129,7 +134,6 @@
                     <th>BL</th>
                     <th>Date livraison</th>
                     <th>Lignes</th>
-                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -137,21 +141,16 @@
                     <td><code>{{ rec.bl_number }}</code></td>
                     <td>{{ formatDate(rec.validated_at) }}</td>
                     <td>{{ rec.nb_lignes }}</td>
-                    <td>
-                      <button type="button" class="btn btn-sm btn-outline-primary" :disabled="loadingPreorder" @click="prefillFromDeliveredReception(rec.id)">
-                        <span v-if="loadingPreorder" class="spinner-border spinner-border-sm"></span>
-                        <template v-else>Préremplir</template>
-                      </button>
-                    </td>
                   </tr>
                 </tbody>
               </table>
             </div>
             <p v-else class="text-muted small mb-2">Aucune réception validée (précommande) pour ce fournisseur.</p>
-            <button type="button" class="btn btn-outline-primary" :disabled="loadingPreorder || loadingPreorderCatalogId !== null" @click="loadPreorderLines">
-              <span v-if="loadingPreorder" class="spinner-border spinner-border-sm me-1"></span>
-              <i v-else class="bi bi-download me-1"></i>Préremplir avec les lignes des précommandes (paniers en cours)
-            </button>
+            <p v-if="form.catalog_file_id" class="small text-success mb-2">
+              <i class="bi bi-check-circle me-1"></i>Précommande utilisée : #{{ form.catalog_file_id }}
+              <span v-if="preordersCatalogues.find(c => c.id === form.catalog_file_id)">{{ preordersCatalogues.find(c => c.id === form.catalog_file_id).originalname || preordersCatalogues.find(c => c.id === form.catalog_file_id).description }}</span>
+              <span v-else-if="currentReception?.catalog_originalname">{{ currentReception.catalog_originalname }}</span>
+            </p>
           </div>
 
           <h6 class="mt-4">Lignes de réception</h6>
@@ -320,10 +319,10 @@ const form = ref({
   supplier_id: '',
   bl_number: '',
   is_from_preorder: false,
+  catalog_file_id: null,
   lignes: [],
 });
 const saving = ref(false);
-const loadingPreorder = ref(false);
 const preordersDelivered = ref([]);
 const loadingPreordersDelivered = ref(false);
 const preordersCatalogues = ref([]);
@@ -360,6 +359,7 @@ function hasPriceDiff(ligne) {
 
 function onSupplierChange() {
   form.value.lignes = [];
+  form.value.catalog_file_id = null;
   productSearchResults.value = [];
   preordersDelivered.value = [];
   preordersCatalogues.value = [];
@@ -395,28 +395,6 @@ watch(
   { immediate: true }
 );
 
-function prefillFromDeliveredReception(id) {
-  loadingPreorder.value = true;
-  fetchReceptionDetail(id)
-    .then((data) => {
-      const lignes = (data.lignes || []).map((l) => ({
-        product_id: l.product_id,
-        product_nom: l.product_nom,
-        quantite_recue: Number(l.quantite_recue) || 0,
-        prix_unitaire: Number(l.prix_unitaire) || 0,
-        prix_base: l.prix_base != null ? Number(l.prix_base) : null,
-        comment: (l.comment || '').trim() || '',
-      }));
-      form.value.lignes = lignes;
-    })
-    .catch((e) => {
-      error.value = e.message;
-    })
-    .finally(() => {
-      loadingPreorder.value = false;
-    });
-}
-
 function loadReceptions() {
   loading.value = true;
   error.value = null;
@@ -443,22 +421,9 @@ function loadSuppliers() {
 function startNew() {
   receptionId.value = null;
   currentReception.value = null;
-  form.value = { supplier_id: '', bl_number: '', is_from_preorder: false, lignes: [] };
+  form.value = { supplier_id: '', bl_number: '', is_from_preorder: false, catalog_file_id: null, lignes: [] };
   mode.value = 'form';
   loadSuppliers();
-}
-
-function loadPreorderLines() {
-  if (!form.value.supplier_id) return;
-  loadingPreorder.value = true;
-  fetchReceptionsPreorderLines(form.value.supplier_id)
-    .then((data) => applyPreorderLinesToForm(data))
-    .catch((e) => {
-      error.value = e.message;
-    })
-    .finally(() => {
-      loadingPreorder.value = false;
-    });
 }
 
 function applyPreorderLinesToForm(data) {
@@ -477,7 +442,10 @@ function prefillFromCatalogue(catalogFileId) {
   if (!form.value.supplier_id) return;
   loadingPreorderCatalogId.value = catalogFileId;
   fetchReceptionsPreorderLines(form.value.supplier_id, catalogFileId)
-    .then((data) => applyPreorderLinesToForm(data))
+    .then((data) => {
+      applyPreorderLinesToForm(data);
+      form.value.catalog_file_id = catalogFileId;
+    })
     .catch((e) => {
       error.value = e.message;
     })
@@ -544,6 +512,7 @@ function saveDraft() {
     supplier_id: form.value.supplier_id,
     bl_number: form.value.bl_number.trim(),
     is_from_preorder: form.value.is_from_preorder,
+    catalog_file_id: form.value.catalog_file_id || undefined,
     lignes: buildLignesPayload(),
   })
     .then((data) => {
@@ -569,6 +538,7 @@ function saveAndValidate() {
     supplier_id: form.value.supplier_id,
     bl_number: form.value.bl_number.trim(),
     is_from_preorder: form.value.is_from_preorder,
+    catalog_file_id: form.value.catalog_file_id || undefined,
     lignes: buildLignesPayload(),
   })
     .then((data) => {
@@ -601,6 +571,7 @@ function openDetail(id) {
         supplier_id: data.reception.supplier_id,
         bl_number: data.reception.bl_number,
         is_from_preorder: !!data.reception.is_from_preorder,
+        catalog_file_id: data.reception.catalog_file_id ?? null,
         lignes: (data.lignes || []).map((l) => ({
           product_id: l.product_id,
           product_nom: l.product_nom,
@@ -627,6 +598,7 @@ function updateDraft() {
   patchReception(receptionId.value, {
     bl_number: form.value.bl_number.trim(),
     is_from_preorder: form.value.is_from_preorder,
+    catalog_file_id: form.value.catalog_file_id ?? undefined,
     lignes: buildLignesPayload(),
   })
     .then(() => {

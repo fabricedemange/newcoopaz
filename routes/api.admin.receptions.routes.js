@@ -32,11 +32,13 @@ router.get("/", requireReception, async (req, res) => {
     const { supplier_id, statut } = req.query;
 
     let sql = `
-      SELECT r.id, r.supplier_id, r.bl_number, r.is_from_preorder, r.statut,
+      SELECT r.id, r.supplier_id, r.bl_number, r.is_from_preorder, r.catalog_file_id, r.statut,
              r.created_by, r.created_at, r.validated_at, r.validated_by, r.comment,
              s.nom AS supplier_nom,
-             u.username AS created_by_username
+             u.username AS created_by_username,
+             cf.originalname AS catalog_originalname
       FROM receptions r
+      LEFT JOIN catalog_files cf ON cf.id = r.catalog_file_id
       INNER JOIN suppliers s ON s.id = r.supplier_id
       LEFT JOIN users u ON u.id = r.created_by
       WHERE r.organization_id = ?
@@ -97,8 +99,8 @@ router.get("/products", requireReception, async (req, res) => {
 
 /**
  * GET /api/admin/receptions/preorders-catalogues
- * Query: supplier_id. Liste des catalogues (précommandes) pour ce fournisseur : catalogues qui contiennent
- * des produits de ce fournisseur, avec date_livraison = jour même ou plus ancien. Pas de condition sur les paniers.
+ * Query: supplier_id. Les 3 catalogues (précommandes) les plus récents pour ce fournisseur,
+ * avec date_livraison = jour même ou plus ancien.
  */
 router.get("/preorders-catalogues", requireReception, async (req, res) => {
   try {
@@ -116,7 +118,7 @@ router.get("/preorders-catalogues", requireReception, async (req, res) => {
        WHERE cf.organization_id = ?
          AND (cf.date_livraison IS NULL OR cf.date_livraison <= CURDATE())
        ORDER BY cf.date_livraison DESC, cf.id DESC
-       LIMIT 50`,
+       LIMIT 3`,
       [orgId, supplierId, orgId]
     );
     res.json({ success: true, catalogues: list || [] });
@@ -199,13 +201,13 @@ router.get("/preorder-lines", requireReception, async (req, res) => {
 
 /**
  * POST /api/admin/receptions
- * Créer une réception (draft). Body: supplier_id, bl_number, is_from_preorder, lignes[] (optionnel).
+ * Créer une réception (draft). Body: supplier_id, bl_number, is_from_preorder, catalog_file_id (optionnel), lignes[] (optionnel).
  */
 router.post("/", requireReception, async (req, res) => {
   try {
     const orgId = getCurrentOrgId(req);
     const userId = getCurrentUserId(req);
-    const { supplier_id, bl_number, is_from_preorder, lignes } = req.body || {};
+    const { supplier_id, bl_number, is_from_preorder, catalog_file_id, lignes } = req.body || {};
 
     if (!supplier_id || !bl_number || bl_number.trim() === "") {
       return res.status(400).json({ success: false, error: "supplier_id et bl_number requis" });
@@ -219,10 +221,11 @@ router.post("/", requireReception, async (req, res) => {
       return res.status(400).json({ success: false, error: "Fournisseur non trouvé" });
     }
 
+    const catalogId = catalog_file_id != null && catalog_file_id !== "" ? parseInt(catalog_file_id, 10) : null;
     const result = await queryPromise(
-      `INSERT INTO receptions (organization_id, supplier_id, bl_number, is_from_preorder, statut, created_by)
-       VALUES (?, ?, ?, ?, 'draft', ?)`,
-      [orgId, supplier_id, String(bl_number).trim(), is_from_preorder ? 1 : 0, userId]
+      `INSERT INTO receptions (organization_id, supplier_id, bl_number, is_from_preorder, catalog_file_id, statut, created_by)
+       VALUES (?, ?, ?, ?, ?, 'draft', ?)`,
+      [orgId, supplier_id, String(bl_number).trim(), is_from_preorder ? 1 : 0, catalogId, userId]
     );
     const receptionId = result.insertId;
 
@@ -272,10 +275,12 @@ router.get("/:id", requireReception, async (req, res) => {
 
     const [rec] = await queryPromise(
       `SELECT r.*, s.nom AS supplier_nom,
-              u.username AS created_by_username
+              u.username AS created_by_username,
+              cf.originalname AS catalog_originalname
        FROM receptions r
        INNER JOIN suppliers s ON s.id = r.supplier_id
        LEFT JOIN users u ON u.id = r.created_by
+       LEFT JOIN catalog_files cf ON cf.id = r.catalog_file_id
        WHERE r.id = ? AND r.organization_id = ?`,
       [id, orgId]
     );
@@ -308,7 +313,7 @@ router.patch("/:id", requireReception, async (req, res) => {
   try {
     const orgId = getCurrentOrgId(req);
     const id = parseInt(req.params.id, 10);
-    const { bl_number, is_from_preorder, comment, lignes } = req.body || {};
+    const { bl_number, is_from_preorder, catalog_file_id, comment, lignes } = req.body || {};
 
     const [rec] = await queryPromise(
       "SELECT id FROM receptions WHERE id = ? AND organization_id = ? AND statut = 'draft'",
@@ -331,6 +336,10 @@ router.patch("/:id", requireReception, async (req, res) => {
     if (comment !== undefined) {
       updates.push("comment = ?");
       params.push((comment || "").trim() || null);
+    }
+    if (catalog_file_id !== undefined) {
+      updates.push("catalog_file_id = ?");
+      params.push(catalog_file_id != null && catalog_file_id !== "" ? parseInt(catalog_file_id, 10) : null);
     }
     if (updates.length) {
       params.push(id);
