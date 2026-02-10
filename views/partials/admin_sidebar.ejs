@@ -656,6 +656,10 @@ function hasAccess(requiredPermissions) {
         <i class="bi bi-upc-scan"></i>
         <span>Inventaire</span>
       </a>
+      <a href="/caisse/receptions" class="sidebar-menu-item" data-path="/caisse/receptions">
+        <i class="bi bi-truck"></i>
+        <span>Réceptions</span>
+      </a>
       <% } %>
       <% if (hasAccess(['catalogues', 'paniers.admin', 'commandes.admin', 'catalogues.manage', 'paniers.manage', 'commandes.manage'])) { %>
       <a href="/admin/dashboard/vue" class="sidebar-menu-item sidebar-menu-admin" data-path="/admin/dashboard/vue">

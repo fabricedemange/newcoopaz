@@ -256,7 +256,13 @@ const csrfToken = computed(() => window.CSRF_TOKEN || '');
 function toDateStr(val) {
   if (!val) return '';
   const d = new Date(val);
-  return isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
+  if (isNaN(d.getTime())) return '';
+  // Formater en YYYY-MM-DD en utilisant les méthodes locales (pas UTC)
+  // pour éviter le décalage d'un jour causé par toISOString()
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 const statusLabel = computed(() => {

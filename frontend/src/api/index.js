@@ -1191,6 +1191,172 @@ export async function postAdminProductsBulkUpdate(body) {
   return response.json();
 }
 
+// --- Réceptions de commandes ---
+/** GET /api/admin/receptions */
+export async function fetchReceptions(params = {}) {
+  const search = new URLSearchParams(params).toString();
+  const response = await fetch(`/api/admin/receptions${search ? `?${search}` : ''}`, {
+    method: 'GET',
+    headers: { Accept: 'application/json', 'csrf-token': typeof window !== 'undefined' && window.CSRF_TOKEN ? window.CSRF_TOKEN : '' },
+    credentials: 'include',
+  });
+  checkAuth(response);
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+/** GET /api/admin/receptions/products?supplier_id=&search= */
+export async function fetchReceptionProducts(supplierId, search = '') {
+  const params = new URLSearchParams({ supplier_id: supplierId });
+  if (search) params.set('search', search);
+  const response = await fetch(`/api/admin/receptions/products?${params.toString()}`, {
+    method: 'GET',
+    headers: { Accept: 'application/json', 'csrf-token': typeof window !== 'undefined' && window.CSRF_TOKEN ? window.CSRF_TOKEN : '' },
+    credentials: 'include',
+  });
+  checkAuth(response);
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+/** GET /api/admin/receptions/preorders-catalogues?supplier_id= — catalogues (précommandes) pour ce fournisseur */
+export async function fetchReceptionsPreordersCatalogues(supplierId) {
+  const response = await fetch(`/api/admin/receptions/preorders-catalogues?supplier_id=${encodeURIComponent(supplierId)}`, {
+    method: 'GET',
+    headers: { Accept: 'application/json', 'csrf-token': typeof window !== 'undefined' && window.CSRF_TOKEN ? window.CSRF_TOKEN : '' },
+    credentials: 'include',
+  });
+  checkAuth(response);
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+/** GET /api/admin/receptions/preorders-delivered?supplier_id= — dernières réceptions validées (précommandes livrées) */
+export async function fetchReceptionsPreordersDelivered(supplierId) {
+  const response = await fetch(`/api/admin/receptions/preorders-delivered?supplier_id=${encodeURIComponent(supplierId)}`, {
+    method: 'GET',
+    headers: { Accept: 'application/json', 'csrf-token': typeof window !== 'undefined' && window.CSRF_TOKEN ? window.CSRF_TOKEN : '' },
+    credentials: 'include',
+  });
+  checkAuth(response);
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+/** GET /api/admin/receptions/preorder-lines?supplier_id=&catalog_file_id= (catalog_file_id optionnel) */
+export async function fetchReceptionsPreorderLines(supplierId, catalogFileId = null) {
+  const params = new URLSearchParams({ supplier_id: supplierId });
+  if (catalogFileId != null && catalogFileId !== '') params.set('catalog_file_id', catalogFileId);
+  const response = await fetch(`/api/admin/receptions/preorder-lines?${params.toString()}`, {
+    method: 'GET',
+    headers: { Accept: 'application/json', 'csrf-token': typeof window !== 'undefined' && window.CSRF_TOKEN ? window.CSRF_TOKEN : '' },
+    credentials: 'include',
+  });
+  checkAuth(response);
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+/** GET /api/admin/receptions/:id */
+export async function fetchReceptionDetail(id) {
+  const response = await fetch(`/api/admin/receptions/${id}`, {
+    method: 'GET',
+    headers: { Accept: 'application/json', 'csrf-token': typeof window !== 'undefined' && window.CSRF_TOKEN ? window.CSRF_TOKEN : '' },
+    credentials: 'include',
+  });
+  checkAuth(response);
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+/** POST /api/admin/receptions */
+export async function postReception(body) {
+  const response = await fetch('/api/admin/receptions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'csrf-token': typeof window !== 'undefined' && window.CSRF_TOKEN ? window.CSRF_TOKEN : '',
+    },
+    credentials: 'include',
+    body: JSON.stringify(body),
+  });
+  checkAuth(response);
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+/** PATCH /api/admin/receptions/:id */
+export async function patchReception(id, body) {
+  const response = await fetch(`/api/admin/receptions/${id}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'csrf-token': typeof window !== 'undefined' && window.CSRF_TOKEN ? window.CSRF_TOKEN : '',
+    },
+    credentials: 'include',
+    body: JSON.stringify(body),
+  });
+  checkAuth(response);
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+/** POST /api/admin/receptions/:id/validate */
+export async function postReceptionValidate(id) {
+  const response = await fetch(`/api/admin/receptions/${id}/validate`, {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'csrf-token': typeof window !== 'undefined' && window.CSRF_TOKEN ? window.CSRF_TOKEN : '' },
+    credentials: 'include',
+  });
+  checkAuth(response);
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+/** DELETE /api/admin/receptions/:id */
+export async function deleteReception(id) {
+  const response = await fetch(`/api/admin/receptions/${id}`, {
+    method: 'DELETE',
+    headers: { Accept: 'application/json', 'csrf-token': typeof window !== 'undefined' && window.CSRF_TOKEN ? window.CSRF_TOKEN : '' },
+    credentials: 'include',
+  });
+  checkAuth(response);
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
 // --- Admin Utilisateurs (liste + rôles + bulk) ---
 /** GET /api/admin/users */
 export async function fetchAdminUsers() {

@@ -62,4 +62,11 @@ router.get("/inventaires-historique", requirePermission("inventory_stock"), (req
   });
 });
 
+// GET /caisse/receptions - Réceptions de commandes (BL, fournisseur, lignes, validation stock)
+router.get("/receptions", requirePermission("inventory_stock"), (req, res) => {
+  renderAdminView(res, "caisse_receptions_vue", {
+    pageTitle: "Réceptions de commandes"
+  });
+});
+
 module.exports = router;

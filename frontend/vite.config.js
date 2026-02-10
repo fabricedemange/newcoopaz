@@ -37,6 +37,7 @@ export default defineConfig(({ mode }) => ({
         'caisse-inventaire': path.resolve(__dirname, 'src/entries/caisse-inventaire.js'),
         'caisse-stock-mouvements': path.resolve(__dirname, 'src/entries/caisse-stock-mouvements.js'),
         'caisse-inventaires-historique': path.resolve(__dirname, 'src/entries/caisse-inventaires-historique.js'),
+        'caisse-receptions': path.resolve(__dirname, 'src/entries/caisse-receptions.js'),
         'admin-trace': path.resolve(__dirname, 'src/entries/admin-trace.js'),
         'admin-bandeaux': path.resolve(__dirname, 'src/entries/admin-bandeaux.js'),
         'admin-organizations': path.resolve(__dirname, 'src/entries/admin-organizations.js'),
