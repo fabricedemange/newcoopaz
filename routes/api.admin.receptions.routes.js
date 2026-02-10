@@ -276,10 +276,12 @@ router.get("/:id", requireReception, async (req, res) => {
     const [rec] = await queryPromise(
       `SELECT r.*, s.nom AS supplier_nom,
               u.username AS created_by_username,
+              uv.username AS validated_by_username,
               cf.originalname AS catalog_originalname
        FROM receptions r
        INNER JOIN suppliers s ON s.id = r.supplier_id
        LEFT JOIN users u ON u.id = r.created_by
+       LEFT JOIN users uv ON uv.id = r.validated_by
        LEFT JOIN catalog_files cf ON cf.id = r.catalog_file_id
        WHERE r.id = ? AND r.organization_id = ?`,
       [id, orgId]

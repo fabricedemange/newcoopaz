@@ -37,6 +37,7 @@
                   <th>Fournisseur</th>
                   <th>Précommande</th>
                   <th>Date</th>
+                  <th>Réception par</th>
                   <th>Statut</th>
                   <th>Actions</th>
                 </tr>
@@ -52,6 +53,7 @@
                     <span v-else>Non</span>
                   </td>
                   <td>{{ formatDate(r.created_at) }}</td>
+                  <td>{{ r.created_by_username || '—' }}</td>
                   <td>
                     <span :class="['badge', r.statut === 'validated' ? 'bg-success' : 'bg-secondary']">
                       {{ r.statut === 'validated' ? 'Validée' : 'Brouillon' }}
@@ -85,6 +87,12 @@
           <h5 class="mb-0">{{ receptionId ? 'Détail / Modifier la réception' : 'Nouvelle réception' }}</h5>
         </div>
         <div class="card-body">
+          <div v-if="receptionId && currentReception" class="small text-muted mb-3">
+            <span>Créée par <strong>{{ currentReception.created_by_username || '—' }}</strong></span>
+            <span v-if="currentReception.statut === 'validated' && currentReception.validated_by_username" class="ms-3">
+              · Validée par <strong>{{ currentReception.validated_by_username }}</strong>
+            </span>
+          </div>
           <div class="row g-3 mb-4">
             <div class="col-md-4">
               <label class="form-label">Fournisseur <span class="text-danger">*</span></label>
