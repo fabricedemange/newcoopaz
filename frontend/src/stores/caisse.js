@@ -38,7 +38,12 @@ function roundToCent(amount) {
 function ajusterAvoirsPourTotalPositif(lignes) {
   const totalProduits = lignes
     .filter((l) => !l.is_avoir)
-    .reduce((sum, l) => sum + roundToCent(l.quantite * l.prix_unitaire), 0);
+    .reduce((sum, l) => {
+      const prixBase = roundToCent(l.quantite * l.prix_unitaire);
+      const remise = parseFloat(l.remise_pourcent) || 0;
+      const montantRemise = roundToCent(prixBase * (remise / 100));
+      return sum + roundToCent(prixBase - montantRemise);
+    }, 0);
   const avoirLines = lignes.filter((l) => l.is_avoir);
   const totalAvoirs = avoirLines.reduce((sum, l) => sum + Math.abs(roundToCent(l.prix_unitaire)), 0);
   if (totalAvoirs <= totalProduits) return;
@@ -89,8 +94,15 @@ export const useCaisseStore = defineStore('caisse', {
     produitsFiltresParRecherche(state) {
       let filtered = [...state.produits];
       if (state.searchQuery) {
-        const q = state.searchQuery.toLowerCase();
-        filtered = filtered.filter((p) => p.nom.toLowerCase().includes(q));
+        const query = state.searchQuery.trim();
+        if (query) {
+          // Séparer les mots et rechercher TOUS les mots (insensible à la casse)
+          const mots = query.toLowerCase().split(/\s+/).filter(m => m.length > 0);
+          filtered = filtered.filter((p) => {
+            const nomLower = (p.nom || '').toLowerCase();
+            return mots.every(mot => nomLower.includes(mot));
+          });
+        }
       }
       return filtered;
     },
@@ -99,8 +111,15 @@ export const useCaisseStore = defineStore('caisse', {
       const parRecherche = getters?.produitsFiltresParRecherche ?? (() => {
         let f = [...state.produits];
         if (state.searchQuery) {
-          const q = state.searchQuery.toLowerCase();
-          f = f.filter((p) => p.nom.toLowerCase().includes(q));
+          const query = state.searchQuery.trim();
+          if (query) {
+            // Séparer les mots et rechercher TOUS les mots (insensible à la casse)
+            const mots = query.toLowerCase().split(/\s+/).filter(m => m.length > 0);
+            f = f.filter((p) => {
+              const nomLower = (p.nom || '').toLowerCase();
+              return mots.every(mot => nomLower.includes(mot));
+            });
+          }
         }
         return f;
       })();
@@ -116,7 +135,10 @@ export const useCaisseStore = defineStore('caisse', {
     },
     total(state) {
       const sum = state.lignes.reduce((acc, l) => {
-        return acc + roundToCent(l.quantite * l.prix_unitaire);
+        const prixBase = roundToCent(l.quantite * l.prix_unitaire);
+        const remise = parseFloat(l.remise_pourcent) || 0;
+        const montantRemise = roundToCent(prixBase * (remise / 100));
+        return acc + roundToCent(prixBase - montantRemise);
       }, 0);
       return roundToCent(sum);
     },
@@ -149,13 +171,23 @@ export const useCaisseStore = defineStore('caisse', {
     },
     /** Reste à payer (négatif = trop perçu, rendu monnaie) */
     resteAPayer(state, getters) {
-      const total = getters?.total ?? roundToCent(state.lignes.reduce((acc, l) => acc + roundToCent(l.quantite * l.prix_unitaire), 0));
+      const total = getters?.total ?? roundToCent(state.lignes.reduce((acc, l) => {
+        const prixBase = roundToCent(l.quantite * l.prix_unitaire);
+        const remise = parseFloat(l.remise_pourcent) || 0;
+        const montantRemise = roundToCent(prixBase * (remise / 100));
+        return acc + roundToCent(prixBase - montantRemise);
+      }, 0));
       const totalPaye = getters?.totalPaye ?? roundToCent((state.lignesPaiement || []).reduce((s, l) => s + (parseFloat(l.montant) || 0), 0));
       return roundToCent(total - totalPaye);
     },
     /** true si on peut valider (total payé >= total et chaque ligne avec montant > 0 a un mode) */
     peutValiderPaiement(state, getters) {
-      const total = getters?.total ?? roundToCent(state.lignes.reduce((acc, l) => acc + roundToCent(l.quantite * l.prix_unitaire), 0));
+      const total = getters?.total ?? roundToCent(state.lignes.reduce((acc, l) => {
+        const prixBase = roundToCent(l.quantite * l.prix_unitaire);
+        const remise = parseFloat(l.remise_pourcent) || 0;
+        const montantRemise = roundToCent(prixBase * (remise / 100));
+        return acc + roundToCent(prixBase - montantRemise);
+      }, 0));
       const totalPaye = getters?.totalPaye ?? roundToCent((state.lignesPaiement || []).reduce((s, l) => s + (parseFloat(l.montant) || 0), 0));
       if (totalPaye <= 0) return false;
       if (totalPaye < total) return false;
@@ -224,6 +256,7 @@ export const useCaisseStore = defineStore('caisse', {
         unite: produit.unite || 'Pièce',
         quantite_min: parseFloat(produit.quantite_min) || 1,
         is_avoir: false,
+        remise_pourcent: 0,
       });
       return this.lignes.length - 1;
     },
@@ -246,6 +279,15 @@ export const useCaisseStore = defineStore('caisse', {
       const ligne = this.lignes[index];
       if (ligne && nouvelleQuantite > 0) {
         ligne.quantite = parseFloat(nouvelleQuantite);
+        if (!ligne.is_avoir) ajusterAvoirsPourTotalPositif(this.lignes);
+      }
+    },
+
+    modifierRemise(index, nouvelleRemise) {
+      const ligne = this.lignes[index];
+      if (ligne && !ligne.is_avoir && !ligne.is_cotisation) {
+        const remise = parseFloat(nouvelleRemise) || 0;
+        ligne.remise_pourcent = Math.max(0, Math.min(100, remise)); // Entre 0 et 100%
         if (!ligne.is_avoir) ajusterAvoirsPourTotalPositif(this.lignes);
       }
     },
@@ -309,7 +351,12 @@ export const useCaisseStore = defineStore('caisse', {
       if (!montant || montant <= 0) return;
       const totalProduits = this.lignes
         .filter((l) => !l.is_avoir)
-        .reduce((sum, l) => sum + roundToCent(l.quantite * l.prix_unitaire), 0);
+        .reduce((sum, l) => {
+          const prixBase = roundToCent(l.quantite * l.prix_unitaire);
+          const remise = parseFloat(l.remise_pourcent) || 0;
+          const montantRemise = roundToCent(prixBase * (remise / 100));
+          return sum + roundToCent(prixBase - montantRemise);
+        }, 0);
       const totalAvoirs = this.lignes
         .filter((l) => l.is_avoir)
         .reduce((sum, l) => sum + Math.abs(roundToCent(l.prix_unitaire)), 0);
@@ -330,6 +377,7 @@ export const useCaisseStore = defineStore('caisse', {
         unite: '',
         quantite_min: 1,
         is_avoir: true,
+        remise_pourcent: 0,
       });
       this.showAvoirModal = false;
       this.avoirMontant = 0;
@@ -385,6 +433,7 @@ export const useCaisseStore = defineStore('caisse', {
         prix_unitaire: roundToCent(m),
         is_avoir: false,
         is_cotisation: true,
+        remise_pourcent: 0,
       });
       if (this.lignesPaiement.length) this.lignesPaiement[0].montant = roundToCent(this.total);
     },
@@ -443,6 +492,7 @@ export const useCaisseStore = defineStore('caisse', {
               unite: produit.unite || 'Pièce',
               quantite_min: parseFloat(produit.quantite_min) || 1,
               is_avoir: false,
+              remise_pourcent: 0,
             });
           }
           count++;

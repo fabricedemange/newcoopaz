@@ -239,10 +239,15 @@
   </div>
 
   <!-- Modal détail vente -->
-  <div v-if="store.showDetailModal && store.selectedVente" class="modal show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+  <div
+    v-if="store.showDetailModal && store.selectedVente"
+    class="modal show d-block"
+    tabindex="-1"
+    style="background: rgba(0, 0, 0, 0.5)"
+  >
     <div class="modal-dialog modal-xl">
       <div class="modal-content">
-        <div class="modal-header">
+        <div class="modal-header card-header-caisse">
           <h5 class="modal-title">
             <i class="bi bi-receipt me-2"></i>
             Détail vente {{ store.selectedVente.vente?.numero_ticket }}
@@ -261,62 +266,84 @@
                 <dt class="col-sm-4">Client</dt>
                 <dd class="col-sm-8">{{ store.selectedVente.vente?.client_nom || store.selectedVente.vente?.nom_client || 'Anonyme' }}</dd>
                 <dt class="col-sm-4">Montant total</dt>
-                <dd class="col-sm-8"><strong class="text-primary">{{ parseFloat(store.selectedVente.vente?.montant_ttc || 0).toFixed(2) }} €</strong></dd>
+                <dd class="col-sm-8">
+                  <strong class="text-primary">{{ parseFloat(store.selectedVente.vente?.montant_ttc || 0).toFixed(2) }} €</strong>
+                </dd>
               </dl>
             </div>
           </div>
+
           <h6>Produits vendus</h6>
           <div class="table-responsive mb-4">
             <table class="table table-sm table-bordered">
-              <thead class="thead-precommandes">
+              <thead class="thead-caisse">
                 <tr>
                   <th>Produit</th>
                   <th class="text-end">Quantité</th>
                   <th class="text-end">Prix unitaire</th>
+                  <th class="text-end">Remise</th>
                   <th class="text-end">Total</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="(ligne, idx) in (store.selectedVente.lignes || [])" :key="idx" :class="{ 'table-warning': ligne.is_avoir }">
+                <tr
+                  v-for="(ligne, idx) in (store.selectedVente.lignes || [])"
+                  :key="idx"
+                  :class="{ 'table-warning': ligne.is_avoir, 'table-info': ligne.is_cotisation }"
+                >
                   <td>
                     {{ ligne.nom_produit || ligne.product_nom_actuel }}
+                    <span v-if="ligne.is_cotisation" class="badge bg-info ms-2">Cotisation</span>
                     <span v-if="ligne.is_avoir" class="badge bg-warning text-dark ms-2">AVOIR</span>
                   </td>
-                  <td class="text-end">{{ parseFloat(ligne.quantite).toFixed(3) }}</td>
-                  <td class="text-end">{{ parseFloat(ligne.prix_unitaire).toFixed(2) }} €</td>
-                  <td class="text-end"><strong :class="ligne.is_avoir ? 'text-warning' : 'text-primary'">{{ parseFloat(ligne.montant_ttc).toFixed(2) }} €</strong></td>
+                  <td class="text-end">{{ parseFloat(ligne.quantite || 0).toFixed(3) }}</td>
+                  <td class="text-end">{{ parseFloat(ligne.prix_unitaire || 0).toFixed(2) }} €</td>
+                  <td class="text-end">
+                    <span v-if="(ligne.remise_pourcent || 0) > 0" class="text-danger">
+                      -{{ ligne.remise_pourcent }}%
+                    </span>
+                    <span v-else class="text-muted">—</span>
+                  </td>
+                  <td class="text-end">
+                    <strong :class="ligne.is_cotisation ? 'text-info' : ligne.is_avoir ? 'text-warning' : 'text-primary'">
+                      {{ parseFloat(ligne.montant_ttc || 0).toFixed(2) }} €
+                    </strong>
+                  </td>
                 </tr>
               </tbody>
               <tfoot class="table-light">
                 <tr>
-                  <td colspan="3" class="text-end"><strong>Total</strong></td>
-                  <td class="text-end"><strong class="text-primary">{{ parseFloat(store.selectedVente.vente?.montant_ttc || 0).toFixed(2) }} €</strong></td>
+                  <td colspan="4" class="text-end"><strong>Total</strong></td>
+                  <td class="text-end">
+                    <strong class="text-primary">{{ parseFloat(store.selectedVente.vente?.montant_ttc || 0).toFixed(2) }} €</strong>
+                  </td>
                 </tr>
               </tfoot>
             </table>
           </div>
-          <template v-if="store.selectedVente.paiements?.length">
-            <h6>Paiements</h6>
-            <div class="table-responsive">
-              <table class="table table-sm">
-                <thead class="thead-precommandes">
-                  <tr><th>Mode</th><th class="text-end">Montant</th><th>Date</th></tr>
-                </thead>
-                <tbody>
-                  <tr v-for="(p, idx) in store.selectedVente.paiements" :key="idx">
-                    <td>{{ p.mode_paiement_nom }}</td>
-                    <td class="text-end"><strong>{{ parseFloat(p.montant).toFixed(2) }} €</strong></td>
-                    <td>{{ formatDate(p.date_paiement) }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </template>
+
+          <h6 v-if="store.selectedVente.paiements?.length > 0">Paiements</h6>
+          <div v-if="store.selectedVente.paiements?.length > 0" class="table-responsive">
+            <table class="table table-sm">
+              <thead class="thead-caisse">
+                <tr>
+                  <th>Mode de paiement</th>
+                  <th class="text-end">Montant</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(p, idx) in store.selectedVente.paiements" :key="idx">
+                  <td>{{ p.mode_paiement_nom }}</td>
+                  <td class="text-end"><strong>{{ parseFloat(p.montant || 0).toFixed(2) }} €</strong></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
         <div class="modal-footer">
           <a
-            :href="`/api/${store.selectedVente?.vente?.id}/pdf`"
-            class="btn btn-outline-primary"
+            :href="`/api/commandes/${store.selectedVente?.vente?.id}/pdf`"
+            class="btn btn-outline-caisse"
             download
             target="_blank"
             rel="noopener noreferrer"

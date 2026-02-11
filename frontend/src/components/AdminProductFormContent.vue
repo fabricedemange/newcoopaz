@@ -62,7 +62,7 @@
         </div>
         <div class="col-md-4 mb-3">
           <label for="quantite_min" class="form-label">Quantité minimale (vente)</label>
-          <input id="quantite_min" v-model.number="form.quantite_min" type="number" class="form-control" min="0.001" step="0.001" required>
+          <input id="quantite_min" v-model.number="form.quantite_min" type="number" class="form-control" min="0.01" step="0.01" required>
           <small class="form-text text-muted">Minimum de vente, pas d'incrément à la caisse</small>
         </div>
         <div class="col-md-4 mb-3">
@@ -282,7 +282,8 @@ async function submit() {
     const url = isEdit.value ? `/admin/products/${props.productId}` : '/admin/products';
     const opts = { method: 'POST', credentials: 'include', headers: { Accept: 'application/json' } };
 
-    if (isEdit.value && imageFile.value) {
+    // Utiliser FormData si une image est fournie (création ou édition)
+    if (imageFile.value) {
       const fd = new FormData();
       fd.append('_csrf', props.csrfToken);
       fd.append('nom', form.value.nom.trim());

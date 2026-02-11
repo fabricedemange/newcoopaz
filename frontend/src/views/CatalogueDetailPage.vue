@@ -187,8 +187,8 @@
                         <td>
                           <div class="d-flex align-items-center">
                             <img
-                              v-if="product.image_filename"
-                              :src="`/images/products/${product.image_filename}`"
+                              v-if="product.image_url"
+                              :src="product.image_url"
                               :alt="product.produit"
                               class="me-2"
                               style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px;"
@@ -266,8 +266,8 @@
                 >
                   <div class="d-flex align-items-start mb-2">
                     <img
-                      v-if="product.image_filename"
-                      :src="`/images/products/${product.image_filename}`"
+                      v-if="product.image_url"
+                      :src="product.image_url"
                       :alt="product.produit"
                       class="me-2"
                       style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px;"

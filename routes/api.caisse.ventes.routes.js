@@ -104,18 +104,25 @@ router.post("/", requirePermission("caisse.sell", { json: true }), (req, res) =>
           // Colonnes sans is_cotisation pour compatibilité si la migration n'est pas encore exécutée
           const insertLignesQuery = `
             INSERT INTO lignes_vente
-              (vente_id, produit_id, nom_produit, quantite, prix_unitaire, montant_ttc)
+              (vente_id, produit_id, nom_produit, quantite, prix_unitaire, montant_ttc, remise_pourcent)
             VALUES ?
           `;
 
-          const lignesValues = lignes.map(l => [
-            venteId,
-            l.produit_id ?? null,
-            l.nom_produit || '',
-            l.quantite,
-            l.prix_unitaire,
-            l.quantite * l.prix_unitaire
-          ]);
+          const lignesValues = lignes.map(l => {
+            const prixBase = l.quantite * l.prix_unitaire;
+            const remise = parseFloat(l.remise_pourcent) || 0;
+            const montantRemise = prixBase * (remise / 100);
+            const montantFinal = prixBase - montantRemise;
+            return [
+              venteId,
+              l.produit_id ?? null,
+              l.nom_produit || '',
+              l.quantite,
+              l.prix_unitaire,
+              montantFinal,
+              remise
+            ];
+          });
 
           connection.query(insertLignesQuery, [lignesValues], (err2) => {
             if (err2) {

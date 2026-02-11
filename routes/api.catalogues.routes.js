@@ -138,7 +138,7 @@ router.get("/catalogues/:id", requireLogin, async (req, res) => {
         COALESCE(cp.unite, 1) as unite,
         p.nom as produit,
         p.description,
-        p.image_filename,
+        p.image_url,
         p.category_id,
         c.nom as categorie,
         c.couleur as categorie_couleur,

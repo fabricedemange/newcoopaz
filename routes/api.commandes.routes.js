@@ -457,14 +457,19 @@ router.post("/commandes/:id/send-pdf-email", requireLogin, async (req, res) => {
 });
 
 // GET /api/commandes/:id/pdf - Télécharger le PDF détail de la vente (identique à la modale)
-router.get("/:id/pdf", requireLogin, async (req, res) => {
+router.get("/commandes/:id/pdf", requireLogin, async (req, res) => {
   const venteId = parseInt(req.params.id);
   const userId = getCurrentUserId(req);
-  const orgId = req.session?.organizationId;
+  const { getCurrentOrgId } = require('../utils/session-helpers');
+  const orgId = getCurrentOrgId(req);
   const { db } = require('../config/config');
   const { generateTicketPdf } = require('../utils/ticket-pdf');
 
   try {
+    if (!orgId) {
+      return res.status(400).json({ success: false, error: 'Organisation non définie' });
+    }
+
     const venteDetails = await getVenteDetails(venteId, orgId, db);
     if (!venteDetails) {
       return res.status(404).json({ success: false, error: 'Vente non trouvée' });
@@ -474,21 +479,30 @@ router.get("/:id/pdf", requireLogin, async (req, res) => {
     }
 
     const pdfBuffer = await generateTicketPdf(venteDetails);
+    if (!pdfBuffer || !Buffer.isBuffer(pdfBuffer)) {
+      console.error('Erreur: generateTicketPdf n\'a pas retourné un buffer PDF valide');
+      return res.status(500).json({ success: false, error: 'Erreur lors de la génération du PDF' });
+    }
+
     const filename = `ticket-${venteDetails.vente.numero_ticket || venteId}.pdf`.replace(/\s/g, '-');
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(pdfBuffer);
   } catch (error) {
     console.error('Erreur génération PDF:', error);
-    res.status(500).json({ success: false, error: error.message });
+    // S'assurer qu'on retourne toujours du JSON, jamais du HTML
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, error: error.message || 'Erreur lors de la génération du PDF' });
+    }
   }
 });
 
 // GET /api/commandes/:id/send-pdf - Envoyer le ticket par email en PDF
-router.get("/:id/send-pdf", requireLogin, async (req, res) => {
+router.get("/commandes/:id/send-pdf", requireLogin, async (req, res) => {
   const venteId = parseInt(req.params.id);
   const userId = getCurrentUserId(req);
-  const orgId = req.session?.organizationId;
+  const { getCurrentOrgId } = require('../utils/session-helpers');
+  const orgId = getCurrentOrgId(req);
   const { db } = require('../config/config');
   const { generateTicketPdf } = require('../utils/ticket-pdf');
   const { envoimail } = require('../utils/exports');

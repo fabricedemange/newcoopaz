@@ -90,9 +90,9 @@
                     <span class="text-primary fw-bold">{{ (parseFloat(produit.prix) || 0).toFixed(2) }} €</span>
                     <span
                       class="small"
-                      :class="(Number(produit.stock) ?? 0) < 0 ? 'fw-bold text-danger' : 'text-muted'"
+                      :class="(Number(produit.stock) ?? 0) <= 0 ? 'fw-bold text-danger' : 'text-muted'"
                     >
-                      Stock : {{ produit.stock ?? 0 }} {{ produit.unite || 'pièce' }}
+                      Stock : {{ (produit.unite || 'pièce').toLowerCase() === 'pièce' ? Math.floor(produit.stock ?? 0) : (produit.stock ?? 0) }} {{ (produit.unite || 'pièce').toLowerCase() === 'pièce' ? (Math.floor(produit.stock ?? 0) <= 1 ? 'pièce' : 'pièces') : (produit.unite || 'pièce') }}
                     </span>
                   </div>
                 </div>
@@ -217,38 +217,59 @@
                     <div v-if="ligne.is_cotisation || ligne.is_avoir || !ligne.produit_id" class="d-flex justify-content-end">
                       <strong :class="ligne.is_cotisation ? 'text-info' : 'text-warning'">{{ ligne.prix_unitaire.toFixed(2) }} €</strong>
                     </div>
-                    <div v-else class="d-flex justify-content-between align-items-center">
-                      <div class="d-flex align-items-center gap-1">
-                        <button
-                          class="btn btn-outline-secondary btn-sm"
-                          type="button"
-                          @click="store.modifierQuantite(index, Math.max(0.001, ligne.quantite - (ligne.quantite_min || 0.001)))"
-                        >
-                          <i class="bi bi-dash"></i>
-                        </button>
-                        <input
-                          :ref="(el) => setQuantiteInputRef(el, index)"
-                          type="number"
-                          class="form-control form-control-sm text-center quantite-input"
-                          :value="ligne.quantite"
-                          min="0.001"
-                          step="0.001"
-                          style="width: 60px"
-                          @change="store.modifierQuantite(index, parseFloat($event.target.value) || 0.001)"
-                        />
-                        <button
-                          class="btn btn-outline-secondary btn-sm"
-                          type="button"
-                          @click="store.modifierQuantite(index, ligne.quantite + (ligne.quantite_min || 0.001))"
-                        >
-                          <i class="bi bi-plus"></i>
-                        </button>
-                        <span class="text-muted small">{{ ligne.unite || 'Pièce' }}</span>
+                    <div v-else class="d-flex flex-column gap-2">
+                      <div class="d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center gap-1">
+                          <button
+                            class="btn btn-outline-secondary btn-sm"
+                            type="button"
+                            @click="store.modifierQuantite(index, Math.max(0.001, ligne.quantite - (ligne.quantite_min || 0.001)))"
+                          >
+                            <i class="bi bi-dash"></i>
+                          </button>
+                          <input
+                            :ref="(el) => setQuantiteInputRef(el, index)"
+                            type="number"
+                            class="form-control form-control-sm text-center quantite-input"
+                            :value="ligne.quantite"
+                            min="0.001"
+                            step="0.001"
+                            style="width: 60px"
+                            @change="store.modifierQuantite(index, parseFloat($event.target.value) || 0.001)"
+                          />
+                          <button
+                            class="btn btn-outline-secondary btn-sm"
+                            type="button"
+                            @click="store.modifierQuantite(index, ligne.quantite + (ligne.quantite_min || 0.001))"
+                          >
+                            <i class="bi bi-plus"></i>
+                          </button>
+                          <span class="text-muted small">{{ ligne.unite || 'Pièce' }}</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-1">
+                          <label class="text-muted small mb-0">Remise:</label>
+                          <input
+                            type="number"
+                            class="form-control form-control-sm text-center"
+                            :value="ligne.remise_pourcent || 0"
+                            min="0"
+                            max="100"
+                            step="0.1"
+                            style="width: 60px"
+                            @change="store.modifierRemise(index, parseFloat($event.target.value) || 0)"
+                          />
+                          <span class="text-muted small">%</span>
+                        </div>
                       </div>
-                      <span class="text-muted">
-                        {{ ligne.quantite.toFixed(3) }} × {{ ligne.prix_unitaire.toFixed(2) }}€ =
-                        <strong class="text-primary">{{ (ligne.quantite * ligne.prix_unitaire).toFixed(2) }} €</strong>
-                      </span>
+                      <div class="d-flex justify-content-end">
+                        <span class="text-muted">
+                          {{ ligne.quantite.toFixed(3) }} × {{ ligne.prix_unitaire.toFixed(2) }}€
+                          <span v-if="(ligne.remise_pourcent || 0) > 0" class="text-danger">
+                            - {{ ((ligne.quantite * ligne.prix_unitaire) * (ligne.remise_pourcent / 100)).toFixed(2) }}€ ({{ ligne.remise_pourcent }}%)
+                          </span>
+                          = <strong class="text-primary">{{ ((ligne.quantite * ligne.prix_unitaire) * (1 - (ligne.remise_pourcent || 0) / 100)).toFixed(2) }} €</strong>
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>

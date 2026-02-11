@@ -117,8 +117,9 @@ router.get("/new", requirePermission('products'), (req, res) => {
 
 // ============================================================================
 // Créer un produit
+// Note: Using upload.any() to parse FormData before CSRF validation
 // ============================================================================
-router.post("/", requirePermission('products'), csrfProtection, (req, res) => {
+router.post("/", requirePermission('products'), upload.any(), csrfProtection, (req, res) => {
   const wantsJson = req.xhr || (req.headers.accept && req.headers.accept.includes("application/json"));
   const {
     nom,
@@ -152,12 +153,19 @@ router.post("/", requirePermission('products'), csrfProtection, (req, res) => {
 
   const stockMinVal = (stock_min !== undefined && stock_min !== '' && stock_min !== null) ? parseFloat(stock_min) : null;
 
+  // Gérer l'upload d'image si présent
+  let imageUrl = null;
+  const imageFile = req.files && req.files.find(f => f.fieldname === 'image');
+  if (imageFile) {
+    imageUrl = `/uploads/products/${imageFile.filename}`;
+  }
+
   queryWithUser(`
     INSERT INTO products (
       organization_id, nom, description, category_id, supplier_id,
       reference_fournisseur, code_ean, conditionnement, unite, quantite_min, stock_min,
-      prix, dlc_jours, origine, label, allergenes, is_active
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      prix, dlc_jours, origine, label, allergenes, is_active, image_url
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     orgId,
     nom.trim(),
@@ -175,7 +183,8 @@ router.post("/", requirePermission('products'), csrfProtection, (req, res) => {
     origine || null,
     label || null,
     allergenes || null,
-    is_active ? 1 : 0
+    is_active ? 1 : 0,
+    imageUrl
   ], (err, result) => {
     if (err) {
       if (wantsJson) return res.status(500).json({ success: false, error: "Erreur lors de la création du produit" });

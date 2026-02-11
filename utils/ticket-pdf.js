@@ -94,17 +94,15 @@ async function generateTicketPdf(venteDetails) {
       {
         table: {
           headerRows: 1,
-          widths: ['*', 'auto', 'auto'],
+          widths: ['*', 'auto'],
           body: [
             [
               { text: 'Mode de paiement', bold: true },
-              { text: 'Montant', bold: true, alignment: 'right' },
-              { text: 'Date', bold: true }
+              { text: 'Montant', bold: true, alignment: 'right' }
             ],
             ...paiements.map(p => [
               p.mode_paiement_nom,
-              { text: `${parseFloat(p.montant).toFixed(2)} €`, alignment: 'right' },
-              p.date_paiement ? formatDate(p.date_paiement) : ''
+              { text: `${parseFloat(p.montant).toFixed(2)} €`, alignment: 'right' }
             ])
           ]
         }

@@ -224,6 +224,7 @@
                     <th>Produit</th>
                     <th class="text-end">Quantité</th>
                     <th class="text-end">Prix unitaire</th>
+                    <th class="text-end">Remise</th>
                     <th class="text-end">Total</th>
                   </tr>
                 </thead>
@@ -241,6 +242,12 @@
                     <td class="text-end">{{ ligne.quantite.toFixed(3) }}</td>
                     <td class="text-end">{{ ligne.prix_unitaire.toFixed(2) }} €</td>
                     <td class="text-end">
+                      <span v-if="(ligne.remise_pourcent || 0) > 0" class="text-danger">
+                        -{{ ligne.remise_pourcent }}%
+                      </span>
+                      <span v-else class="text-muted">—</span>
+                    </td>
+                    <td class="text-end">
                       <strong :class="ligne.is_cotisation ? 'text-info' : ligne.is_avoir ? 'text-warning' : 'text-primary'">
                         {{ ligne.montant_ttc.toFixed(2) }} €
                       </strong>
@@ -249,7 +256,7 @@
                 </tbody>
                 <tfoot class="table-light">
                   <tr>
-                    <td colspan="3" class="text-end"><strong>Total</strong></td>
+                    <td colspan="4" class="text-end"><strong>Total</strong></td>
                     <td class="text-end">
                       <strong class="text-primary">{{ store.selectedVente.vente.montant_ttc.toFixed(2) }} €</strong>
                     </td>

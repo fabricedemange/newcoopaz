@@ -117,6 +117,10 @@ router.post("/", async (req, res) => {
 
     // Créer lignes
     for (const ligne of lignes) {
+      const prixBase = ligne.quantite * ligne.prix_unitaire;
+      const remise = parseFloat(ligne.remise_pourcent) || 0;
+      const montantRemise = prixBase * (remise / 100);
+      const montantFinal = prixBase - montantRemise;
       await queryPromise(
         `INSERT INTO lignes_vente (
           vente_id,
@@ -124,15 +128,17 @@ router.post("/", async (req, res) => {
           nom_produit,
           quantite,
           prix_unitaire,
-          montant_ttc
-        ) VALUES (?, ?, ?, ?, ?, ?)`,
+          montant_ttc,
+          remise_pourcent
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
           venteId,
           ligne.produit_id,
           ligne.nom_produit,
           ligne.quantite,
           ligne.prix_unitaire,
-          ligne.quantite * ligne.prix_unitaire
+          montantFinal,
+          remise
         ]
       );
     }
@@ -231,6 +237,10 @@ router.put("/:id", async (req, res) => {
 
     // Réinsérer
     for (const ligne of lignes) {
+      const prixBase = ligne.quantite * ligne.prix_unitaire;
+      const remise = parseFloat(ligne.remise_pourcent) || 0;
+      const montantRemise = prixBase * (remise / 100);
+      const montantFinal = prixBase - montantRemise;
       await queryPromise(
         `INSERT INTO lignes_vente (
           vente_id,
@@ -238,15 +248,17 @@ router.put("/:id", async (req, res) => {
           nom_produit,
           quantite,
           prix_unitaire,
-          montant_ttc
-        ) VALUES (?, ?, ?, ?, ?, ?)`,
+          montant_ttc,
+          remise_pourcent
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
           venteId,
           ligne.produit_id,
           ligne.nom_produit,
           ligne.quantite,
           ligne.prix_unitaire,
-          ligne.quantite * ligne.prix_unitaire
+          montantFinal,
+          remise
         ]
       );
     }
