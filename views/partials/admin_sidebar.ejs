@@ -18,16 +18,68 @@
     left: 0;
     height: 100vh;
     overflow-y: auto;
-    transition: opacity 0.15s ease;
+    transition: transform 0.3s ease, opacity 0.15s ease;
     z-index: 900;
-    will-change: opacity;
+    will-change: transform, opacity;
+  }
+
+  .admin-sidebar.sidebar-hidden {
+    transform: translateX(-100%);
+    pointer-events: none; /* Empêche les interactions avec le sidebar masqué */
   }
 
   .admin-content-wrapper {
     margin-left: 280px;
     flex: 1;
     width: calc(100% - 280px);
+    max-width: calc(100% - 280px);
     animation: fadeIn 0.2s ease-in;
+    transition: margin-left 0.3s ease, width 0.3s ease, max-width 0.3s ease;
+  }
+
+  .admin-content-wrapper.sidebar-hidden {
+    margin-left: 0;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  /* Forcer les conteneurs à utiliser toute la largeur quand sidebar masqué */
+  body.sidebar-hidden .admin-content-wrapper .container-fluid {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  body.sidebar-hidden .admin-content-wrapper .container {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  /* S'assurer que tous les éléments utilisent toute la largeur */
+  body.sidebar-hidden .admin-content-wrapper {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    margin-left: 0 !important;
+  }
+
+  body.sidebar-hidden .admin-content-wrapper > * {
+    max-width: 100% !important;
+  }
+
+  /* Supprimer toute marge/padding qui pourrait créer une bande vide */
+  body.sidebar-hidden .admin-content-wrapper .row,
+  body.sidebar-hidden .admin-content-wrapper .col,
+  body.sidebar-hidden .admin-content-wrapper [class*="col-"] {
+    margin-left: 0;
+    padding-left: 0.75rem; /* Garder le padding Bootstrap normal */
+    padding-right: 0.75rem;
+  }
+
+  /* S'assurer que les tableaux et autres éléments utilisent toute la largeur */
+  body.sidebar-hidden .admin-content-wrapper table,
+  body.sidebar-hidden .admin-content-wrapper .card,
+  body.sidebar-hidden .admin-content-wrapper .card-body {
+    width: 100%;
+    max-width: 100%;
   }
 
   @keyframes fadeIn {
@@ -41,6 +93,82 @@
 
   .ms-280 {
     margin-left: 280px !important;
+    transition: margin-left 0.3s ease;
+  }
+
+  /* Supprimer toutes les marges liées au sidebar quand masqué */
+  body.sidebar-hidden .ms-280,
+  body.sidebar-hidden .alert.ms-280,
+  body.sidebar-hidden div.ms-280,
+  body.sidebar-hidden * .ms-280 {
+    margin-left: 0 !important;
+  }
+
+  /* Ajuster les alertes quand le sidebar est masqué */
+  body.sidebar-hidden .alert.ms-280 {
+    margin-left: 1rem !important;
+    margin-right: 1rem !important;
+  }
+
+  /* S'assurer que le body n'a pas de margin/padding qui crée une bande */
+  body.sidebar-hidden {
+    margin-left: 0 !important;
+    padding-left: 0 !important;
+  }
+
+  /* Supprimer spécifiquement les marges gauches qui pourraient créer une bande */
+  body.sidebar-hidden .admin-content-wrapper {
+    margin-left: 0 !important;
+    padding-left: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* S'assurer que le contenu utilise toute la largeur */
+  body.sidebar-hidden .admin-content-wrapper > .container-fluid,
+  body.sidebar-hidden .admin-content-wrapper > .container {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  /* Exception : garder les paddings Bootstrap normaux pour les colonnes */
+  body.sidebar-hidden .admin-content-wrapper [class*="col-"] {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+
+  .sidebar-toggle-btn {
+    position: fixed;
+    top: 1rem;
+    left: 1rem;
+    z-index: 1000;
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: left 0.3s ease, transform 0.2s ease, background 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    color: #495057;
+  }
+
+  .sidebar-toggle-btn:hover {
+    background: #f8f9fa;
+    transform: scale(1.05);
+    color: #007bff;
+  }
+
+  .admin-sidebar.sidebar-hidden ~ .sidebar-toggle-btn,
+  body.sidebar-hidden .sidebar-toggle-btn {
+    left: 1rem;
   }
 
   .sidebar-section {
@@ -569,12 +697,28 @@
       left: 0;
     }
 
+    .admin-sidebar.sidebar-hidden {
+      left: -280px;
+      transform: none;
+    }
+
     .admin-content-wrapper {
       margin-left: 0;
       width: 100%;
+      max-width: 100%;
+    }
+
+    .admin-content-wrapper.sidebar-hidden {
+      margin-left: 0;
+      width: 100%;
+      max-width: 100%;
     }
 
     .ms-280 {
+      margin-left: 1rem !important;
+    }
+
+    body.sidebar-hidden .ms-280 {
       margin-left: 1rem !important;
     }
 
@@ -613,6 +757,11 @@ function hasAccess(requiredPermissions) {
   return requiredPermissions.some(perm => userPermissions.includes(perm));
 }
 %>
+
+<!-- Bouton hamburger pour masquer/afficher le sidebar -->
+<button type="button" class="sidebar-toggle-btn" id="sidebarToggleBtn" aria-label="Masquer/Afficher le menu">
+  <i class="bi bi-list" id="sidebarToggleIcon"></i>
+</button>
 
 <!-- Sidebar -->
 <nav class="admin-sidebar" id="adminSidebar">
@@ -1009,5 +1158,62 @@ function hasAccess(requiredPermissions) {
       sidebar.style.transition = 'opacity 0.1s ease';
     });
   });
+
+  // Sidebar toggle (hamburger menu)
+  const SIDEBAR_STATE_KEY = 'sidebar-visible';
+  const toggleBtn = document.getElementById('sidebarToggleBtn');
+  const toggleIcon = document.getElementById('sidebarToggleIcon');
+  const contentWrapper = document.querySelector('.admin-content-wrapper');
+
+  function loadSidebarState() {
+    try {
+      const saved = localStorage.getItem(SIDEBAR_STATE_KEY);
+      return saved !== null ? saved === 'true' : true; // Par défaut visible
+    } catch (e) {
+      return true;
+    }
+  }
+
+  function saveSidebarState(isVisible) {
+    try {
+      localStorage.setItem(SIDEBAR_STATE_KEY, isVisible.toString());
+    } catch (e) {
+      console.error('Failed to save sidebar state', e);
+    }
+  }
+
+  function toggleSidebar() {
+    const isVisible = !sidebar.classList.contains('sidebar-hidden');
+    
+    if (isVisible) {
+      // Masquer
+      sidebar.classList.add('sidebar-hidden');
+      if (contentWrapper) contentWrapper.classList.add('sidebar-hidden');
+      document.body.classList.add('sidebar-hidden');
+      if (toggleIcon) toggleIcon.className = 'bi bi-list';
+      saveSidebarState(false);
+    } else {
+      // Afficher
+      sidebar.classList.remove('sidebar-hidden');
+      if (contentWrapper) contentWrapper.classList.remove('sidebar-hidden');
+      document.body.classList.remove('sidebar-hidden');
+      if (toggleIcon) toggleIcon.className = 'bi bi-x-lg';
+      saveSidebarState(true);
+    }
+  }
+
+  // Initialiser l'état du sidebar
+  const sidebarVisible = loadSidebarState();
+  if (!sidebarVisible) {
+    sidebar.classList.add('sidebar-hidden');
+    if (contentWrapper) contentWrapper.classList.add('sidebar-hidden');
+    document.body.classList.add('sidebar-hidden');
+    if (toggleIcon) toggleIcon.className = 'bi bi-x-lg';
+  }
+
+  // Ajouter l'événement click sur le bouton
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', toggleSidebar);
+  }
 })();
 </script>
