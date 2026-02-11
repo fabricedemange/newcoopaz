@@ -120,11 +120,41 @@
         </div>
       </div>
 
+      <!-- Importer depuis un catalogue -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <button class="btn btn-link text-decoration-none p-0 w-100 text-start d-flex align-items-center" type="button" data-bs-toggle="collapse" data-bs-target="#collapseImportCatalog" aria-expanded="false">
+            <i class="bi bi-files me-2"></i>Importer depuis un autre catalogue
+          </button>
+        </div>
+        <div id="collapseImportCatalog" class="collapse">
+          <div class="card-body">
+            <div class="row align-items-end">
+              <div class="col-md-8">
+                <label class="form-label">Catalogue source</label>
+                <select v-model="importSourceId" class="form-select">
+                  <option value="">-- Sélectionner un catalogue --</option>
+                  <option v-for="oc in otherCatalogs" :key="oc.id" :value="oc.id">
+                    #{{ oc.id }} - {{ oc.originalname }} ({{ oc.nb_produits }} produits)
+                  </option>
+                </select>
+              </div>
+              <div class="col-md-4">
+                <button type="button" class="btn btn-success w-100" :disabled="importing || !importSourceId" @click="importFromCatalog">
+                  <span v-if="importing" class="spinner-border spinner-border-sm me-1"></span>
+                  Importer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Ajouter des produits -->
       <div class="card mb-4">
         <div class="card-header">
           <button class="btn btn-link text-decoration-none p-0 w-100 text-start d-flex align-items-center" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAddProducts" aria-expanded="false">
-            <i class="bi bi-plus-circle me-2"></i>Ajouter des produits au catalogue
+            <i class="bi bi-plus-circle me-2"></i>Ajouter des produits au catalogue depuis la base des produits
           </button>
         </div>
         <div id="collapseAddProducts" class="collapse">
@@ -149,12 +179,24 @@
                 <input v-model="filterSearch" type="text" class="form-control" placeholder="Nom du produit...">
               </div>
             </div>
-            <p class="small text-muted">{{ selectedProductIds.length }} produit(s) sélectionné(s)</p>
-            <div class="table-responsive mb-3" style="max-height: 400px; overflow-y: auto;">
+            <button type="button" class="btn btn-primary mb-3" :disabled="adding || selectedProductIds.length === 0" @click="addSelectedProducts">
+              <span v-if="adding" class="spinner-border spinner-border-sm me-1"></span>
+              Ajouter la sélection
+            </button>
+            <p class="small text-muted mb-3">{{ selectedProductIds.length }} produit(s) sélectionné(s)</p>
+            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
               <table class="table table-sm table-hover">
                 <thead class="sticky-top thead-administration">
                   <tr>
-                    <th style="width: 40px;"></th>
+                    <th style="width: 40px;">
+                      <input 
+                        type="checkbox" 
+                        class="form-check-input" 
+                        :checked="allFilteredSelected"
+                        @change="toggleSelectAll"
+                        :title="allFilteredSelected ? 'Tout désélectionner' : 'Tout sélectionner'"
+                      >
+                    </th>
                     <th>Produit</th>
                     <th>Prix (€)</th>
                     <th>Qté mini</th>
@@ -175,36 +217,6 @@
                   </tr>
                 </tbody>
               </table>
-            </div>
-            <button type="button" class="btn btn-primary" :disabled="adding || selectedProductIds.length === 0" @click="addSelectedProducts">
-              <span v-if="adding" class="spinner-border spinner-border-sm me-1"></span>
-              Ajouter la sélection
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Importer depuis un catalogue -->
-      <div class="card mb-4">
-        <div class="card-header">
-          <h5 class="card-title mb-0"><i class="bi bi-files me-2"></i>Importer depuis un autre catalogue</h5>
-        </div>
-        <div class="card-body">
-          <div class="row align-items-end">
-            <div class="col-md-8">
-              <label class="form-label">Catalogue source</label>
-              <select v-model="importSourceId" class="form-select">
-                <option value="">-- Sélectionner un catalogue --</option>
-                <option v-for="oc in otherCatalogs" :key="oc.id" :value="oc.id">
-                  #{{ oc.id }} - {{ oc.originalname }} ({{ oc.nb_produits }} produits)
-                </option>
-              </select>
-            </div>
-            <div class="col-md-4">
-              <button type="button" class="btn btn-success w-100" :disabled="importing || !importSourceId" @click="importFromCatalog">
-                <span v-if="importing" class="spinner-border spinner-border-sm me-1"></span>
-                Importer
-              </button>
             </div>
           </div>
         </div>
@@ -298,6 +310,26 @@ const filteredProducts = computed(() => {
   return list;
 });
 
+const allFilteredSelected = computed(() => {
+  const filtered = filteredProducts.value;
+  if (filtered.length === 0) return false;
+  return filtered.every(p => selectedProductIds.value.includes(p.id));
+});
+
+function toggleSelectAll() {
+  const filtered = filteredProducts.value;
+  const filteredIds = filtered.map(p => p.id);
+  
+  if (allFilteredSelected.value) {
+    // Désélectionner tous les produits filtrés
+    selectedProductIds.value = selectedProductIds.value.filter(id => !filteredIds.includes(id));
+  } else {
+    // Sélectionner tous les produits filtrés (sans doublons)
+    const newSelection = [...new Set([...selectedProductIds.value, ...filteredIds])];
+    selectedProductIds.value = newSelection;
+  }
+}
+
 
 function onDeleteCatalogue(e) {
   if (!confirm('Supprimer ce catalogue (cela supprimera tous les paniers, commandes et articles associés) ?')) e.preventDefault();
@@ -389,19 +421,60 @@ async function addSelectedProducts() {
   error.value = '';
   adding.value = true;
   try {
-    const products = selectedProductIds.value.map(pid => ({
-      product_id: pid,
-      prix: productPrix.value[pid] ?? 0,
-      unite: productUnite.value[pid] ?? 1,
-    }));
+    const products = selectedProductIds.value.map(pid => {
+      // Convertir prix en nombre (0 si vide/null/undefined)
+      const prix = productPrix.value[pid];
+      const prixNum = (prix !== null && prix !== undefined && prix !== '') ? Number(prix) : 0;
+      // Convertir unite en nombre (1 si vide/null/undefined)
+      const unite = productUnite.value[pid];
+      const uniteNum = (unite !== null && unite !== undefined && unite !== '') ? Number(unite) : 1;
+      return {
+        product_id: pid,
+        prix: prixNum,
+        unite: uniteNum,
+      };
+    });
     const body = JSON.stringify({ products });
+    const headers = { 
+      'Content-Type': 'application/json', 
+      Accept: 'application/json' 
+    };
+    // Ajouter le token CSRF dans le header (le middleware CSRF accepte csrf-token, xsrf-token ou x-csrf-token)
+    if (csrfToken.value) {
+      headers['csrf-token'] = csrfToken.value;
+    }
     const res = await fetch(`/admin/catalogues/${catalogue.value.id}/articles/add-multiple`, {
       method: 'POST',
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      headers,
       body,
     });
-    const data = await res.json().catch(() => ({}));
+    
+    let data = {};
+    const contentType = res.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      try {
+        data = await res.json();
+      } catch (e) {
+        error.value = `Erreur lors de la lecture de la réponse: ${e.message}`;
+        return;
+      }
+    } else {
+      // Si ce n'est pas du JSON, lire le texte
+      try {
+        const text = await res.text();
+        error.value = `Erreur ${res.status}: ${text || res.statusText}`;
+      } catch (e) {
+        error.value = `Erreur ${res.status}: ${res.statusText}`;
+      }
+      return;
+    }
+    
+    if (!res.ok) {
+      error.value = data.error || data.message || `Erreur ${res.status}: ${res.statusText}`;
+      return;
+    }
+    
     if (data.success) {
       if (data.added > 0) window.location.reload();
       else error.value = data.error || 'Aucun produit ajouté (déjà présents).';
@@ -409,7 +482,8 @@ async function addSelectedProducts() {
       error.value = data.error || 'Erreur lors de l\'ajout.';
     }
   } catch (e) {
-    error.value = 'Erreur de connexion.';
+    console.error('Erreur addSelectedProducts:', e);
+    error.value = `Erreur de connexion: ${e.message}`;
   } finally {
     adding.value = false;
   }

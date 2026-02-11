@@ -136,15 +136,45 @@ async function getUserPermissions(userId) {
  */
 async function hasPermission(req, permissionName) {
   const userId = getCurrentUserId(req);
-  if (!userId) return false;
+  if (!userId) {
+    console.log(`[RBAC hasPermission] No userId`);
+    return false;
+  }
 
-  // Check if RBAC is enabled for this user
-  if (!req.session.rbac_enabled) return false;
+  // Super admin bypass: check if user is super admin (legacy role)
+  if (req.session?.role === "SuperAdmin") {
+    console.log(`[RBAC hasPermission] SuperAdmin role detected, allowing`);
+    return true;
+  }
 
-  // db is imported globally
-  const permissions = await getUserPermissions(userId);
+  // Check if user has organizations.view_all (super admin permission) - even if RBAC not enabled
+  try {
+    const permissions = await getUserPermissions(userId);
+    console.log(`[RBAC hasPermission] User ${userId} permissions:`, Array.from(permissions));
+    if (permissions.has("organizations.view_all")) {
+      console.log(`[RBAC hasPermission] organizations.view_all found, allowing`);
+      return true; // Super admin has all permissions
+    }
+  } catch (err) {
+    console.error('[RBAC hasPermission] Error checking super admin permission:', err);
+  }
 
-  return permissions.has(permissionName);
+  // Check if RBAC is enabled for this user (for non-super-admins)
+  if (!req.session.rbac_enabled) {
+    console.log(`[RBAC hasPermission] RBAC not enabled for user ${userId}`);
+    return false;
+  }
+
+  // Check specific permission
+  try {
+    const permissions = await getUserPermissions(userId);
+    const hasPerm = permissions.has(permissionName);
+    console.log(`[RBAC hasPermission] Permission ${permissionName}: ${hasPerm}`);
+    return hasPerm;
+  } catch (err) {
+    console.error('[RBAC hasPermission] Error checking permission:', err);
+    return false;
+  }
 }
 
 /**
@@ -215,11 +245,17 @@ async function logPermissionDenial(req, permissionName) {
  */
 function requirePermission(permissionName, options = {}) {
   return async (req, res, next) => {
+    // Auto-detect JSON requests if not explicitly set
+    const isJsonRequest = options.json !== undefined ? options.json : (
+      req.headers.accept && req.headers.accept.includes('application/json') ||
+      req.headers['content-type'] && req.headers['content-type'].includes('application/json')
+    );
+
     let userId;
     try {
       userId = getCurrentUserId(req);
     } catch {
-      if (options.json) {
+      if (isJsonRequest) {
         return res.status(401).json({
           success: false,
           error: 'Non authentifié'
@@ -229,7 +265,7 @@ function requirePermission(permissionName, options = {}) {
     }
 
     if (!userId) {
-      if (options.json) {
+      if (isJsonRequest) {
         return res.status(401).json({
           success: false,
           error: 'Non authentifié'
@@ -238,29 +274,22 @@ function requirePermission(permissionName, options = {}) {
       return res.redirect('/login');
     }
 
-    // Check RBAC enabled
-    if (!req.session.rbac_enabled) {
-      if (options.json) {
-        return res.status(403).json({
-          success: false,
-          error: 'RBAC non activé pour cet utilisateur'
-        });
-      }
-      const { getCurrentUsername, getCurrentUserRole } = require('../utils/session-helpers');
-      return res.status(403).render('403', {
-        message: 'RBAC non activé pour votre compte. Contactez l\'administrateur.',
-        user: getCurrentUsername(req),
-        role: getCurrentUserRole(req)
-      });
-    }
-
+    // Debug: log session info
+    console.log(`[RBAC] Checking permission: user ${userId}, role: ${req.session?.role}, rbac_enabled: ${req.session?.rbac_enabled}, permission: ${permissionName}`);
+    
+    // Check permission (hasPermission handles super admin bypass)
     const allowed = await hasPermission(req, permissionName);
+    
+    console.log(`[RBAC] Permission check result: ${allowed} for user ${userId}, permission: ${permissionName}`);
 
     if (!allowed) {
       // Log denial for security monitoring
       await logPermissionDenial(req, permissionName);
 
-      if (options.json) {
+      // Debug log
+      console.log(`[RBAC] Permission denied: user ${userId}, permission: ${permissionName}, RBAC enabled: ${req.session.rbac_enabled}, role: ${req.session?.role}, isJson: ${isJsonRequest}`);
+
+      if (isJsonRequest) {
         return res.status(403).json({
           success: false,
           error: `Permission refusée: ${permissionName} requise`

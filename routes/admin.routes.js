@@ -2446,7 +2446,7 @@ router.post("/catalogues/:id/articles/add", requirePermission('catalogues'), (re
 });
 
 // Ajouter plusieurs produits existants au catalogue en une fois
-router.post("/catalogues/:id/articles/add-multiple", requirePermission('catalogues'), (req, res) => {
+router.post("/catalogues/:id/articles/add-multiple", csrfProtection, requirePermission('catalogues', { json: true }), (req, res) => {
   const catalogueId = req.params.id;
   const products = req.body.products; // Array de {product_id, prix, unite}
 
@@ -2475,8 +2475,12 @@ router.post("/catalogues/:id/articles/add-multiple", requirePermission('catalogu
         });
       }
 
-      // Préparer les valeurs pour l'insertion
-      const values = toAdd.map(p => [catalogueId, p.product_id, p.prix, p.unite]);
+      // Préparer les valeurs pour l'insertion (convertir prix et unite en nombres, éviter les chaînes vides)
+      const values = toAdd.map(p => {
+        const prix = (p.prix !== null && p.prix !== undefined && p.prix !== '') ? parseFloat(p.prix) || 0 : 0;
+        const unite = (p.unite !== null && p.unite !== undefined && p.unite !== '') ? parseFloat(p.unite) || 1 : 1;
+        return [catalogueId, p.product_id, prix, unite];
+      });
 
       // Insérer tous les produits
       queryWithUser(
